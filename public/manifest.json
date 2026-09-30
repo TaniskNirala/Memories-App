@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "Kinfolk Memories",
+  "short_name": "Kinfolk",
+  "description": "Private, zero-quota memory and photo sharing for close friends.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

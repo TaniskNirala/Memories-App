@@ -1,0 +1,6 @@
+{
+  "name": "Kinfolk Memories",
+  "description": "A private, zero-quota memory and photo sharing web app for close friend groups with S3/local storage, reference sharing, albums, and permissions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -21,8 +21,17 @@ export class S3StorageAdapter implements StorageAdapter {
 
   constructor(config: S3Config) {
     this.config = config;
-    this.region = config.region || 'auto';
-    this.endpoint = config.endpoint || `https://${config.bucket}.s3.${this.region}.amazonaws.com`;
+    let reg = config.region || 'auto';
+    const ep = config.endpoint || `https://${config.bucket}.s3.${reg}.amazonaws.com`;
+    // If Backblaze B2 endpoint, auto-extract the region (e.g. us-west-004) if set to auto or empty
+    if ((reg === 'auto' || !reg) && ep) {
+      const b2Match = ep.match(/s3\.([a-z0-9-]+)\.backblazeb2\.com/i);
+      if (b2Match && b2Match[1]) {
+        reg = b2Match[1];
+      }
+    }
+    this.region = reg;
+    this.endpoint = ep;
   }
 
   private hmac(key: Buffer | string, stringToSign: string): Buffer {
@@ -48,7 +57,22 @@ export class S3StorageAdapter implements StorageAdapter {
 
     const credentialScope = `${dateStamp}/${this.region}/s3/aws4_request`;
     const cleanKey = storageKey.replace(/^\/+/, '');
-    const url = new URL(`${this.endpoint.replace(/\/+$/, '')}/${encodeURIComponent(cleanKey)}`);
+
+    const baseEndpoint = this.endpoint.replace(/\/+$/, '');
+    const bucket = this.config.bucket;
+    // If bucket is not already part of the host or URL path, prepend it for path-style S3 (Backblaze B2, MinIO, etc.)
+    let pathPrefix = '';
+    if (bucket && !baseEndpoint.includes(bucket)) {
+      pathPrefix = `/${encodeURIComponent(bucket)}`;
+    }
+
+    const encodedKeyPath = cleanKey
+      .split('/')
+      .map((seg) => encodeURIComponent(seg))
+      .join('/');
+
+    const fullPath = `${pathPrefix}/${encodedKeyPath}`;
+    const url = new URL(`${baseEndpoint}${fullPath}`);
 
     const queryParams: Record<string, string> = {
       'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
@@ -67,12 +91,13 @@ export class S3StorageAdapter implements StorageAdapter {
       .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
       .join('&');
 
-    const canonicalHeaders = `host:${url.host}\n` + (headersToSign['content-type'] ? `content-type:${headersToSign['content-type']}\n` : '');
+    const canonicalHeaders =
+      `host:${url.host}\n` + (headersToSign['content-type'] ? `content-type:${headersToSign['content-type']}\n` : '');
     const signedHeaders = queryParams['X-Amz-SignedHeaders'];
 
     const canonicalRequest = [
       method,
-      `/${encodeURIComponent(cleanKey)}`,
+      url.pathname,
       sortedQuery,
       canonicalHeaders,
       signedHeaders,

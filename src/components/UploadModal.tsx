@@ -1,5 +1,17 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, CheckCircle2, AlertCircle, RefreshCw, Image, Calendar, Users } from 'lucide-react';
+import {
+  X,
+  Upload,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Image,
+  Calendar,
+  Users,
+  Sparkles,
+  Clock,
+} from 'lucide-react';
+import exifr from 'exifr';
 import { Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 
@@ -23,6 +35,7 @@ interface QueuedFile {
   error?: string;
   width?: number;
   height?: number;
+  detectedDate?: string;
 }
 
 // Client-side resizing (~2048px max dimension) and thumbnail (~400px) with resilient fallback
@@ -147,10 +160,51 @@ async function resizeImage(file: File): Promise<{ mainBlob: Blob; thumbBlob: Blo
   });
 }
 
+// Extract capture date from EXIF metadata (or lastModified date)
+async function extractPhotoDate(file: File): Promise<string | null> {
+  try {
+    if (file.type.startsWith('image/')) {
+      const data = await exifr.parse(file, [
+        'DateTimeOriginal',
+        'CreateDate',
+        'DateCreated',
+        'ModifyDate',
+        'OffsetTimeOriginal',
+      ]);
+
+      const candidate = data?.DateTimeOriginal || data?.CreateDate || data?.DateCreated || data?.ModifyDate;
+      if (candidate instanceof Date && !isNaN(candidate.getTime())) {
+        return candidate.toISOString().slice(0, 10);
+      }
+      if (typeof candidate === 'string') {
+        const parsed = new Date(candidate);
+        if (!isNaN(parsed.getTime())) {
+          return parsed.toISOString().slice(0, 10);
+        }
+      }
+    }
+  } catch (e) {
+    console.debug('EXIF extraction skipped or unsupported for file', file.name, e);
+  }
+
+  // Fallback to file.lastModified timestamp if plausible
+  if (file.lastModified && typeof file.lastModified === 'number') {
+    try {
+      const mod = new Date(file.lastModified);
+      if (!isNaN(mod.getTime()) && mod.getTime() > 0) {
+        return mod.toISOString().slice(0, 10);
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
 export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, groups, onUploadSuccess }) => {
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [caption, setCaption] = useState('');
   const [takenAt, setTakenAt] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [metadataSource, setMetadataSource] = useState<string | null>(null);
   const [dateBasis, setDateBasis] = useState<'taken_at' | 'uploaded_at'>('taken_at');
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -160,16 +214,35 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
 
   if (!isOpen) return null;
 
-  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const newFiles = Array.from(e.target.files).map((f) => ({
+    const filesArray = Array.from(e.target.files);
+    if (filesArray.length === 0) return;
+
+    const newFiles: QueuedFile[] = filesArray.map((f) => ({
       id: crypto.randomUUID(),
       file: f,
       previewUrl: URL.createObjectURL(f),
       status: 'pending' as const,
       progress: 0,
     }));
+
     setQueue((prev) => [...prev, ...newFiles]);
+
+    // Inspect files for EXIF DateTimeOriginal / Capture Date
+    let detected: string | null = null;
+    for (const f of filesArray) {
+      const d = await extractPhotoDate(f);
+      if (d) {
+        detected = d;
+        break;
+      }
+    }
+
+    if (detected) {
+      setTakenAt(detected);
+      setMetadataSource(`Auto-detected date (${detected}) from photo EXIF metadata`);
+    }
   };
 
   const removeQueueItem = (id: string) => {
@@ -182,7 +255,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
     );
   };
 
-  // Upload runner: concurrency of parallel uploads
+  // Upload runner: direct multipart streaming via /api/posts/upload-file
   const startUpload = async () => {
     if (queue.length === 0) {
       setGlobalError('Please select at least one photo or file');
@@ -220,74 +293,58 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
         }
       }
 
-      // 2. Request signed upload URLs from server (authenticated)
-      const fileSpecs = processedQueue.map((q) => ({
-        fileName: q.file.name,
-        fileType: q.file.type.startsWith('video') ? 'video' : q.file.type.startsWith('audio') ? 'audio' : 'photo',
-        mimeType: q.file.type || 'image/jpeg',
-        fileSize: q.mainBlob?.size || q.file.size,
-      }));
-
-      const urlsRes = await apiFetch('/api/posts/signed-upload-urls', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ files: fileSpecs }),
-      });
-
-      if (!urlsRes.ok) {
-        const errJson = await urlsRes.json().catch(() => ({}));
-        throw new Error(errJson.error || 'Failed to retrieve direct upload URLs');
-      }
-
-      const { uploads } = await urlsRes.json();
-      if (!Array.isArray(uploads) || uploads.length === 0) {
-        throw new Error('Server returned empty upload specification');
-      }
-
-      // 3. Concurrency pool to upload directly to storage adapter
-      const readyItems = processedQueue;
-      const concurrency = 3;
+      // 2. Direct upload via FormData to /api/posts/upload-file (bypasses CORS PUT and raw stream issues)
+      const completedFiles: any[] = [];
+      const concurrency = 2;
       let currentIndex = 0;
 
       async function uploadWorker() {
-        while (currentIndex < readyItems.length) {
+        while (currentIndex < processedQueue.length) {
           const idx = currentIndex++;
-          const item = readyItems[idx];
-          const uploadSpec = uploads[idx];
-          if (!item || !uploadSpec) continue;
+          const item = processedQueue[idx];
+          if (!item) continue;
 
           item.status = 'uploading';
-          item.mainStorageKey = uploadSpec.mainStorageKey;
-          item.thumbStorageKey = uploadSpec.thumbStorageKey;
           setQueue([...processedQueue]);
 
           try {
-            // Upload main
-            const mainRes = await fetch(uploadSpec.mainUploadUrl, {
-              method: uploadSpec.mainMethod || 'PUT',
-              headers: uploadSpec.mainHeaders,
-              body: item.mainBlob || item.file,
+            const formData = new FormData();
+            formData.append('file', item.mainBlob || item.file, item.file.name);
+            if (item.thumbBlob) {
+              formData.append('thumb', item.thumbBlob, `thumb_${item.file.name}`);
+            }
+            formData.append('width', String(item.width || 1200));
+            formData.append('height', String(item.height || 800));
+
+            const res = await apiFetch('/api/posts/upload-file', {
+              method: 'POST',
+              body: formData,
             });
 
-            if (!mainRes.ok) {
-              const errTxt = await mainRes.text().catch(() => '');
-              throw new Error(`Upload write failed (${mainRes.status}): ${errTxt || 'Server rejected file'}`);
+            if (!res.ok) {
+              const errJson = await res.json().catch(() => ({}));
+              throw new Error(errJson.error || `Upload failed (${res.status})`);
             }
 
-            // Upload thumbnail
-            if (item.thumbBlob && uploadSpec.thumbUploadUrl) {
-              await fetch(uploadSpec.thumbUploadUrl, {
-                method: uploadSpec.thumbMethod || 'PUT',
-                headers: uploadSpec.thumbHeaders,
-                body: item.thumbBlob,
-              }).catch(() => {});
-            }
-
+            const data = await res.json();
+            item.mainStorageKey = data.storageKey;
+            item.thumbStorageKey = data.thumbKey;
             item.status = 'done';
             item.progress = 100;
             setQueue([...processedQueue]);
+
+            completedFiles.push({
+              storageKey: data.storageKey,
+              thumbKey: data.thumbKey,
+              fileType: data.fileType || 'photo',
+              mimeType: data.mimeType || item.file.type || 'image/jpeg',
+              fileSize: data.fileSize || item.file.size,
+              width: data.width || item.width || 1200,
+              height: data.height || item.height || 800,
+              position: idx,
+            });
           } catch (err: any) {
-            console.error('File upload error for item', item.file.name, err);
+            console.error('File upload error for', item.file.name, err);
             item.status = 'error';
             item.error = err.message || 'Upload dropped';
             setQueue([...processedQueue]);
@@ -295,33 +352,26 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
         }
       }
 
-      const workers = Array.from({ length: Math.min(concurrency, readyItems.length) }, () => uploadWorker());
+      const workers = Array.from({ length: Math.min(concurrency, processedQueue.length) }, () => uploadWorker());
       await Promise.all(workers);
 
-      // Check if all succeeded
-      const completedFiles = processedQueue.filter((q) => q.status === 'done');
+      // Check if any succeeded
       if (completedFiles.length === 0) {
         const firstErr = processedQueue.find((q) => q.error)?.error;
-        throw new Error(firstErr || 'All file uploads failed. Check connection and retry.');
+        throw new Error(firstErr || 'File upload failed. Check connection and retry.');
       }
 
-      // 4. Create post record with placements (authenticated)
+      // Sort files by position
+      completedFiles.sort((a, b) => a.position - b.position);
+
+      // 3. Create post record with placements
       const postPayload = {
         caption,
         takenAt: new Date(takenAt).toISOString(),
         uploadedAt: new Date().toISOString(),
         dateBasis,
         groupIds: selectedGroupIds,
-        files: completedFiles.map((f, pos) => ({
-          storageKey: f.mainStorageKey,
-          thumbKey: f.thumbStorageKey,
-          fileType: f.file.type.startsWith('video') ? 'video' : f.file.type.startsWith('audio') ? 'audio' : 'photo',
-          mimeType: f.file.type || 'image/jpeg',
-          fileSize: f.mainBlob?.size || f.file.size,
-          width: f.width,
-          height: f.height,
-          position: pos,
-        })),
+        files: completedFiles,
       };
 
       const postRes = await apiFetch('/api/posts', {
@@ -397,7 +447,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
                     Choose photos or videos
                   </p>
                   <p className="text-[11px] text-[var(--text-muted)]">
-                    Supports high-res images, zero storage quota restrictions
+                    Supports high-res images, auto-detects date taken from EXIF
                   </p>
                 </div>
               </div>
@@ -483,32 +533,45 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
           </div>
 
           {/* Date Selector & Basis */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5" /> Date Taken
-              </label>
-              <input
-                type="date"
-                value={takenAt}
-                onChange={(e) => setTakenAt(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
-              />
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5" /> Date Taken
+                </label>
+                <input
+                  type="date"
+                  value={takenAt}
+                  onChange={(e) => {
+                    setTakenAt(e.target.value);
+                    setMetadataSource(null);
+                  }}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+                  Feed Sort Basis
+                </label>
+                <select
+                  value={dateBasis}
+                  onChange={(e) => setDateBasis(e.target.value as any)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
+                >
+                  <option value="taken_at">By Date Taken (Chronological)</option>
+                  <option value="uploaded_at">By Date Uploaded (Recent First)</option>
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                Feed Sort Basis
-              </label>
-              <select
-                value={dateBasis}
-                onChange={(e) => setDateBasis(e.target.value as any)}
-                className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
-              >
-                <option value="taken_at">By Date Taken (Chronological)</option>
-                <option value="uploaded_at">By Date Uploaded (Recent First)</option>
-              </select>
-            </div>
+            {/* Detected metadata indicator */}
+            {metadataSource && (
+              <div className="flex items-center gap-1.5 text-[11px] text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 animate-in fade-in">
+                <Sparkles className="w-3 h-3 shrink-0" />
+                <span>{metadataSource}</span>
+              </div>
+            )}
           </div>
 
           {/* Circle Placements */}

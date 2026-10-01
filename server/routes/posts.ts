@@ -1,8 +1,38 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved, requireAdmin } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+
+// Multer disk storage setup for reliable multipart file uploads
+const uploadsBaseDir = path.resolve(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsBaseDir)) {
+  fs.mkdirSync(uploadsBaseDir, { recursive: true });
+}
+
+const diskStorage = multer.diskStorage({
+  destination: (req: any, _file, cb) => {
+    const userId = req.user?.id || 'anon';
+    const userDir = path.join(uploadsBaseDir, 'posts', userId);
+    if (!fs.existsSync(userDir)) {
+      fs.mkdirSync(userDir, { recursive: true });
+    }
+    cb(null, userDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    const unique = `${Date.now()}_${crypto.randomUUID()}${ext}`;
+    cb(null, unique);
+  },
+});
+
+const upload = multer({
+  storage: diskStorage,
+  limits: { fileSize: 1024 * 1024 * 500 }, // 500 MB limit
+});
 
 export const postsRouter = Router();
 postsRouter.use(requireApproved);
@@ -79,6 +109,53 @@ export function canUserViewPost(
     post,
   };
 }
+
+// Direct multipart file upload endpoint (streamed directly to disk via multer)
+postsRouter.post(
+  '/upload-file',
+  upload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'thumb', maxCount: 1 },
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const mainFile = files?.file?.[0];
+      const thumbFile = files?.thumb?.[0];
+
+      if (!mainFile) {
+        return res.status(400).json({ error: 'No main file received' });
+      }
+
+      const userId = req.user!.id;
+      const mainStorageKey = `posts/${userId}/${mainFile.filename}`;
+      const thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
+
+      const fileType = mainFile.mimetype.startsWith('video')
+        ? 'video'
+        : mainFile.mimetype.startsWith('audio')
+        ? 'audio'
+        : 'photo';
+
+      const width = parseInt(req.body.width, 10) || 1200;
+      const height = parseInt(req.body.height, 10) || 800;
+
+      res.json({
+        success: true,
+        storageKey: mainStorageKey,
+        thumbKey: thumbStorageKey,
+        fileType,
+        mimeType: mainFile.mimetype,
+        fileSize: mainFile.size,
+        width,
+        height,
+      });
+    } catch (err: any) {
+      console.error('File upload error:', err);
+      res.status(500).json({ error: err.message || 'File upload failed' });
+    }
+  }
+);
 
 // Generate signed upload URLs for browser direct upload
 postsRouter.post('/signed-upload-urls', async (req: AuthenticatedRequest, res) => {

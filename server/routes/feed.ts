@@ -159,6 +159,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
           id: f.id,
           fileType: f.file_type,
           position: f.position,
+          storageKey: f.storage_key,
           thumbUrl: await storage.getSignedViewUrl(f.thumb_key || f.storage_key),
           viewUrl: await storage.getSignedViewUrl(f.storage_key),
           width: f.width,

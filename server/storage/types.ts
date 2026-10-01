@@ -26,4 +26,8 @@ export interface StorageAdapter {
     data: Buffer,
     contentType: string
   ): Promise<void>;
+
+  getObject?(
+    storageKey: string
+  ): Promise<{ data: Buffer; contentType: string } | null>;
 }

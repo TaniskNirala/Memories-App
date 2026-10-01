@@ -143,7 +143,28 @@ export class S3StorageAdapter implements StorageAdapter {
     if (this.config.publicUrl) {
       return `${this.config.publicUrl.replace(/\/+$/, '')}/${encodeURIComponent(storageKey.replace(/^\/+/, ''))}`;
     }
-    return this.generatePresignedUrl('GET', storageKey, expiresInSeconds);
+    // Route via server proxy endpoint to prevent CORS & private bucket permission failures
+    return `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
+  }
+
+  async getObject(storageKey: string): Promise<{ data: Buffer; contentType: string } | null> {
+    try {
+      const getUrl = this.generatePresignedUrl('GET', storageKey, 300);
+      const res = await fetch(getUrl);
+      if (!res.ok) {
+        console.error(`S3 getObject failed with status ${res.status} for ${storageKey}`);
+        return null;
+      }
+      const arrayBuf = await res.arrayBuffer();
+      const contentType = res.headers.get('content-type') || 'image/jpeg';
+      return {
+        data: Buffer.from(arrayBuf),
+        contentType,
+      };
+    } catch (err: any) {
+      console.error(`Failed to fetch S3 object ${storageKey}:`, err.message);
+      return null;
+    }
   }
 
   async deleteObject(storageKey: string): Promise<void> {

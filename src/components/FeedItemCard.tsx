@@ -212,6 +212,13 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
               src={mainFile.viewUrl || mainFile.thumbUrl}
               alt={item.caption || 'Memory photo'}
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (!target.dataset.triedFallback && mainFile.storageKey) {
+                  target.dataset.triedFallback = 'true';
+                  target.src = `/api/storage/view?key=${encodeURIComponent(mainFile.storageKey)}`;
+                }
+              }}
               className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
             />
           ) : (

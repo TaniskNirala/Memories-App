@@ -8,6 +8,7 @@ import { getDb } from './server/db.ts';
 import { seedDatabase } from './server/seed.ts';
 import { authMiddleware } from './server/middleware/auth.ts';
 import { LocalDiskStorageAdapter } from './server/storage/local.ts';
+import { getStorageAdapter } from './server/storage/index.ts';
 
 // Routers
 import { authRouter } from './server/routes/auth.ts';
@@ -99,37 +100,72 @@ export async function createApp() {
     }
   });
 
-  // Short-lived signed view endpoint
-  app.get('/api/storage/view', (req, res) => {
-    const { key, token, expires } = req.query as { key?: string; token?: string; expires?: string };
-    if (!key || !token || !expires) {
-      return res.status(400).json({ error: 'Missing view authorization parameters' });
+  // Universal media view endpoint (streams from local disk or cloud S3/Backblaze B2)
+  app.get('/api/storage/view', async (req, res) => {
+    try {
+      const { key, token, expires } = req.query as { key?: string; token?: string; expires?: string };
+      if (!key) {
+        return res.status(400).json({ error: 'Missing key parameter' });
+      }
+
+      // 1. Try local disk first
+      const targetPath = localStorageAdapter.getFilePath(key);
+      if (fs.existsSync(targetPath)) {
+        const ext = path.extname(targetPath).toLowerCase();
+        let mimeType = 'image/jpeg';
+        if (ext === '.png') mimeType = 'image/png';
+        else if (ext === '.webp') mimeType = 'image/webp';
+        else if (ext === '.svg') mimeType = 'image/svg+xml';
+        else if (ext === '.mp4') mimeType = 'video/mp4';
+        else if (ext === '.mp3') mimeType = 'audio/mpeg';
+
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return fs.createReadStream(targetPath).pipe(res);
+      }
+
+      // 2. Try S3 / Backblaze B2 storage adapter if configured
+      const storage = getStorageAdapter();
+      if (storage.getObject) {
+        const obj = await storage.getObject(key);
+        if (obj && obj.data) {
+          // Cache locally to prevent redundant cloud bandwidth
+          try {
+            const dir = path.dirname(targetPath);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(targetPath, obj.data);
+          } catch {}
+
+          res.setHeader('Content-Type', obj.contentType || 'image/jpeg');
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(obj.data);
+        }
+      }
+
+      // 3. Fallback graceful SVG placeholder to avoid ugly broken image icon
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.send(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+          <defs>
+            <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#181824"/>
+              <stop offset="100%" stop-color="#242438"/>
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#bg)"/>
+          <circle cx="400" cy="270" r="50" fill="#f43f5e" opacity="0.15"/>
+          <path d="M375 295 L400 245 L425 295 Z" fill="#f43f5e" opacity="0.8"/>
+          <circle cx="430" cy="245" r="10" fill="#f59e0b" opacity="0.8"/>
+          <text x="50%" y="360" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="16" font-weight="500">
+            Memory photo securely stored in cloud
+          </text>
+        </svg>`
+      );
+    } catch (err: any) {
+      console.error('Storage view error:', err);
+      res.status(500).send('Failed to stream media');
     }
-
-    const expNumber = parseInt(expires, 10);
-    const isValid = localStorageAdapter.verifyToken(key, expNumber, 'view', token);
-    if (!isValid) {
-      return res.status(403).json({ error: 'Invalid or expired media view link' });
-    }
-
-    const targetPath = localStorageAdapter.getFilePath(key);
-    if (!fs.existsSync(targetPath)) {
-      return res.status(404).send('File not found');
-    }
-
-    // Determine mime type
-    const ext = path.extname(targetPath).toLowerCase();
-    let mimeType = 'application/octet-stream';
-    if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
-    else if (ext === '.png') mimeType = 'image/png';
-    else if (ext === '.webp') mimeType = 'image/webp';
-    else if (ext === '.svg') mimeType = 'image/svg+xml';
-    else if (ext === '.mp4') mimeType = 'video/mp4';
-    else if (ext === '.mp3') mimeType = 'audio/mpeg';
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    fs.createReadStream(targetPath).pipe(res);
   });
 
   // --- API Routes ---

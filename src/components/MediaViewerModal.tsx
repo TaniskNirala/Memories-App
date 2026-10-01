@@ -161,6 +161,13 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             src={currentFile.viewUrl || currentFile.thumbUrl}
             alt={item.caption || 'Memory view'}
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const target = e.currentTarget;
+              if (!target.dataset.triedFallback && currentFile.storageKey) {
+                target.dataset.triedFallback = 'true';
+                target.src = `/api/storage/view?key=${encodeURIComponent(currentFile.storageKey)}`;
+              }
+            }}
             className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl select-none"
           />
         )}

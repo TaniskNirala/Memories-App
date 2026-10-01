@@ -33,6 +33,7 @@ export interface PostFile {
   id: string;
   fileType: 'photo' | 'video' | 'audio';
   position: number;
+  storageKey?: string;
   thumbUrl: string;
   viewUrl: string;
   fileSize?: number;

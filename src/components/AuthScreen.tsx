@@ -56,15 +56,6 @@ export const AuthScreen: React.FC = () => {
     }
   };
 
-  const quickLogin = async (uname: string, pass: string) => {
-    setUsername(uname);
-    setPassword(pass);
-    setError(null);
-    setLoading(true);
-    await login(uname, pass);
-    setLoading(false);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors">
       <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl p-6 sm:p-8 playful-card relative">
@@ -247,43 +238,6 @@ export const AuthScreen: React.FC = () => {
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
-
-        {/* Demo Fast Login Buttons */}
-        <div className="mt-6 pt-5 border-t border-[var(--border-subtle)]">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block text-center mb-2">
-            Prototype Demo Logins
-          </span>
-          <div className="grid grid-cols-2 gap-1.5 text-xs">
-            <button
-              onClick={() => quickLogin('admin', 'admin123')}
-              className="p-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] font-medium text-left transition flex items-center justify-between"
-            >
-              <span>Admin Jordan</span>
-              <span className="text-[10px] text-amber-500 font-mono">admin</span>
-            </button>
-            <button
-              onClick={() => quickLogin('maya', 'secret123')}
-              className="p-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] font-medium text-left transition flex items-center justify-between"
-            >
-              <span>Maya Lin</span>
-              <span className="text-[10px] text-rose-400 font-mono">member</span>
-            </button>
-            <button
-              onClick={() => quickLogin('sam', 'secret123')}
-              className="p-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] font-medium text-left transition flex items-center justify-between"
-            >
-              <span>Sam Rivera</span>
-              <span className="text-[10px] text-emerald-400 font-mono">member</span>
-            </button>
-            <button
-              onClick={() => quickLogin('elena', 'secret123')}
-              className="p-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] font-medium text-left transition flex items-center justify-between"
-            >
-              <span>Elena Rostova</span>
-              <span className="text-[10px] text-purple-400 font-mono">pending</span>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

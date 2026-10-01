@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Check, X, Key, UserX, UserCheck, AlertTriangle, FileText, Clock, Copy, CheckCheck } from 'lucide-react';
+import { useAuth } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
 
 export const AdminPanel: React.FC = () => {
+  const { user, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState<'signups' | 'users' | 'proposals' | 'reports' | 'audit'>('signups');
+
+  // If user is not an admin, do not render or fetch anything
+  if (!isAdmin || user?.role !== 'admin') {
+    return null;
+  }
 
   const [pendingSignups, setPendingSignups] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);

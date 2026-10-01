@@ -46,7 +46,16 @@ groupsRouter.get('/', (req: AuthenticatedRequest, res) => {
        WHERE gm.group_id = ?
        ORDER BY u.display_name ASC`,
       [g.id]
-    );
+    ).map((m) => ({
+      id: m.id,
+      username: m.username,
+      displayName: m.display_name,
+      display_name: m.display_name,
+      avatarColor: m.avatar_color,
+      avatar_color: m.avatar_color,
+      role: m.role,
+      joinedAt: m.joined_at,
+    }));
 
     return {
       id: g.id,
@@ -287,18 +296,24 @@ groupsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
     [groupId]
   );
 
-  if (!group) return res.status(404).json({ error: 'Group not found' });
-  if (group.is_everyone) return res.status(400).json({ error: 'The Everyone group cannot be deleted' });
+  if (!group) return res.status(404).json({ error: 'Circle not found' });
+  if (group.is_everyone) return res.status(400).json({ error: 'The Everyone circle cannot be deleted' });
   if (!isAdmin && group.creator_id !== userId) {
-    return res.status(403).json({ error: 'Only the creator or admin can delete this circle' });
+    return res.status(403).json({ error: 'Only the circle creator or an admin can delete this circle' });
   }
 
-  // Placements and memberships are deleted, but posts and albums remain intact!
-  run('DELETE FROM item_groups WHERE group_id = ?', [groupId]);
-  run('DELETE FROM comments WHERE group_id = ?', [groupId]);
-  run('DELETE FROM reactions WHERE group_id = ?', [groupId]);
-  run('DELETE FROM group_members WHERE group_id = ?', [groupId]);
-  run('DELETE FROM groups WHERE id = ?', [groupId]);
+  try {
+    // Clean up mentions for comments in this group first
+    run('DELETE FROM mentions WHERE comment_id IN (SELECT id FROM comments WHERE group_id = ?)', [groupId]);
+    run('DELETE FROM comments WHERE group_id = ?', [groupId]);
+    run('DELETE FROM reactions WHERE group_id = ?', [groupId]);
+    run('DELETE FROM item_groups WHERE group_id = ?', [groupId]);
+    run('DELETE FROM group_members WHERE group_id = ?', [groupId]);
+    run('DELETE FROM groups WHERE id = ?', [groupId]);
 
-  res.json({ success: true, message: 'Group deleted. Items remain with their respective owners.' });
+    res.json({ success: true, message: 'Circle deleted. Memories remain with their respective owners.' });
+  } catch (err: any) {
+    console.error('Failed to delete circle:', err);
+    res.status(500).json({ error: err.message || 'Failed to delete circle' });
+  }
 });

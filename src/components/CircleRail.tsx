@@ -33,7 +33,7 @@ export const CircleRail: React.FC<CircleRailProps> = ({
   };
 
   return (
-    <aside className="w-16 sm:w-20 shrink-0 flex flex-col items-center py-4 border-r border-[var(--border-color)] bg-[var(--bg-page)] gap-3 select-none transition-colors">
+    <aside className="w-16 sm:w-20 shrink-0 sticky top-[57px] self-start max-h-[calc(100vh-57px)] overflow-y-auto overflow-x-hidden flex flex-col items-center py-4 border-r border-[var(--border-color)] bg-[var(--bg-page)] gap-3 select-none transition-colors z-20">
       {/* "All" Circle Button */}
       <button
         onClick={() => onSelectGroup(undefined)}

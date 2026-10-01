@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Users, Plus, UserPlus, LogOut, Trash2, Edit3, Check } from 'lucide-react';
+import {
+  X,
+  Users,
+  Plus,
+  UserPlus,
+  LogOut,
+  Trash2,
+  Edit3,
+  Check,
+  AlertTriangle,
+  RefreshCw,
+} from 'lucide-react';
 import { Group, GroupMember } from '../types/index.ts';
-import { useAuth } from '../context/AuthContext.tsx';
+import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 
 interface GroupManagementModalProps {
   isOpen: boolean;
@@ -9,6 +20,8 @@ interface GroupManagementModalProps {
   groups: Group[];
   onRefreshGroups: () => void;
   onSelectGroupFeed?: (groupId: string | undefined) => void;
+  initialCreateMode?: boolean;
+  onGroupDeleted?: (groupId: string) => void;
 }
 
 export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
@@ -17,10 +30,12 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
   groups,
   onRefreshGroups,
   onSelectGroupFeed,
+  initialCreateMode = false,
+  onGroupDeleted,
 }) => {
   const { user, isAdmin } = useAuth();
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(initialCreateMode);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -32,24 +47,46 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
   const [editDesc, setEditDesc] = useState('');
   const [showAddMember, setShowAddMember] = useState(false);
 
+  // In-app Delete Confirmation Modal state (avoids browser window.confirm being blocked by iframe)
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Leave circle modal state
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+
   const fetchAvailableUsers = async () => {
     try {
-      const res = await fetch('/api/groups/available-users');
+      const res = await apiFetch('/api/groups/available-users');
       if (res.ok) {
         const data = await res.json();
         setAvailableUsers(data.users || []);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Failed to fetch available users', e);
+    }
   };
 
   useEffect(() => {
     if (isOpen) {
       fetchAvailableUsers();
-      if (!selectedGroup && groups.length > 0) {
+      if (initialCreateMode) {
+        setShowCreateModal(true);
+      }
+      if (selectedGroup) {
+        // Keep selected group updated with fresh props
+        const fresh = groups.find((g) => g.id === selectedGroup.id);
+        if (fresh) {
+          setSelectedGroup(fresh);
+        } else if (groups.length > 0) {
+          setSelectedGroup(groups[0]);
+        }
+      } else if (groups.length > 0) {
         setSelectedGroup(groups[0]);
       }
     }
-  }, [isOpen, groups]);
+  }, [isOpen, groups, initialCreateMode]);
 
   if (!isOpen) return null;
 
@@ -58,7 +95,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
     if (!newGroupName.trim()) return;
 
     try {
-      const res = await fetch('/api/groups', {
+      const res = await apiFetch('/api/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -69,19 +106,25 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
       });
 
       if (res.ok) {
+        const data = await res.json();
         setNewGroupName('');
         setNewGroupDesc('');
         setSelectedUserIds([]);
         setShowCreateModal(false);
         onRefreshGroups();
+        if (data.group) {
+          setSelectedGroup(data.group);
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Failed to create group', e);
+    }
   };
 
   const handleUpdateGroup = async () => {
     if (!selectedGroup || !editName.trim()) return;
     try {
-      const res = await fetch(`/api/groups/${selectedGroup.id}`, {
+      const res = await apiFetch(`/api/groups/${selectedGroup.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: editName.trim(), description: editDesc.trim() }),
@@ -90,13 +133,15 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         setIsEditing(false);
         onRefreshGroups();
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Failed to update group', e);
+    }
   };
 
   const handleAddMember = async (memberId: string) => {
     if (!selectedGroup) return;
     try {
-      const res = await fetch(`/api/groups/${selectedGroup.id}/members`, {
+      const res = await apiFetch(`/api/groups/${selectedGroup.id}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ memberId }),
@@ -105,37 +150,96 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         setShowAddMember(false);
         onRefreshGroups();
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Failed to add member', e);
+    }
   };
 
   const handleRemoveMember = async (memberId: string) => {
     if (!selectedGroup) return;
     try {
-      const res = await fetch(`/api/groups/${selectedGroup.id}/members/${memberId}`, {
+      const res = await apiFetch(`/api/groups/${selectedGroup.id}/members/${memberId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
         onRefreshGroups();
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('Failed to remove member', e);
+    }
   };
 
-  const handleDeleteGroup = async () => {
+  const executeDeleteCircle = async () => {
     if (!selectedGroup) return;
-    if (!confirm(`Delete circle "${selectedGroup.name}"? Shared memories will stay with their respective owners.`)) {
-      return;
-    }
+    setDeleteLoading(true);
+    setDeleteError(null);
+
     try {
-      const res = await fetch(`/api/groups/${selectedGroup.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        onRefreshGroups();
-        setSelectedGroup(groups[0] || null);
+      const res = await apiFetch(`/api/groups/${selectedGroup.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setDeleteError(data.error || 'Failed to delete circle');
+        return;
       }
-    } catch (e) {}
+
+      const deletedId = selectedGroup.id;
+      setShowDeleteModal(false);
+
+      if (onGroupDeleted) {
+        onGroupDeleted(deletedId);
+      }
+      onRefreshGroups();
+
+      // Pick next available group
+      const remaining = groups.filter((g) => g.id !== deletedId);
+      setSelectedGroup(remaining[0] || null);
+    } catch (err: any) {
+      setDeleteError(err.message || 'Network error while deleting circle');
+    } finally {
+      setDeleteLoading(false);
+    }
   };
+
+  const executeLeaveCircle = async () => {
+    if (!selectedGroup || !user) return;
+    setLeaveLoading(true);
+
+    try {
+      const res = await apiFetch(`/api/groups/${selectedGroup.id}/members/${user.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setShowLeaveModal(false);
+        if (onGroupDeleted) {
+          onGroupDeleted(selectedGroup.id);
+        }
+        onRefreshGroups();
+        const remaining = groups.filter((g) => g.id !== selectedGroup.id);
+        setSelectedGroup(remaining[0] || null);
+      }
+    } catch (e) {
+      console.error('Failed to leave circle', e);
+    } finally {
+      setLeaveLoading(false);
+    }
+  };
+
+  const canManageCurrentGroup = Boolean(
+    selectedGroup &&
+      !selectedGroup.isEveryone &&
+      (isAdmin || selectedGroup.canManage || selectedGroup.creatorId === user?.id)
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl flex flex-col max-h-[88vh] h-[80vh] playful-card overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
@@ -209,7 +313,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                           type="text"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
-                          className="px-2 py-1 text-xs rounded bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)]"
+                          className="px-2 py-1 text-xs rounded bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] w-full"
                         />
                         <input
                           type="text"
@@ -235,8 +339,13 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                       </div>
                     ) : (
                       <>
-                        <h4 className="font-display font-bold text-base text-[var(--text-primary)]">
-                          {selectedGroup.name}
+                        <h4 className="font-display font-bold text-base text-[var(--text-primary)] flex items-center gap-2">
+                          <span>{selectedGroup.name}</span>
+                          {selectedGroup.isEveryone && (
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-mono px-1.5 py-0.5 rounded">
+                              Default Everyone
+                            </span>
+                          )}
                         </h4>
                         {selectedGroup.description && (
                           <p className="text-xs text-[var(--text-secondary)] mt-0.5">
@@ -260,26 +369,42 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                       </button>
                     )}
 
-                    {selectedGroup.canManage && !selectedGroup.isEveryone && !isEditing && (
+                    {canManageCurrentGroup && !isEditing && (
                       <button
                         onClick={() => {
                           setIsEditing(true);
                           setEditName(selectedGroup.name);
                           setEditDesc(selectedGroup.description || '');
                         }}
-                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                        title="Edit circle name & description"
                       >
                         <Edit3 className="w-4 h-4" />
                       </button>
                     )}
 
-                    {selectedGroup.canManage && !selectedGroup.isEveryone && (
+                    {/* Delete Circle Button (Creator or Admin) */}
+                    {canManageCurrentGroup && (
                       <button
-                        onClick={handleDeleteGroup}
-                        className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10"
-                        title="Delete Group"
+                        onClick={() => {
+                          setDeleteError(null);
+                          setShowDeleteModal(true);
+                        }}
+                        className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/15 transition"
+                        title="Delete Circle"
                       >
                         <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {/* Leave Circle Button (for non-creator member in non-Everyone circle) */}
+                    {!selectedGroup.isEveryone && !canManageCurrentGroup && (
+                      <button
+                        onClick={() => setShowLeaveModal(true)}
+                        className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/10 transition"
+                        title="Leave Circle"
+                      >
+                        <LogOut className="w-4 h-4" />
                       </button>
                     )}
                   </div>
@@ -292,7 +417,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                       Members ({selectedGroup.members?.length || 0})
                     </span>
 
-                    {selectedGroup.canManage && !selectedGroup.isEveryone && (
+                    {canManageCurrentGroup && (
                       <button
                         onClick={() => setShowAddMember((prev) => !prev)}
                         className="text-xs text-[var(--accent-coral)] font-semibold flex items-center gap-1 hover:underline"
@@ -306,7 +431,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                   {showAddMember && (
                     <div className="p-3 mb-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)]">
                       <span className="text-[11px] text-[var(--text-muted)] block mb-2 font-medium">
-                        Select an approved friend to add:
+                        Select an approved friend to add to this circle:
                       </span>
                       <div className="flex flex-wrap gap-1.5">
                         {availableUsers
@@ -320,44 +445,56 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                               + {u.display_name} (@{u.username})
                             </button>
                           ))}
+                        {availableUsers.filter((u) => !selectedGroup.members?.some((m) => m.id === u.id)).length === 0 && (
+                          <p className="text-[11px] text-[var(--text-muted)] py-1">
+                            All approved members are already in this circle.
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
 
                   <div className="space-y-1.5">
-                    {selectedGroup.members?.map((member) => (
-                      <div
-                        key={member.id}
-                        className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-surface)] text-xs border border-[var(--border-subtle)]"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
-                            style={{ backgroundColor: member.avatarColor }}
-                          >
-                            {member.displayName.charAt(0)}
-                          </div>
-                          <div>
-                            <span className="font-semibold text-[var(--text-primary)] block">
-                              {member.displayName}
-                            </span>
-                            <span className="text-[10px] text-[var(--text-muted)]">
-                              @{member.username} {selectedGroup.creatorId === member.id && '• Creator'}
-                            </span>
-                          </div>
-                        </div>
+                    {selectedGroup.members?.map((member) => {
+                      const mName = member.displayName || (member as any).display_name || member.username || 'Member';
+                      const mInitial = mName.charAt(0).toUpperCase();
+                      const mColor = member.avatarColor || (member as any).avatar_color || '#f59e0b';
+                      const isMemberCreator = selectedGroup.creatorId === member.id;
 
-                        {!selectedGroup.isEveryone && (member.id === user?.id || selectedGroup.canManage) && (
-                          <button
-                            onClick={() => handleRemoveMember(member.id)}
-                            className="text-xs text-[var(--text-muted)] hover:text-rose-400 p-1"
-                            title={member.id === user?.id ? 'Leave Circle' : 'Remove from Circle'}
-                          >
-                            {member.id === user?.id ? <LogOut className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      return (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-surface)] text-xs border border-[var(--border-subtle)]"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs shrink-0"
+                              style={{ backgroundColor: mColor }}
+                            >
+                              {mInitial}
+                            </div>
+                            <div>
+                              <span className="font-semibold text-[var(--text-primary)] block">
+                                {mName}
+                              </span>
+                              <span className="text-[10px] text-[var(--text-muted)]">
+                                @{member.username} {isMemberCreator && '• Circle Creator'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {!selectedGroup.isEveryone && (member.id === user?.id || canManageCurrentGroup) && !isMemberCreator && (
+                            <button
+                              onClick={() => handleRemoveMember(member.id)}
+                              className="text-xs text-[var(--text-muted)] hover:text-rose-400 p-1"
+                              title={member.id === user?.id ? 'Leave Circle' : 'Remove from Circle'}
+                            >
+                              {member.id === user?.id ? <LogOut className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -369,7 +506,12 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
 
         {/* Create Group Sub-Modal */}
         {showCreateModal && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowCreateModal(false);
+            }}
+          >
             <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl playful-card">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-display font-bold text-sm text-[var(--text-primary)]">
@@ -390,21 +532,21 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                     required
                     value={newGroupName}
                     onChange={(e) => setNewGroupName(e.target.value)}
-                    placeholder="e.g. Book Club, Roommates"
-                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)]"
+                    placeholder="e.g. College Buddies, Hiking Trip"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                    Description
+                    Description (optional)
                   </label>
                   <input
                     type="text"
                     value={newGroupDesc}
                     onChange={(e) => setNewGroupDesc(e.target.value)}
                     placeholder="Short description..."
-                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)]"
+                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
                   />
                 </div>
 
@@ -412,28 +554,35 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                   <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
                     Add Friends
                   </label>
-                  <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1 bg-[var(--bg-surface)] rounded-xl">
-                    {availableUsers.map((u) => {
-                      const selected = selectedUserIds.includes(u.id);
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedUserIds((prev) =>
-                              prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]
-                            );
-                          }}
-                          className={`px-2 py-1 text-[11px] rounded-lg transition ${
-                            selected
-                              ? 'bg-[var(--accent-coral)] text-white'
-                              : 'bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-white'
-                          }`}
-                        >
-                          {u.display_name}
-                        </button>
-                      );
-                    })}
+                  <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1.5 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]">
+                    {availableUsers.length === 0 ? (
+                      <p className="text-[11px] text-[var(--text-muted)] p-1">
+                        No other members yet. You can create the circle now and add members later!
+                      </p>
+                    ) : (
+                      availableUsers.map((u) => {
+                        const selected = selectedUserIds.includes(u.id);
+                        const uName = u.displayName || u.display_name || u.username;
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedUserIds((prev) =>
+                                prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]
+                              );
+                            }}
+                            className={`px-2.5 py-1 text-[11px] rounded-lg transition font-medium ${
+                              selected
+                                ? 'bg-[var(--accent-coral)] text-white shadow-xs'
+                                : 'bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-white'
+                            }`}
+                          >
+                            {uName}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
@@ -441,18 +590,111 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowCreateModal(false)}
-                    className="px-3 py-1.5 text-xs text-[var(--text-secondary)]"
+                    className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-[var(--accent-coral)] text-white playful-btn"
+                    className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-[var(--accent-coral)] text-white playful-btn shadow-md"
                   >
                     Create Circle
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* --- Delete Circle Confirmation Modal (In-App) --- */}
+        {showDeleteModal && selectedGroup && (
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !deleteLoading) setShowDeleteModal(false);
+            }}
+          >
+            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+              <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Delete Circle</span>
+              </div>
+
+              <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+                <p>
+                  Are you sure you want to delete circle <strong>"{selectedGroup.name}"</strong>?
+                </p>
+                <p className="text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                  Shared photos and memories will remain safely with their respective owners. Only this private circle and its membership channel will be removed.
+                </p>
+              </div>
+
+              {deleteError && (
+                <p className="text-xs text-rose-400 bg-rose-500/10 p-2 rounded-lg font-medium">
+                  {deleteError}
+                </p>
+              )}
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={deleteLoading}
+                  onClick={() => setShowDeleteModal(false)}
+                  className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={deleteLoading}
+                  onClick={executeDeleteCircle}
+                  className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+                >
+                  {deleteLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{deleteLoading ? 'Deleting...' : 'Yes, Delete Circle'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- Leave Circle Confirmation Modal --- */}
+        {showLeaveModal && selectedGroup && (
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !leaveLoading) setShowLeaveModal(false);
+            }}
+          >
+            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+              <div className="flex items-center gap-2 text-amber-500 font-bold text-sm">
+                <LogOut className="w-4 h-4" />
+                <span>Leave Circle</span>
+              </div>
+
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                Are you sure you want to leave circle <strong>"{selectedGroup.name}"</strong>? You will no longer see updates from this circle.
+              </p>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={leaveLoading}
+                  onClick={() => setShowLeaveModal(false)}
+                  className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={leaveLoading}
+                  onClick={executeLeaveCircle}
+                  className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-amber-500 hover:bg-amber-600 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+                >
+                  {leaveLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{leaveLoading ? 'Leaving...' : 'Yes, Leave Circle'}</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

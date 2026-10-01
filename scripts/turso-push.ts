@@ -26,9 +26,9 @@ async function pushToTurso() {
     process.exit(1);
   }
 
-  // Ensure local DB is initialized & seeded
+  // Ensure local DB is initialized with clean Tanisk admin user
   await getDb();
-  await seedDatabase(false);
+  await seedDatabase(true);
 
   const tables = [
     'users',

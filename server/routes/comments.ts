@@ -213,7 +213,14 @@ commentsRouter.get('/group-members/:groupId', (req: AuthenticatedRequest, res) =
      WHERE gm.group_id = ? AND u.status = 'active'
      ORDER BY u.display_name ASC`,
     [groupId]
-  );
+  ).map((m) => ({
+    id: m.id,
+    username: m.username,
+    displayName: m.display_name,
+    display_name: m.display_name,
+    avatarColor: m.avatar_color,
+    avatar_color: m.avatar_color,
+  }));
 
   res.json({ members });
 });

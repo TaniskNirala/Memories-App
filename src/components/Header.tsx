@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Bell, LogOut, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Moon, Sun, Bell, LogOut, CheckCircle2 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
@@ -12,20 +12,12 @@ interface HeaderProps {
   onUserSwitched?: () => void;
 }
 
-const DEMO_USERS = [
-  { username: 'riya', label: 'Riya' },
-  { username: 'aarav', label: 'Aarav' },
-  { username: 'kabir', label: 'Kabir' },
-  { username: 'admin', label: 'Admin' },
-];
-
-export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onUserSwitched }) => {
-  const { user, logout, isPending, switchUser } = useAuth();
+export const Header: React.FC<HeaderProps> = ({ selectedGroupName }) => {
+  const { user, logout, isPending } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
-  const [switching, setSwitching] = useState(false);
 
   const fetchNotifications = async () => {
     if (!user || isPending) return;
@@ -53,21 +45,6 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onUserSwitche
     } catch (e) {}
   };
 
-  const handleSwitchUser = async (newUsername: string) => {
-    if (!newUsername || newUsername === user?.username) return;
-    setSwitching(true);
-    try {
-      const success = await switchUser(newUsername);
-      if (success && onUserSwitched) {
-        onUserSwitched();
-      }
-    } catch (e) {
-      console.error('Switch user failed', e);
-    } finally {
-      setSwitching(false);
-    }
-  };
-
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[var(--border-color)] bg-[var(--bg-card)]/95 backdrop-blur-md px-4 sm:px-6 py-3 transition-colors">
       <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
@@ -86,27 +63,23 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onUserSwitche
           )}
         </div>
 
-        {/* Right Controls: Viewing as [Dropdown] & Light/Dark mode */}
+        {/* Right Controls: User Badge & Light/Dark mode */}
         <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* Quick User Switcher: "Viewing as [Riya v]" */}
+          {/* Current User Badge */}
           {user && !isPending && (
-            <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-              <span className="hidden sm:inline">Viewing as</span>
-              <div className="relative">
-                <select
-                  value={user.username}
-                  disabled={switching}
-                  onChange={(e) => handleSwitchUser(e.target.value)}
-                  className="bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold text-xs px-3 py-1.5 rounded-full border border-[var(--border-color)] focus:outline-hidden focus:border-amber-400 cursor-pointer pr-7 appearance-none"
-                >
-                  {DEMO_USERS.map((u) => (
-                    <option key={u.username} value={u.username} className="bg-[#17172e] text-white">
-                      {u.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-2.5 text-[var(--text-muted)] pointer-events-none" />
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)] text-xs">
+              <div
+                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase shrink-0"
+                style={{ backgroundColor: user.avatarColor || '#f59e0b' }}
+              >
+                {user.displayName?.charAt(0) || user.username?.charAt(0)}
               </div>
+              <span className="font-semibold text-[var(--text-primary)]">{user.displayName || user.username}</span>
+              {user.role === 'admin' && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 font-bold uppercase tracking-wider">
+                  Admin
+                </span>
+              )}
             </div>
           )}
 

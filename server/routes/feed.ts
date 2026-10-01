@@ -182,7 +182,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
       );
 
       // Target group for comments/reactions
-      const activeGroupId = groupId || placements[0]?.group_id;
+      const activeGroupId = groupId || placements[0]?.groupId || placements[0]?.group_id;
 
       let commentsCount = 0;
       let reactions: any[] = [];
@@ -290,7 +290,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
         attendeesCount,
         userAttended,
         placements,
-        activeGroupId: groupId || placements[0]?.group_id,
+        activeGroupId: groupId || placements[0]?.groupId || placements[0]?.group_id,
       };
     })
   );

@@ -22,10 +22,17 @@ import { FeedItem, Group } from './types/index.ts';
 import { RefreshCw } from 'lucide-react';
 
 const MainContent: React.FC = () => {
-  const { user, loading, isPending } = useAuth();
+  const { user, loading, isPending, isAdmin } = useAuth();
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash'>('feed');
+
+  // Guard against non-admin users ever accessing or lingering on admin tab
+  useEffect(() => {
+    if (!isAdmin && currentTab === 'admin') {
+      setCurrentTab('feed');
+    }
+  }, [user?.id, isAdmin, currentTab]);
 
   // Feed state
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
@@ -40,6 +47,7 @@ const MainContent: React.FC = () => {
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
+  const [isCreateGroupMode, setIsCreateGroupMode] = useState(false);
   const [isProposeModalOpen, setIsProposeModalOpen] = useState(false);
   const [viewerItem, setViewerItem] = useState<FeedItem | null>(null);
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -152,6 +160,17 @@ const MainContent: React.FC = () => {
     } catch (e) {}
   };
 
+  const handleDeleteAlbum = async (albumId: string, permanent: boolean = false) => {
+    try {
+      await apiFetch(`/api/albums/${albumId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permanent }),
+      });
+      fetchFeed(true);
+    } catch (e) {}
+  };
+
   const handleAdminOverride = async (postId: string, override: string | null) => {
     try {
       await apiFetch(`/api/posts/${postId}/override-visibility`, {
@@ -176,29 +195,23 @@ const MainContent: React.FC = () => {
         }}
       />
 
-      <div className="flex-1 flex max-w-5xl w-full mx-auto">
+      <div className="flex-1 flex max-w-5xl w-full mx-auto items-start relative">
         {/* Left Circle Rail (All, E, AR, RK, +) matching user screenshot */}
         <CircleRail
           groups={groups}
           selectedGroupId={selectedGroupId}
           onSelectGroup={(gid) => setSelectedGroupId(gid)}
-          onOpenCreateGroup={() => setIsGroupsModalOpen(true)}
+          onOpenCreateGroup={() => {
+            setIsCreateGroupMode(true);
+            setIsGroupsModalOpen(true);
+          }}
         />
 
         {/* Center Main Stream & Timeline */}
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 min-w-0">
           {/* TAB: STREAM / TIMELINE */}
           {currentTab === 'feed' && (
             <div className="space-y-4 max-w-2xl">
-              {/* Interactive Demo Hint Banner from screenshot */}
-              <div className="p-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] text-xs text-[var(--text-secondary)] leading-relaxed font-sans shadow-md">
-                <span className="text-amber-500 font-semibold">Try this:</span> as{' '}
-                <strong className="text-[var(--text-primary)]">Riya</strong>, share Kabir's "Cricket nets" to{' '}
-                <strong className="text-[var(--accent-cyan)]">Aarav & Riya</strong>. Switch to{' '}
-                <strong className="text-[var(--text-primary)]">Aarav</strong> to see a locked placeholder, then to{' '}
-                <strong className="text-[var(--text-primary)]">Kabir</strong> to allow it.
-              </div>
-
               {/* Owner Pending Reference Requests Approval Banner */}
               <PendingReferencesBanner onUpdated={() => fetchFeed(true)} />
 
@@ -215,6 +228,9 @@ const MainContent: React.FC = () => {
                 onOpenCollection={(colId) => setActiveCollectionId(colId)}
                 onShareToGroup={handleDirectShare}
                 onOpenUpload={() => setIsUploadOpen(true)}
+                onDeletePost={handleDeletePost}
+                onDeleteAlbum={handleDeleteAlbum}
+                onMemoryUpdated={() => fetchFeed(true)}
               />
 
               {/* Load More Button */}
@@ -257,6 +273,9 @@ const MainContent: React.FC = () => {
                 onOpenCollection={(colId) => setActiveCollectionId(colId)}
                 onShareToGroup={handleDirectShare}
                 onOpenUpload={() => setIsUploadOpen(true)}
+                onDeletePost={handleDeletePost}
+                onDeleteAlbum={handleDeleteAlbum}
+                onMemoryUpdated={() => fetchFeed(true)}
               />
             </div>
           )}
@@ -305,8 +324,8 @@ const MainContent: React.FC = () => {
             </div>
           )}
 
-          {/* TAB: ADMIN PORTAL */}
-          {currentTab === 'admin' && <AdminPanel />}
+          {/* TAB: ADMIN PORTAL - strictly restricted to admin role */}
+          {currentTab === 'admin' && isAdmin && <AdminPanel />}
 
           {/* TAB: TRASH BIN */}
           {currentTab === 'trash' && <TrashView />}
@@ -319,6 +338,8 @@ const MainContent: React.FC = () => {
         onSelectTab={(tab) => {
           if (tab === 'groups') {
             setIsGroupsModalOpen(true);
+          } else if (tab === 'admin' && !isAdmin) {
+            setCurrentTab('feed');
           } else {
             setCurrentTab(tab);
           }
@@ -385,12 +406,26 @@ const MainContent: React.FC = () => {
 
       <GroupManagementModal
         isOpen={isGroupsModalOpen}
-        onClose={() => setIsGroupsModalOpen(false)}
+        onClose={() => {
+          setIsGroupsModalOpen(false);
+          setIsCreateGroupMode(false);
+        }}
         groups={groups}
-        onRefreshGroups={fetchGroups}
+        onRefreshGroups={() => {
+          fetchGroups();
+          fetchFeed(true);
+        }}
+        initialCreateMode={isCreateGroupMode}
         onSelectGroupFeed={(gid) => {
           setSelectedGroupId(gid);
           setCurrentTab('feed');
+        }}
+        onGroupDeleted={(deletedGid) => {
+          if (selectedGroupId === deletedGid) {
+            setSelectedGroupId(undefined);
+          }
+          fetchGroups();
+          fetchFeed(true);
         }}
       />
 

@@ -33,7 +33,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
 
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const activeGroupId = groupId || (item?.type === 'single_post' ? item.activeGroupId : item?.activeGroupId);
+  const activeGroupId = groupId || item?.activeGroupId || item?.placements?.[0]?.groupId || (item?.placements?.[0] as any)?.group_id;
 
   const fetchComments = async () => {
     if (!item || !activeGroupId) return;
@@ -71,7 +71,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
     }
   }, [isOpen, item, activeGroupId]);
 
-  if (!isOpen || !item || !activeGroupId) return null;
+  if (!isOpen || !item) return null;
 
   // Handle typing & @mentions
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -162,12 +162,19 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
     }
   }
 
-  const filteredMembers = groupMembers.filter((m) =>
-    m.username.toLowerCase().includes(mentionFilter) || m.displayName.toLowerCase().includes(mentionFilter)
-  );
+  const filteredMembers = groupMembers.filter((m) => {
+    const dName = m.displayName || (m as any).display_name || m.username || '';
+    const uName = m.username || '';
+    return uName.toLowerCase().includes(mentionFilter) || dName.toLowerCase().includes(mentionFilter);
+  });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div className="w-full sm:max-w-lg bg-[var(--bg-card)] border-t sm:border border-[var(--border-color)] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[85vh] h-[75vh] playful-card overflow-hidden">
         {/* Grab bar affordance for mobile */}
         <div className="w-10 h-1 bg-[var(--border-color)] rounded-full mx-auto my-2 sm:hidden" />
@@ -179,7 +186,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
               Circle Conversation
             </h3>
             <span className="text-[11px] text-[var(--accent-coral)]">
-              Private to this placement
+              {activeGroupId ? 'Private to this circle placement' : 'No circle selected'}
             </span>
           </div>
           <button
@@ -190,8 +197,16 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
           </button>
         </div>
 
-        {/* Reaction quick bar */}
-        <div className="flex items-center justify-center gap-2 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50">
+        {!activeGroupId ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+            <p className="text-xs text-[var(--text-secondary)] max-w-xs leading-relaxed">
+              This memory hasn't been placed in a circle yet. Use <strong>"Share to a group"</strong> on the memory card to share it into a circle first.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Reaction quick bar */}
+            <div className="flex items-center justify-center gap-2 py-2 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50">
           <span className="text-[11px] text-[var(--text-muted)] mr-1">React:</span>
           {EMOJIS.map((emoji) => (
             <button
@@ -383,6 +398,8 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
             </button>
           </form>
         </div>
+        </>
+      )}
       </div>
     </div>
   );

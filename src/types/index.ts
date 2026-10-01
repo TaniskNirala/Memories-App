@@ -99,7 +99,7 @@ export interface CollectionCardFeedItem {
   };
   attendeesCount: number;
   userAttended: boolean;
-  placements: { groupId: string; groupName: string }[];
+  placements: { id?: string; groupId: string; groupName: string }[];
   activeGroupId?: string;
 }
 

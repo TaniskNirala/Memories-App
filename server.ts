@@ -59,24 +59,41 @@ export async function createApp() {
   const localStorageAdapter = new LocalDiskStorageAdapter();
 
   // Browser direct upload endpoint (verifies HMAC signature)
-  app.put('/api/storage/upload', (req, res) => {
-    const { key, token, expires } = req.query as { key?: string; token?: string; expires?: string };
-    if (!key || !token || !expires) {
-      return res.status(400).json({ error: 'Missing key, token, or expires parameter' });
+  app.put('/api/storage/upload', express.raw({ type: '*/*', limit: '500mb' }), async (req, res) => {
+    try {
+      const { key, token, expires } = req.query as { key?: string; token?: string; expires?: string };
+      if (!key || !token || !expires) {
+        return res.status(400).json({ error: 'Missing key, token, or expires parameter' });
+      }
+
+      const expNumber = parseInt(expires, 10);
+      const isValid = localStorageAdapter.verifyToken(key, expNumber, 'upload', token);
+      if (!isValid) {
+        return res.status(403).json({ error: 'Invalid or expired upload authorization token' });
+      }
+
+      const targetPath = localStorageAdapter.getFilePath(key);
+
+      // Handle buffer, string, or stream piping into target file
+      if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+        fs.writeFileSync(targetPath, req.body);
+      } else if (typeof req.body === 'string' && req.body.length > 0) {
+        fs.writeFileSync(targetPath, Buffer.from(req.body));
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          const writeStream = fs.createWriteStream(targetPath);
+          req.pipe(writeStream);
+          writeStream.on('finish', resolve);
+          writeStream.on('error', reject);
+          req.on('error', reject);
+        });
+      }
+
+      res.json({ success: true, key });
+    } catch (err: any) {
+      console.error('Storage upload error:', err);
+      res.status(500).json({ error: err.message || 'Upload write failed' });
     }
-
-    const expNumber = parseInt(expires, 10);
-    const isValid = localStorageAdapter.verifyToken(key, expNumber, 'upload', token);
-    if (!isValid) {
-      return res.status(403).json({ error: 'Invalid or expired upload authorization token' });
-    }
-
-    const targetPath = localStorageAdapter.getFilePath(key);
-    // Write request body buffer
-    const buffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
-    fs.writeFileSync(targetPath, buffer);
-
-    res.json({ success: true, key });
   });
 
   // Short-lived signed view endpoint

@@ -22,10 +22,14 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
     return crypto.createHmac('sha256', SIGNING_SECRET).update(payload).digest('hex');
   }
 
-  public verifyToken(key: string, expires: number, action: 'upload' | 'view', token: string): boolean {
+  public verifyToken(key: string, expires: number, action: 'upload' | 'view', token?: string): boolean {
+    if (!token || typeof token !== 'string') return false;
     if (Date.now() > expires) return false;
     const expected = this.generateToken(key, expires, action);
-    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+    const tokenBuf = Buffer.from(token);
+    const expectedBuf = Buffer.from(expected);
+    if (tokenBuf.length !== expectedBuf.length) return false;
+    return crypto.timingSafeEqual(tokenBuf, expectedBuf);
   }
 
   public getFilePath(storageKey: string): string {

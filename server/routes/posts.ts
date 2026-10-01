@@ -131,15 +131,19 @@ postsRouter.post(
       const mainStorageKey = `posts/${userId}/${mainFile.filename}`;
       const thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
 
-      // If cloud storage backend is configured, sync uploaded buffers to cloud
+      // If cloud storage backend is configured, sync uploaded buffers to cloud safely
       const storage = getStorageAdapter();
       const backend = process.env.STORAGE_BACKEND;
       if (backend === 's3' || backend === 'r2') {
-        const fileBuf = fs.readFileSync(mainFile.path);
-        await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype);
-        if (thumbFile) {
-          const thumbBuf = fs.readFileSync(thumbFile.path);
-          await storage.putObject(thumbStorageKey, thumbBuf, thumbFile.mimetype);
+        try {
+          const fileBuf = fs.readFileSync(mainFile.path);
+          await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype);
+          if (thumbFile) {
+            const thumbBuf = fs.readFileSync(thumbFile.path);
+            await storage.putObject(thumbStorageKey, thumbBuf, thumbFile.mimetype);
+          }
+        } catch (cloudErr: any) {
+          console.error('⚠️ Cloud storage sync warning (file safely saved on disk):', cloudErr.message);
         }
       }
 

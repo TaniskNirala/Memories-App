@@ -1,4 +1,11 @@
-import crypto from 'crypto';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'stream';
 import { StorageAdapter, SignedUploadUrlResult } from './types.ts';
 
 export interface S3Config {
@@ -7,114 +14,63 @@ export interface S3Config {
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
-  publicUrl?: string; // Optional custom domain for Cloudflare R2
+  publicUrl?: string; // Optional custom domain for Cloudflare R2 / CDN
 }
 
 /**
- * Pure SigV4 implementation for Cloudflare R2 & AWS S3 compatible storage
- * without heavy external dependencies.
+ * Enterprise-grade S3 adapter supporting Backblaze B2, Cloudflare R2, AWS S3, and MinIO.
+ * Powered by official @aws-sdk/client-s3 with automatic endpoint normalization and path-style support.
  */
 export class S3StorageAdapter implements StorageAdapter {
   private config: S3Config;
+  private client: S3Client;
   private region: string;
   private endpoint: string;
 
   constructor(config: S3Config) {
     this.config = config;
-    let reg = config.region || 'auto';
-    const ep = config.endpoint || `https://${config.bucket}.s3.${reg}.amazonaws.com`;
-    // If Backblaze B2 endpoint, auto-extract the region (e.g. us-west-004) if set to auto or empty
-    if ((reg === 'auto' || !reg) && ep) {
+
+    let reg = (config.region || '').trim();
+    let ep = (config.endpoint || '').trim();
+
+    // Ensure endpoint has protocol
+    if (ep && !ep.startsWith('http://') && !ep.startsWith('https://')) {
+      ep = `https://${ep}`;
+    }
+
+    // Auto-extract region from Backblaze B2 endpoint if region is empty or 'auto'
+    // e.g. s3.eu-central-003.backblazeb2.com -> eu-central-003
+    if ((!reg || reg === 'auto') && ep) {
       const b2Match = ep.match(/s3\.([a-z0-9-]+)\.backblazeb2\.com/i);
       if (b2Match && b2Match[1]) {
         reg = b2Match[1];
       }
     }
+    if (!reg) {
+      reg = 'us-east-1';
+    }
+
     this.region = reg;
-    this.endpoint = ep;
-  }
+    this.endpoint = ep || `https://${config.bucket}.s3.${reg}.amazonaws.com`;
 
-  private hmac(key: Buffer | string, stringToSign: string): Buffer {
-    return crypto.createHmac('sha256', key).update(stringToSign, 'utf8').digest();
-  }
-
-  private getSigningKey(dateStamp: string): Buffer {
-    const kDate = this.hmac('AWS4' + this.config.secretAccessKey, dateStamp);
-    const kRegion = this.hmac(kDate, this.region);
-    const kService = this.hmac(kRegion, 's3');
-    return this.hmac(kService, 'aws4_request');
-  }
-
-  private generatePresignedUrl(
-    method: 'PUT' | 'GET',
-    storageKey: string,
-    expiresInSeconds: number,
-    headersToSign: Record<string, string> = {}
-  ): string {
-    const now = new Date();
-    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const dateStamp = amzDate.substring(0, 8);
-
-    const credentialScope = `${dateStamp}/${this.region}/s3/aws4_request`;
-    const cleanKey = storageKey.replace(/^\/+/, '');
-
-    const baseEndpoint = this.endpoint.replace(/\/+$/, '');
-    const bucket = this.config.bucket;
-    // If bucket is not already part of the host or URL path, prepend it for path-style S3 (Backblaze B2, MinIO, etc.)
-    let pathPrefix = '';
-    if (bucket && !baseEndpoint.includes(bucket)) {
-      pathPrefix = `/${encodeURIComponent(bucket)}`;
+    if (this.config.publicUrl && !this.config.publicUrl.startsWith('http://') && !this.config.publicUrl.startsWith('https://')) {
+      this.config.publicUrl = `https://${this.config.publicUrl}`;
     }
 
-    const encodedKeyPath = cleanKey
-      .split('/')
-      .map((seg) => encodeURIComponent(seg))
-      .join('/');
+    this.client = new S3Client({
+      endpoint: this.endpoint,
+      region: this.region,
+      credentials: {
+        accessKeyId: (config.accessKeyId || '').trim(),
+        secretAccessKey: (config.secretAccessKey || '').trim(),
+      },
+      // Backblaze B2, MinIO, and custom endpoints require path-style routing
+      forcePathStyle: true,
+    });
+  }
 
-    const fullPath = `${pathPrefix}/${encodedKeyPath}`;
-    const url = new URL(`${baseEndpoint}${fullPath}`);
-
-    const queryParams: Record<string, string> = {
-      'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-      'X-Amz-Credential': `${this.config.accessKeyId}/${credentialScope}`,
-      'X-Amz-Date': amzDate,
-      'X-Amz-Expires': expiresInSeconds.toString(),
-      'X-Amz-SignedHeaders': 'host',
-    };
-
-    if (headersToSign['content-type']) {
-      queryParams['X-Amz-SignedHeaders'] = 'content-type;host';
-    }
-
-    const sortedQuery = Object.keys(queryParams)
-      .sort()
-      .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(queryParams[k])}`)
-      .join('&');
-
-    const canonicalHeaders =
-      `host:${url.host}\n` + (headersToSign['content-type'] ? `content-type:${headersToSign['content-type']}\n` : '');
-    const signedHeaders = queryParams['X-Amz-SignedHeaders'];
-
-    const canonicalRequest = [
-      method,
-      url.pathname,
-      sortedQuery,
-      canonicalHeaders,
-      signedHeaders,
-      'UNSIGNED-PAYLOAD',
-    ].join('\n');
-
-    const stringToSign = [
-      'AWS4-HMAC-SHA256',
-      amzDate,
-      credentialScope,
-      crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
-    ].join('\n');
-
-    const signingKey = this.getSigningKey(dateStamp);
-    const signature = crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
-
-    return `${url.origin}${url.pathname}?${sortedQuery}&X-Amz-Signature=${signature}`;
+  private cleanKey(key: string): string {
+    return key.replace(/^\/+/, '');
   }
 
   async getSignedUploadUrl(
@@ -122,8 +78,15 @@ export class S3StorageAdapter implements StorageAdapter {
     contentType: string,
     expiresInSeconds: number = 900
   ): Promise<SignedUploadUrlResult> {
-    const uploadUrl = this.generatePresignedUrl('PUT', storageKey, expiresInSeconds, {
-      'content-type': contentType,
+    const key = this.cleanKey(storageKey);
+    const command = new PutObjectCommand({
+      Bucket: this.config.bucket,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(this.client, command, {
+      expiresIn: expiresInSeconds,
     });
 
     return {
@@ -138,50 +101,72 @@ export class S3StorageAdapter implements StorageAdapter {
 
   async getSignedViewUrl(
     storageKey: string,
-    expiresInSeconds: number = 3600
+    _expiresInSeconds: number = 3600
   ): Promise<string> {
+    // If publicUrl / CDN is explicitly configured, use that
     if (this.config.publicUrl) {
-      return `${this.config.publicUrl.replace(/\/+$/, '')}/${encodeURIComponent(storageKey.replace(/^\/+/, ''))}`;
+      return `${this.config.publicUrl.replace(/\/+$/, '')}/${encodeURIComponent(this.cleanKey(storageKey))}`;
     }
-    // Route via server proxy endpoint to prevent CORS & private bucket permission failures
+
+    // Always route through app's proxy (/api/storage/view) to eliminate Backblaze B2 CORS and private bucket errors
     return `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
   }
 
-  async getObject(storageKey: string): Promise<{ data: Buffer; contentType: string } | null> {
+  async putObject(storageKey: string, data: Buffer, contentType: string): Promise<void> {
+    const key = this.cleanKey(storageKey);
     try {
-      const getUrl = this.generatePresignedUrl('GET', storageKey, 300);
-      const res = await fetch(getUrl);
-      if (!res.ok) {
-        console.error(`S3 getObject failed with status ${res.status} for ${storageKey}`);
-        return null;
+      const command = new PutObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        Body: data,
+        ContentType: contentType,
+      });
+
+      await this.client.send(command);
+      console.log(`✅ Successfully synced ${key} to S3/Backblaze B2 (${data.length} bytes)`);
+    } catch (err: any) {
+      console.error(`⚠️ S3/Backblaze putObject warning for ${key}:`, err.message || err);
+      // Do not rethrow so local file storage remains safe
+    }
+  }
+
+  async getObject(storageKey: string): Promise<{ data: Buffer; contentType: string } | null> {
+    const key = this.cleanKey(storageKey);
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+      });
+
+      const response = await this.client.send(command);
+      if (!response.Body) return null;
+
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
-      const arrayBuf = await res.arrayBuffer();
-      const contentType = res.headers.get('content-type') || 'image/jpeg';
+
       return {
-        data: Buffer.from(arrayBuf),
-        contentType,
+        data: Buffer.concat(chunks),
+        contentType: response.ContentType || 'image/jpeg',
       };
     } catch (err: any) {
-      console.error(`Failed to fetch S3 object ${storageKey}:`, err.message);
+      console.error(`⚠️ S3/Backblaze getObject warning for ${key}:`, err.message || err);
       return null;
     }
   }
 
   async deleteObject(storageKey: string): Promise<void> {
-    const deleteUrl = this.generatePresignedUrl('PUT', storageKey, 60);
+    const key = this.cleanKey(storageKey);
     try {
-      await fetch(deleteUrl, { method: 'DELETE' });
-    } catch (e) {
-      console.error('Failed to delete S3 object', e);
+      const command = new DeleteObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+      });
+      await this.client.send(command);
+    } catch (err: any) {
+      console.error(`⚠️ S3 deleteObject warning for ${key}:`, err.message || err);
     }
-  }
-
-  async putObject(storageKey: string, data: Buffer, contentType: string): Promise<void> {
-    const upload = await this.getSignedUploadUrl(storageKey, contentType);
-    await fetch(upload.uploadUrl, {
-      method: 'PUT',
-      headers: upload.headers,
-      body: new Uint8Array(data) as any,
-    });
   }
 }

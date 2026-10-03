@@ -51,9 +51,22 @@ const MainContent: React.FC = () => {
   const [isProposeModalOpen, setIsProposeModalOpen] = useState(false);
   const [viewerItem, setViewerItem] = useState<FeedItem | null>(null);
   const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerMode, setViewerMode] = useState<'grid' | 'expanded'>('expanded');
   const [commentsItem, setCommentsItem] = useState<FeedItem | null>(null);
   const [shareItem, setShareItem] = useState<FeedItem | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+
+  const handleOpenViewer = (item: FeedItem, initialIndex: number = 0, initialMode?: 'grid' | 'expanded') => {
+    setViewerItem(item);
+    setViewerIndex(initialIndex);
+    if (initialMode) {
+      setViewerMode(initialMode);
+    } else if (item.type === 'single_post' && item.files.length > 1) {
+      setViewerMode('grid');
+    } else {
+      setViewerMode('expanded');
+    }
+  };
 
   // Fetch circles/groups
   const fetchGroups = async () => {
@@ -220,10 +233,7 @@ const MainContent: React.FC = () => {
                 items={feedItems}
                 groups={groups}
                 selectedGroupId={selectedGroupId}
-                onOpenViewer={(item, initialIndex) => {
-                  setViewerItem(item);
-                  setViewerIndex(initialIndex || 0);
-                }}
+                onOpenViewer={handleOpenViewer}
                 onOpenComments={(item) => setCommentsItem(item)}
                 onOpenCollection={(colId) => setActiveCollectionId(colId)}
                 onShareToGroup={handleDirectShare}
@@ -358,6 +368,7 @@ const MainContent: React.FC = () => {
       <MediaViewerModal
         item={viewerItem}
         initialIndex={viewerIndex}
+        initialMode={viewerMode}
         isOpen={Boolean(viewerItem)}
         onClose={() => setViewerItem(null)}
         onOpenComments={(item) => setCommentsItem(item)}
@@ -389,15 +400,13 @@ const MainContent: React.FC = () => {
         onSelectPhoto={(postId) => {
           const found = feedItems.find((i) => i.id === postId);
           if (found) {
-            setViewerItem(found);
-            setViewerIndex(0);
+            handleOpenViewer(found, 0, 'expanded');
           } else {
             apiFetch(`/api/posts/${postId}`)
               .then((r) => r.json())
               .then((data) => {
                 if (data.post) {
-                  setViewerItem({ type: 'single_post', ...data.post });
-                  setViewerIndex(0);
+                  handleOpenViewer({ type: 'single_post', ...data.post }, 0, 'expanded');
                 }
               });
           }

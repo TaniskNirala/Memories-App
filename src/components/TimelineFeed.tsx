@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { FeedItem, Group } from '../types/index.ts';
+import { FeedItem, SinglePostFeedItem, Group } from '../types/index.ts';
 import {
   Lock,
   ChevronDown,
@@ -14,6 +14,8 @@ import {
   X,
   Flag,
   Share2,
+  Grid,
+  Images,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 
@@ -21,7 +23,7 @@ interface TimelineFeedProps {
   items: FeedItem[];
   groups: Group[];
   selectedGroupId?: string;
-  onOpenViewer: (item: FeedItem, initialIndex?: number) => void;
+  onOpenViewer: (item: FeedItem, initialIndex?: number, initialMode?: 'grid' | 'expanded') => void;
   onOpenComments: (item: FeedItem) => void;
   onOpenCollection: (collectionId: string) => void;
   onShareToGroup: (itemId: string, itemType: 'post' | 'album', groupId: string) => Promise<void>;
@@ -30,6 +32,248 @@ interface TimelineFeedProps {
   onDeleteAlbum?: (albumId: string, permanent?: boolean) => Promise<void>;
   onMemoryUpdated?: () => void;
 }
+
+interface PostCollageProps {
+  item: SinglePostFeedItem;
+  onOpenViewer: (item: FeedItem, initialIndex?: number, initialMode?: 'grid' | 'expanded') => void;
+}
+
+const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
+  const files = item.files || [];
+  const count = files.length;
+
+  if (count === 0) {
+    return (
+      <div className="w-full aspect-16/9 sm:aspect-2/1 rounded-xl bg-neutral-900 border border-[var(--border-color)] flex items-center justify-center mb-3">
+        <Sparkles className="w-8 h-8 text-amber-300 opacity-60" />
+      </div>
+    );
+  }
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, storageKey?: string) => {
+    const target = e.currentTarget;
+    if (!target.dataset.triedFallback && storageKey) {
+      target.dataset.triedFallback = 'true';
+      target.src = `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
+    }
+  };
+
+  // 1 photo: Full width
+  if (count === 1) {
+    const f = files[0];
+    return (
+      <div
+        onClick={() => onOpenViewer(item, 0, 'expanded')}
+        className="relative w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden cursor-pointer bg-neutral-900 border border-[var(--border-color)] mb-3 group/media"
+      >
+        <img
+          src={f.viewUrl || f.thumbUrl}
+          alt={item.caption || 'Memory photo'}
+          referrerPolicy="no-referrer"
+          onError={(e) => handleImageError(e, f.storageKey)}
+          className="w-full h-full object-cover group-hover/media:scale-[1.02] transition-transform duration-300"
+        />
+      </div>
+    );
+  }
+
+  // 2 photos: Split columns side-by-side
+  if (count === 2) {
+    return (
+      <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
+        <div className="grid grid-cols-2 gap-1.5 w-full h-full">
+          {files.map((f, idx) => (
+            <div
+              key={f.id || idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenViewer(item, idx, 'expanded');
+              }}
+              className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
+            >
+              <img
+                src={f.viewUrl || f.thumbUrl}
+                alt={`${item.caption || 'Memory'} ${idx + 1}`}
+                referrerPolicy="no-referrer"
+                onError={(e) => handleImageError(e, f.storageKey)}
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenViewer(item, 0, 'grid');
+          }}
+          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+        >
+          <Images className="w-3.5 h-3.5 text-amber-400" />
+          <span>2 Photos • Open Album</span>
+        </button>
+      </div>
+    );
+  }
+
+  // 3 photos: 1 large feature photo on left, 2 stacked on right
+  if (count === 3) {
+    return (
+      <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
+        <div className="grid grid-cols-3 gap-1.5 w-full h-full">
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenViewer(item, 0, 'expanded');
+            }}
+            className="col-span-2 relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
+          >
+            <img
+              src={files[0].viewUrl || files[0].thumbUrl}
+              alt={`${item.caption || 'Memory'} 1`}
+              referrerPolicy="no-referrer"
+              onError={(e) => handleImageError(e, files[0].storageKey)}
+              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+            />
+          </div>
+
+          <div className="col-span-1 grid grid-rows-2 gap-1.5 h-full">
+            {files.slice(1, 3).map((f, i) => {
+              const realIdx = i + 1;
+              return (
+                <div
+                  key={f.id || realIdx}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenViewer(item, realIdx, 'expanded');
+                  }}
+                  className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
+                >
+                  <img
+                    src={f.viewUrl || f.thumbUrl}
+                    alt={`${item.caption || 'Memory'} ${realIdx + 1}`}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => handleImageError(e, f.storageKey)}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenViewer(item, 0, 'grid');
+          }}
+          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+        >
+          <Images className="w-3.5 h-3.5 text-amber-400" />
+          <span>3 Photos • Open Album</span>
+        </button>
+      </div>
+    );
+  }
+
+  // 4 photos: 2x2 grid
+  if (count === 4) {
+    return (
+      <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
+        <div className="grid grid-cols-2 gap-1.5 w-full h-full">
+          {files.map((f, idx) => (
+            <div
+              key={f.id || idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenViewer(item, idx, 'expanded');
+              }}
+              className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
+            >
+              <img
+                src={f.viewUrl || f.thumbUrl}
+                alt={`${item.caption || 'Memory'} ${idx + 1}`}
+                referrerPolicy="no-referrer"
+                onError={(e) => handleImageError(e, f.storageKey)}
+                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenViewer(item, 0, 'grid');
+          }}
+          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+        >
+          <Images className="w-3.5 h-3.5 text-amber-400" />
+          <span>4 Photos • Open Album</span>
+        </button>
+      </div>
+    );
+  }
+
+  // 5+ photos: 2x2 grid with +N overlay on the 4th item
+  const extraCount = count - 4;
+  return (
+    <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
+      <div className="grid grid-cols-2 gap-1.5 w-full h-full">
+        {files.slice(0, 4).map((f, idx) => {
+          const isFourth = idx === 3;
+          return (
+            <div
+              key={f.id || idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isFourth) {
+                  onOpenViewer(item, 0, 'grid');
+                } else {
+                  onOpenViewer(item, idx, 'expanded');
+                }
+              }}
+              className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900 group/cell"
+            >
+              <img
+                src={f.viewUrl || f.thumbUrl}
+                alt={`${item.caption || 'Memory'} ${idx + 1}`}
+                referrerPolicy="no-referrer"
+                onError={(e) => handleImageError(e, f.storageKey)}
+                className={`w-full h-full object-cover transition-transform duration-300 ${
+                  isFourth ? 'brightness-75' : 'hover:scale-105'
+                }`}
+              />
+
+              {isFourth && (
+                <div className="absolute inset-0 bg-black/65 backdrop-blur-xs flex flex-col items-center justify-center text-white hover:bg-black/55 transition">
+                  <span className="font-display font-bold text-xl sm:text-2xl text-amber-300">
+                    +{extraCount + 1}
+                  </span>
+                  <span className="text-[10px] sm:text-xs text-neutral-200 flex items-center gap-1 font-medium mt-0.5">
+                    <Grid className="w-3.5 h-3.5 text-amber-400" />
+                    <span>View Album</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenViewer(item, 0, 'grid');
+        }}
+        className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+      >
+        <Images className="w-3.5 h-3.5 text-amber-400" />
+        <span>{count} Photos • Open Album</span>
+      </button>
+    </div>
+  );
+};
 
 export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   items,
@@ -354,7 +598,8 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                       onClick={() => {
                         if (item.type === 'single_post' && item.isLockedPlaceholder) return;
                         if (item.type === 'collection_card') onOpenCollection(item.id);
-                        else onOpenViewer(item, 0);
+                        else if (item.type === 'single_post' && item.files.length > 1) onOpenViewer(item, 0, 'grid');
+                        else onOpenViewer(item, 0, 'expanded');
                       }}
                       className={`font-display font-bold text-base sm:text-lg text-[var(--text-primary)] mb-3 ${
                         item.type === 'single_post' && item.isLockedPlaceholder
@@ -382,25 +627,9 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                       </div>
                     ) : (
                       <>
-                        {/* Media Display */}
+                        {/* Media Display: Responsive Collage for Multi-Photos or Cover Mosaic */}
                         {item.type === 'single_post' ? (
-                          <div
-                            onClick={() => onOpenViewer(item, 0)}
-                            className="relative w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden cursor-pointer bg-neutral-900 border border-[var(--border-color)] mb-3 group/media"
-                          >
-                            {mainFile ? (
-                              <img
-                                src={mainFile.viewUrl || mainFile.thumbUrl}
-                                alt={item.caption || 'Memory photo'}
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover group-hover/media:scale-[1.02] transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-linear-to-r from-amber-700 to-amber-900 flex items-center justify-center">
-                                <Sparkles className="w-8 h-8 text-amber-300 opacity-60" />
-                              </div>
-                            )}
-                          </div>
+                          <PostCollage item={item} onOpenViewer={onOpenViewer} />
                         ) : (
                           /* Collection 2x2 cover mosaic grid */
                           <div

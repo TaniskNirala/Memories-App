@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Upload,
@@ -212,6 +212,41 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const resetForm = () => {
+    // Revoke object URLs to avoid memory leaks
+    queue.forEach((item) => {
+      if (item.previewUrl) {
+        try {
+          URL.revokeObjectURL(item.previewUrl);
+        } catch {}
+      }
+    });
+    setQueue([]);
+    setCaption('');
+    setTakenAt(new Date().toISOString().slice(0, 10));
+    setMetadataSource(null);
+    setDateBasis('taken_at');
+    setSelectedGroupIds([]);
+    setGlobalError(null);
+    setIsProcessing(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Reset form whenever modal closes or opens freshly
+  useEffect(() => {
+    if (!isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
+  const handleClose = () => {
+    if (isProcessing) return;
+    resetForm();
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -385,6 +420,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
         throw new Error(pErr.error || 'Failed to create post record');
       }
 
+      resetForm();
       onUploadSuccess();
       onClose();
     } catch (err: any) {
@@ -406,7 +442,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
             <span className="text-[11px] text-[var(--accent-coral)] font-mono">Zero Quota</span>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isProcessing}
             className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition"
           >
@@ -611,7 +647,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
         <div className="px-5 py-3.5 border-t border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-card)]">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isProcessing}
             className="px-4 py-2 text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
           >

@@ -441,6 +441,60 @@ postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// Delete single photo/file from a multi-photo post
+postsRouter.delete('/:id/files/:fileId', async (req: AuthenticatedRequest, res) => {
+  const postId = req.params.id;
+  const fileId = req.params.fileId;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (!isAdmin && post.owner_id !== userId) {
+    return res.status(403).json({ error: 'Only the owner or an admin can delete photos from this post' });
+  }
+
+  const files = queryAll<any>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [postId]);
+  const targetFile = files.find((f) => f.id === fileId);
+  if (!targetFile) {
+    return res.status(404).json({ error: 'Photo not found in this post' });
+  }
+
+  // Delete from storage adapter
+  const storage = getStorageAdapter();
+  await storage.deleteObject(targetFile.storage_key).catch(() => {});
+  if (targetFile.thumb_key && targetFile.thumb_key !== targetFile.storage_key) {
+    await storage.deleteObject(targetFile.thumb_key).catch(() => {});
+  }
+
+  // Delete from post_files table
+  run('DELETE FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
+
+  const remainingFiles = files.filter((f) => f.id !== fileId);
+
+  // If no files remain, delete the post completely
+  if (remainingFiles.length === 0) {
+    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
+    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [postId]);
+    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [postId]);
+    run('DELETE FROM album_items WHERE post_id = ?', [postId]);
+    run('DELETE FROM posts WHERE id = ?', [postId]);
+    return res.json({ success: true, postDeleted: true, message: 'Last photo deleted, entire memory removed' });
+  }
+
+  // Re-index remaining files position (0, 1, 2, ...)
+  remainingFiles.forEach((file, index) => {
+    run('UPDATE post_files SET position = ? WHERE id = ?', [index, file.id]);
+  });
+
+  return res.json({
+    success: true,
+    postDeleted: false,
+    remainingCount: remainingFiles.length,
+    message: 'Photo deleted from memory successfully',
+  });
+});
+
 // Restore post from trash
 postsRouter.post('/:id/restore', (req: AuthenticatedRequest, res) => {
   const postId = req.params.id;

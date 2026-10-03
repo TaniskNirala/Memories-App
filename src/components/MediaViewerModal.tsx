@@ -29,6 +29,7 @@ interface MediaViewerModalProps {
   onOpenComments: (item: FeedItem) => void;
   onOpenShareModal: (item: FeedItem) => void;
   onDeletePost: (postId: string, permanent?: boolean) => void;
+  onDeleteFile?: (postId: string, fileId: string) => Promise<void> | void;
   onOverrideVisibility?: (postId: string, override: string | null) => void;
 }
 
@@ -41,12 +42,15 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   onOpenComments,
   onOpenShareModal,
   onDeletePost,
+  onDeleteFile,
   onOverrideVisibility,
 }) => {
   const { user, isAdmin } = useAuth();
   const [fileIndex, setFileIndex] = useState(initialIndex);
   const [viewMode, setViewMode] = useState<'grid' | 'expanded'>('expanded');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteTargetPhoto, setDeleteTargetPhoto] = useState<{ id: string; index: number } | null>(null);
+  const [isDeletingFile, setIsDeletingFile] = useState(false);
   const [showOverrideMenu, setShowOverrideMenu] = useState(false);
 
   // Zoom & Pan state
@@ -59,6 +63,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   useEffect(() => {
     setFileIndex(initialIndex);
     setShowDeleteConfirm(false);
+    setDeleteTargetPhoto(null);
     if (initialMode) {
       setViewMode(initialMode);
     } else if (item && item.type === 'single_post' && item.files.length > 1) {
@@ -320,15 +325,28 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             </div>
           )}
 
-          {/* Delete Button */}
+          {/* Delete Buttons */}
           {canDelete && (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="p-2 rounded-full bg-white/10 hover:bg-rose-500/30 text-rose-400 transition"
-              title="Delete Post"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {hasMultiplePhotos && currentFile && (
+                <button
+                  onClick={() => setDeleteTargetPhoto({ id: currentFile.id, index: fileIndex })}
+                  className="px-2.5 py-1.5 rounded-full bg-white/10 hover:bg-amber-500/25 text-amber-300 transition flex items-center gap-1.5 text-xs font-semibold"
+                  title={`Delete Photo #${fileIndex + 1} only`}
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Delete Photo #{fileIndex + 1}</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-2 rounded-full bg-white/10 hover:bg-rose-500/30 text-rose-400 transition"
+                title={hasMultiplePhotos ? "Delete Memory Options" : "Delete Memory"}
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
           )}
 
           {/* Close Modal */}
@@ -433,6 +451,20 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono border border-white/10">
                     #{idx + 1}
                   </div>
+
+                  {/* Delete Single Photo Button on Thumbnail in Grid */}
+                  {canDelete && files.length > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTargetPhoto({ id: file.id, index: idx });
+                      }}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/75 hover:bg-rose-600 text-neutral-300 hover:text-white backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
+                      title={`Delete Photo #${idx + 1}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
 
                   {/* Hover Overlay */}
                   <div className="absolute inset-0 bg-black/50 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-1.5 text-white">
@@ -650,12 +682,42 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           <div className="w-full max-w-sm p-5 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl text-white">
             <h4 className="font-semibold text-sm mb-2 text-rose-400 flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4" />
-              Delete Memory
+              {hasMultiplePhotos ? 'Delete Memory Options' : 'Delete Memory'}
             </h4>
             <p className="text-xs text-neutral-300 mb-4 leading-relaxed">
-              Choose how you want to remove this memory:
+              {hasMultiplePhotos
+                ? `This memory has ${files.length} photos. What would you like to delete?`
+                : 'Choose how you want to remove this memory:'}
             </p>
             <div className="space-y-2">
+              {/* Option to delete ONLY current photo if multiple photos */}
+              {hasMultiplePhotos && currentFile && onDeleteFile && (
+                <button
+                  onClick={async () => {
+                    if (isDeletingFile) return;
+                    setIsDeletingFile(true);
+                    try {
+                      await onDeleteFile(item.id, currentFile.id);
+                      setShowDeleteConfirm(false);
+                      setFileIndex((prev) => Math.max(0, Math.min(prev, files.length - 2)));
+                      resetZoom();
+                    } finally {
+                      setIsDeletingFile(false);
+                    }
+                  }}
+                  disabled={isDeletingFile}
+                  className="w-full py-2.5 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-semibold text-left transition flex items-center justify-between border border-amber-500/30"
+                >
+                  <div className="flex items-center gap-2">
+                    <Trash2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Delete Photo #{fileIndex + 1} Only</span>
+                  </div>
+                  <span className="text-[10px] text-amber-400/80 font-normal">
+                    {isDeletingFile ? 'Deleting...' : `Keeps other ${files.length - 1} photos`}
+                  </span>
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   onDeletePost(item.id, false);
@@ -663,7 +725,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 }}
                 className="w-full py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-left transition flex items-center justify-between"
               >
-                <span>Move to Trash</span>
+                <span>{hasMultiplePhotos ? 'Move Entire Memory to Trash' : 'Move to Trash'}</span>
                 <span className="text-[10px] text-neutral-400">Recoverable for 30 days</span>
               </button>
 
@@ -674,13 +736,55 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 }}
                 className="w-full py-2 px-3 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 text-xs font-medium text-left transition flex items-center justify-between border border-rose-500/30"
               >
-                <span>Delete Forever</span>
+                <span>{hasMultiplePhotos ? 'Delete Entire Memory Forever' : 'Delete Forever'}</span>
                 <span className="text-[10px] text-rose-400/80">Purges files immediately</span>
               </button>
 
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Single Photo confirmation dialog */}
+      {deleteTargetPhoto && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs">
+          <div className="w-full max-w-sm p-5 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl text-white">
+            <h4 className="font-semibold text-sm mb-2 text-amber-400 flex items-center gap-1.5">
+              <Trash2 className="w-4 h-4 text-amber-400" />
+              Delete Photo #{deleteTargetPhoto.index + 1}?
+            </h4>
+            <p className="text-xs text-neutral-300 mb-4 leading-relaxed">
+              Are you sure you want to remove this single photo from this memory? The remaining {files.length - 1} {files.length - 1 === 1 ? 'photo' : 'photos'} will stay safely in your memory.
+            </p>
+            <div className="space-y-2">
+              <button
+                onClick={async () => {
+                  if (isDeletingFile || !onDeleteFile) return;
+                  setIsDeletingFile(true);
+                  try {
+                    await onDeleteFile(item.id, deleteTargetPhoto.id);
+                    setDeleteTargetPhoto(null);
+                    setFileIndex((prev) => Math.max(0, Math.min(prev, files.length - 2)));
+                    resetZoom();
+                  } finally {
+                    setIsDeletingFile(false);
+                  }
+                }}
+                disabled={isDeletingFile}
+                className="w-full py-2.5 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold text-center transition shadow-md"
+              >
+                {isDeletingFile ? 'Deleting Photo...' : `Delete Photo #${deleteTargetPhoto.index + 1}`}
+              </button>
+
+              <button
+                onClick={() => setDeleteTargetPhoto(null)}
+                className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white transition"
               >
                 Cancel
               </button>

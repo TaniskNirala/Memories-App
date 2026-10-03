@@ -258,6 +258,45 @@ const MainContent: React.FC = () => {
     } catch (e) {}
   };
 
+  const handleDeleteSinglePhoto = async (postId: string, fileId: string) => {
+    try {
+      const res = await apiFetch(`/api/posts/${postId}/files/${fileId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.postDeleted) {
+          setFeedItems((prev) => prev.filter((item) => item.id !== postId));
+          setViewerItem(null);
+        } else {
+          // Update feed item's files in-place
+          setFeedItems((prev) =>
+            prev.map((item) => {
+              if (item.id === postId && item.type === 'single_post') {
+                return {
+                  ...item,
+                  files: item.files.filter((f) => f.id !== fileId),
+                };
+              }
+              return item;
+            })
+          );
+          // If the viewer is currently open on this post, update viewerItem
+          setViewerItem((prev) => {
+            if (!prev || prev.id !== postId || prev.type !== 'single_post') return prev;
+            const updatedFiles = prev.files.filter((f) => f.id !== fileId);
+            return {
+              ...prev,
+              files: updatedFiles,
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Failed to delete single photo', e);
+    }
+  };
+
   const handleDeleteAlbum = async (albumId: string, permanent: boolean = false) => {
     try {
       await apiFetch(`/api/albums/${albumId}`, {
@@ -471,6 +510,7 @@ const MainContent: React.FC = () => {
         onOpenComments={(item) => setCommentsItem(item)}
         onOpenShareModal={(item) => setShareItem(item)}
         onDeletePost={handleDeletePost}
+        onDeleteFile={handleDeleteSinglePhoto}
         onOverrideVisibility={handleAdminOverride}
       />
 

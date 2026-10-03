@@ -19,7 +19,7 @@ import { PendingReferencesBanner } from './components/PendingReferencesBanner.ts
 import { TrashView } from './components/TrashView.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
-import { FeedItem, Group } from './types/index.ts';
+import { FeedItem, Group, NotificationItem } from './types/index.ts';
 import { RefreshCw } from 'lucide-react';
 
 const MainContent: React.FC = () => {
@@ -54,6 +54,8 @@ const MainContent: React.FC = () => {
   const [viewerIndex, setViewerIndex] = useState(0);
   const [viewerMode, setViewerMode] = useState<'grid' | 'expanded'>('expanded');
   const [commentsItem, setCommentsItem] = useState<FeedItem | null>(null);
+  const [commentsGroupId, setCommentsGroupId] = useState<string | undefined>(undefined);
+  const [highlightCommentId, setHighlightCommentId] = useState<string | undefined>(undefined);
   const [shareItem, setShareItem] = useState<FeedItem | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
 
@@ -319,12 +321,110 @@ const MainContent: React.FC = () => {
     } catch (e) {}
   };
 
+  const handleNotificationClick = async (notif: NotificationItem) => {
+    const link = notif.link || '';
+    if (!link) return;
+
+    const [pathPart, queryPart] = link.split('?');
+    const params = new URLSearchParams(queryPart || '');
+    const groupId = params.get('group') || undefined;
+    const commentId = params.get('comment') || undefined;
+
+    // 1. Post target: /post/:id
+    const postMatch = pathPart.match(/^\/post\/([a-zA-Z0-9_-]+)/);
+    if (postMatch) {
+      const postId = postMatch[1];
+      setCurrentTab('feed');
+      if (groupId) {
+        setSelectedGroupId(groupId);
+      }
+
+      let targetPost = feedItems.find((f) => f.id === postId);
+      if (!targetPost) {
+        try {
+          const res = await apiFetch(`/api/posts/${postId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.post) {
+              targetPost = {
+                type: 'single_post',
+                ...data.post,
+              };
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load notification post', e);
+        }
+      }
+
+      if (targetPost) {
+        setCommentsGroupId(groupId);
+        setHighlightCommentId(commentId);
+        setCommentsItem(targetPost);
+      }
+      return;
+    }
+
+    // 2. Album target: /album/:id or /collection/:id
+    const albumMatch = pathPart.match(/^\/(?:album|collection)\/([a-zA-Z0-9_-]+)/);
+    if (albumMatch) {
+      const albumId = albumMatch[1];
+      if (commentId) {
+        let targetAlbum = feedItems.find((f) => f.id === albumId && f.type === 'collection_card');
+        if (!targetAlbum) {
+          try {
+            const res = await apiFetch(`/api/albums/${albumId}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.album) {
+                targetAlbum = {
+                  type: 'collection_card',
+                  ...data.album,
+                };
+              }
+            }
+          } catch (e) {}
+        }
+        if (targetAlbum) {
+          setCommentsGroupId(groupId);
+          setHighlightCommentId(commentId);
+          setCommentsItem(targetAlbum);
+          return;
+        }
+      }
+      setActiveCollectionId(albumId);
+      return;
+    }
+
+    // 3. Admin: /admin
+    if (pathPart === '/admin') {
+      if (isAdmin) setCurrentTab('admin');
+      return;
+    }
+
+    // 4. Groups / circles: /groups or /circles
+    if (pathPart === '/groups' || pathPart === '/circles') {
+      setIsGroupsModalOpen(true);
+      return;
+    }
+
+    // 5. Trash: /trash
+    if (pathPart === '/trash') {
+      setCurrentTab('trash');
+      return;
+    }
+
+    // Default fallback:
+    setCurrentTab('feed');
+  };
+
   return (
     <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] flex flex-col transition-colors pb-16">
       {/* Top Header */}
       <Header
         selectedGroupName={selectedGroup?.name}
         onSelectGroup={(gid) => setSelectedGroupId(gid)}
+        onNotificationClick={handleNotificationClick}
         onUserSwitched={() => {
           setSelectedGroupId(undefined);
           fetchGroups();
@@ -516,8 +616,14 @@ const MainContent: React.FC = () => {
 
       <CommentsDrawer
         isOpen={Boolean(commentsItem)}
-        onClose={() => setCommentsItem(null)}
+        onClose={() => {
+          setCommentsItem(null);
+          setCommentsGroupId(undefined);
+          setHighlightCommentId(undefined);
+        }}
         item={commentsItem}
+        groupId={commentsGroupId}
+        highlightCommentId={highlightCommentId}
         onReactionToggle={async (targetId, groupId, emoji) => {
           try {
             await apiFetch('/api/reactions/toggle', {

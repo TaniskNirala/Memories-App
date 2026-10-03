@@ -10,9 +10,10 @@ interface HeaderProps {
   onSelectGroup?: (groupId: string | undefined) => void;
   selectedGroupName?: string;
   onUserSwitched?: () => void;
+  onNotificationClick?: (notification: NotificationItem) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ selectedGroupName }) => {
+export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificationClick }) => {
   const { user, logout, isPending } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -43,6 +44,22 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName }) => {
       setUnreadCount(0);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
     } catch (e) {}
+  };
+
+  const handleNotificationClick = async (n: NotificationItem) => {
+    if (!n.read) {
+      try {
+        await apiFetch(`/api/notifications/${n.id}/read`, { method: 'POST' });
+        setNotifications((prev) =>
+          prev.map((item) => (item.id === n.id ? { ...item, read: 1 } : item))
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch (e) {}
+    }
+    setShowNotifDropdown(false);
+    if (onNotificationClick) {
+      onNotificationClick(n);
+    }
   };
 
   return (
@@ -140,17 +157,30 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName }) => {
                       notifications.map((n) => (
                         <div
                           key={n.id}
-                          className={`p-2 rounded-xl text-xs transition ${
-                            n.read ? 'bg-transparent text-[var(--text-muted)]' : 'bg-[var(--bg-surface)] text-[var(--text-primary)] font-medium'
+                          onClick={() => handleNotificationClick(n)}
+                          className={`p-2.5 rounded-xl text-xs transition cursor-pointer text-left w-full hover:scale-[1.01] active:scale-[0.99] select-none ${
+                            n.read
+                              ? 'bg-transparent hover:bg-[var(--bg-surface)]/60 text-[var(--text-muted)]'
+                              : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] font-medium border border-amber-500/20 shadow-xs'
                           }`}
+                          role="button"
+                          tabIndex={0}
                         >
                           <div className="flex items-start justify-between gap-1">
-                            <span className="text-[11px] font-semibold text-amber-400">{n.title}</span>
+                            <div className="flex items-center gap-1.5">
+                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
+                              <span className="text-[11px] font-semibold text-amber-400">{n.title}</span>
+                            </div>
                             <span className="text-[9px] text-[var(--text-muted)] shrink-0">
                               {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
-                          <p className="text-[11px] mt-0.5 leading-snug">{n.body}</p>
+                          <p className="text-[11px] mt-1 leading-snug line-clamp-2">{n.body}</p>
+                          {n.link && (
+                            <span className="text-[10px] text-[var(--accent-coral)] font-semibold mt-1 inline-flex items-center gap-0.5 hover:underline">
+                              View details →
+                            </span>
+                          )}
                         </div>
                       ))
                     )}

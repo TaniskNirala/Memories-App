@@ -8,6 +8,7 @@ interface CommentsDrawerProps {
   onClose: () => void;
   item: FeedItem | null;
   groupId?: string;
+  highlightCommentId?: string;
   onReactionToggle?: (targetId: string, groupId: string, emoji: string) => void;
 }
 
@@ -18,6 +19,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
   onClose,
   item,
   groupId,
+  highlightCommentId,
   onReactionToggle,
 }) => {
   const { user, isAdmin } = useAuth();
@@ -70,6 +72,18 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
       setReplyingTo(null);
     }
   }, [isOpen, item, activeGroupId]);
+
+  // Scroll to and highlight targeted comment from notifications
+  useEffect(() => {
+    if (!highlightCommentId || comments.length === 0) return;
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`comment-${highlightCommentId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [highlightCommentId, comments]);
 
   if (!isOpen || !item) return null;
 
@@ -231,7 +245,14 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
             rootComments.map((comment) => (
               <div key={comment.id} className="space-y-2">
                 {/* Root Comment */}
-                <div className={`p-2.5 rounded-xl bg-[var(--bg-surface)] text-xs border border-[var(--border-subtle)] ${comment.isDeleted ? 'opacity-50 italic' : ''}`}>
+                <div
+                  id={`comment-${comment.id}`}
+                  className={`p-2.5 rounded-xl text-xs border transition-all duration-300 ${
+                    comment.id === highlightCommentId
+                      ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-400 shadow-md shadow-amber-500/20'
+                      : 'bg-[var(--bg-surface)] border-[var(--border-subtle)]'
+                  } ${comment.isDeleted ? 'opacity-50 italic' : ''}`}
+                >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
                       <div
@@ -315,7 +336,14 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
                 {/* Threaded Replies */}
                 {repliesByParent[comment.id]?.map((reply) => (
                   <div key={reply.id} className="ml-5 pl-2.5 border-l-2 border-[var(--border-color)] space-y-1">
-                    <div className={`p-2 rounded-xl bg-[var(--bg-surface-elevated)] text-xs ${reply.isDeleted ? 'opacity-50 italic' : ''}`}>
+                    <div
+                      id={`comment-${reply.id}`}
+                      className={`p-2 rounded-xl text-xs transition-all duration-300 ${
+                        reply.id === highlightCommentId
+                          ? 'bg-amber-500/15 border border-amber-400 ring-2 ring-amber-400 shadow-md shadow-amber-500/20'
+                          : 'bg-[var(--bg-surface-elevated)]'
+                      } ${reply.isDeleted ? 'opacity-50 italic' : ''}`}
+                    >
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-1.5">
                           <span className="font-bold text-[var(--text-primary)]">

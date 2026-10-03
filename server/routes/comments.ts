@@ -124,7 +124,7 @@ commentsRouter.post('/', (req: AuthenticatedRequest, res) => {
             'mention',
             'New Mention',
             `@${req.user!.username} mentioned you in "${group?.name || 'circle'}": "${cleanText.slice(0, 50)}..."`,
-            `/${targetType}/${targetId}?group=${groupId}`,
+            `/${targetType}/${targetId}?group=${groupId}&comment=${commentId}`,
             now,
           ]
         );
@@ -145,7 +145,7 @@ commentsRouter.post('/', (req: AuthenticatedRequest, res) => {
           'comment',
           'New Comment',
           `@${req.user!.username} commented on your memory: "${cleanText.slice(0, 50)}..."`,
-          `/post/${targetId}?group=${groupId}`,
+          `/post/${targetId}?group=${groupId}&comment=${commentId}`,
           now,
         ]
       );

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth, apiFetch } from './context/AuthContext.tsx';
 import { ThemeProvider } from './context/ThemeContext.tsx';
 import { Header } from './components/Header.tsx';
 import { BottomNav } from './components/BottomNav.tsx';
 import { CircleRail } from './components/CircleRail.tsx';
 import { TimelineFeed } from './components/TimelineFeed.tsx';
+import { FeedSearchBar, FeedFilterState } from './components/FeedSearchBar.tsx';
 import { AuthScreen } from './components/AuthScreen.tsx';
 import { PendingApprovalScreen } from './components/PendingApprovalScreen.tsx';
 import { UploadModal } from './components/UploadModal.tsx';
@@ -55,6 +56,90 @@ const MainContent: React.FC = () => {
   const [commentsItem, setCommentsItem] = useState<FeedItem | null>(null);
   const [shareItem, setShareItem] = useState<FeedItem | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+
+  // Search & filter state
+  const initialFeedFilters: FeedFilterState = {
+    searchQuery: '',
+    contributorId: 'all',
+    tag: 'all',
+    startDate: '',
+    endDate: '',
+  };
+  const [feedFilters, setFeedFilters] = useState<FeedFilterState>(initialFeedFilters);
+
+  // Filtered feed items based on search query, contributor, tag, and date range
+  const filteredFeedItems = useMemo(() => {
+    return feedItems.filter((item) => {
+      // 1. Text Search Query
+      if (feedFilters.searchQuery.trim()) {
+        const q = feedFilters.searchQuery.trim().toLowerCase();
+        const caption = (item.type === 'single_post' ? item.caption : `${item.title} ${item.description || ''}`).toLowerCase();
+        const author = item.type === 'single_post' ? item.owner : item.creator;
+        const authorName = (author?.displayName || '').toLowerCase();
+        const authorUsername = (author?.username || '').toLowerCase();
+        const groupPlacements = (item.placements || []).map((p) => p.groupName.toLowerCase()).join(' ');
+
+        const matchesQuery =
+          caption.includes(q) ||
+          authorName.includes(q) ||
+          authorUsername.includes(q) ||
+          groupPlacements.includes(q);
+
+        if (!matchesQuery) return false;
+      }
+
+      // 2. Contributor Filter
+      if (feedFilters.contributorId && feedFilters.contributorId !== 'all') {
+        const author = item.type === 'single_post' ? item.owner : item.creator;
+        if (!author || author.id !== feedFilters.contributorId) {
+          return false;
+        }
+      }
+
+      // 3. Tag Filter
+      if (feedFilters.tag && feedFilters.tag !== 'all') {
+        const targetTag = feedFilters.tag.toLowerCase();
+        const cleanTag = targetTag.replace(/^#/, '');
+        const text = (item.type === 'single_post' ? item.caption : `${item.title} ${item.description || ''}`).toLowerCase();
+        const groupPlacements = (item.placements || []).map((p) => p.groupName.toLowerCase());
+
+        const matchesHashtag = text.includes(`#${cleanTag}`) || text.includes(cleanTag);
+        const matchesGroup = groupPlacements.some((g) => g.includes(cleanTag));
+
+        if (!matchesHashtag && !matchesGroup) {
+          return false;
+        }
+      }
+
+      // 4. Date Range Filter
+      const rawDate = item.type === 'single_post' ? (item.takenAt || item.sortDate) : (item.eventDate || item.sortDate);
+      if (rawDate && (feedFilters.startDate || feedFilters.endDate)) {
+        const itemDate = new Date(rawDate);
+        if (!isNaN(itemDate.getTime())) {
+          if (feedFilters.startDate) {
+            const start = new Date(feedFilters.startDate);
+            start.setHours(0, 0, 0, 0);
+            if (itemDate < start) return false;
+          }
+          if (feedFilters.endDate) {
+            const end = new Date(feedFilters.endDate);
+            end.setHours(23, 59, 59, 999);
+            if (itemDate > end) return false;
+          }
+        }
+      }
+
+      return true;
+    });
+  }, [feedItems, feedFilters]);
+
+  const isFiltersActive = Boolean(
+    feedFilters.searchQuery.trim() ||
+    (feedFilters.contributorId && feedFilters.contributorId !== 'all') ||
+    (feedFilters.tag && feedFilters.tag !== 'all') ||
+    feedFilters.startDate ||
+    feedFilters.endDate
+  );
 
   const handleOpenViewer = (item: FeedItem, initialIndex: number = 0, initialMode?: 'grid' | 'expanded') => {
     setViewerItem(item);
@@ -228,9 +313,19 @@ const MainContent: React.FC = () => {
               {/* Owner Pending Reference Requests Approval Banner */}
               <PendingReferencesBanner onUpdated={() => fetchFeed(true)} />
 
+              {/* Feed Search & Filter Bar */}
+              <FeedSearchBar
+                filters={feedFilters}
+                onFilterChange={setFeedFilters}
+                onResetFilters={() => setFeedFilters(initialFeedFilters)}
+                items={feedItems}
+                filteredCount={filteredFeedItems.length}
+                totalCount={feedItems.length}
+              />
+
               {/* Continuous Vertical Timeline Feed */}
               <TimelineFeed
-                items={feedItems}
+                items={filteredFeedItems}
                 groups={groups}
                 selectedGroupId={selectedGroupId}
                 onOpenViewer={handleOpenViewer}
@@ -241,6 +336,8 @@ const MainContent: React.FC = () => {
                 onDeletePost={handleDeletePost}
                 onDeleteAlbum={handleDeleteAlbum}
                 onMemoryUpdated={() => fetchFeed(true)}
+                isFiltered={isFiltersActive}
+                onResetFilters={() => setFeedFilters(initialFeedFilters)}
               />
 
               {/* Load More Button */}

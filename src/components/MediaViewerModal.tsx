@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useGesture } from '@use-gesture/react';
 import {
   X,
   ChevronLeft,
@@ -12,6 +13,9 @@ import {
   Grid,
   Maximize2,
   Images,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
 } from 'lucide-react';
 import { FeedItem } from '../types/index.ts';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -45,6 +49,13 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showOverrideMenu, setShowOverrideMenu] = useState(false);
 
+  // Zoom & Pan state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const imageViewportRef = useRef<HTMLDivElement>(null);
+
+  // Reset fileIndex and viewMode on prop updates
   useEffect(() => {
     setFileIndex(initialIndex);
     setShowDeleteConfirm(false);
@@ -57,17 +68,104 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     }
   }, [initialIndex, initialMode, item]);
 
-  // Keyboard navigation
+  // Reset zoom & pan when switching photos, changing mode, or changing item
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setIsDragging(false);
+  }, [fileIndex, item, viewMode]);
+
+  // Gesture listener via @use-gesture/react for pinch-to-zoom, pan drag, and scroll-to-zoom
+  useGesture(
+    {
+      onPinch: ({ offset: [scale], event }) => {
+        if (event && 'preventDefault' in event) {
+          try {
+            event.preventDefault();
+          } catch {}
+        }
+        const nextZoom = Math.min(Math.max(1, scale), 6);
+        setZoom(nextZoom);
+        if (nextZoom <= 1.05) {
+          setPan({ x: 0, y: 0 });
+        }
+      },
+      onDrag: ({ offset: [x, y], dragging }) => {
+        setIsDragging(Boolean(dragging));
+        if (zoom > 1.05) {
+          setPan({ x, y });
+        }
+      },
+      onWheel: ({ delta: [, dy], event }) => {
+        if (event && 'preventDefault' in event) {
+          try {
+            event.preventDefault();
+          } catch {}
+        }
+        const zoomFactor = dy < 0 ? 1.15 : 0.87;
+        setZoom((prevZoom) => {
+          const nextZoom = Math.min(Math.max(1, prevZoom * zoomFactor), 6);
+          if (nextZoom <= 1.05) {
+            setPan({ x: 0, y: 0 });
+            return 1;
+          }
+          return nextZoom;
+        });
+      },
+    },
+    {
+      target: imageViewportRef,
+      eventOptions: { passive: false },
+      pinch: {
+        scaleBounds: { min: 1, max: 6 },
+        from: () => [zoom, 0],
+        modifierKey: null,
+      },
+      drag: {
+        from: () => [pan.x, pan.y],
+        filterTaps: true,
+      },
+    }
+  );
+
+  // Keyboard navigation & zoom shortcuts
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (viewMode === 'expanded' && item?.type === 'single_post' && item.files.length > 1) {
+        if (zoom > 1) {
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
+        } else if (viewMode === 'expanded' && item?.type === 'single_post' && item.files.length > 1) {
           setViewMode('grid');
         } else {
           onClose();
         }
+        return;
       }
+
+      // Zoom keyboard shortcuts
+      if (viewMode === 'expanded') {
+        if (e.key === '+' || e.key === '=') {
+          setZoom((z) => Math.min(6, z + 0.5));
+          return;
+        }
+        if (e.key === '-' || e.key === '_') {
+          setZoom((z) => {
+            const next = Math.max(1, z - 0.5);
+            if (next <= 1.05) setPan({ x: 0, y: 0 });
+            return next;
+          });
+          return;
+        }
+        if (e.key === '0') {
+          setZoom(1);
+          setPan({ x: 0, y: 0 });
+          return;
+        }
+      }
+
+      // Next / Previous Photo
       if (viewMode === 'expanded' && item?.type === 'single_post') {
         if (e.key === 'ArrowRight') {
           setFileIndex((prev) => (prev + 1) % item.files.length);
@@ -77,9 +175,10 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         }
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, item, viewMode, onClose]);
+  }, [isOpen, item, viewMode, zoom, onClose]);
 
   if (!isOpen || !item) return null;
   if (item.type !== 'single_post') return null;
@@ -90,8 +189,23 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const canDelete = isOwner || isAdmin;
   const hasMultiplePhotos = files.length > 1;
 
+  // Double click to toggle zoom (1x <-> 2.5x)
+  const handleDoubleClick = () => {
+    if (zoom > 1.1) {
+      setZoom(1);
+      setPan({ x: 0, y: 0 });
+    } else {
+      setZoom(2.5);
+    }
+  };
+
+  const resetZoom = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-150 select-none">
       {/* Top action bar */}
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-3.5 sm:p-4 bg-gradient-to-b from-black/90 via-black/60 to-transparent">
         {/* Left: Author & Album info */}
@@ -335,17 +449,69 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
       )}
 
       {/* ======================================================== */}
-      {/* MODE 2: FULLSCREEN EXPANDED LIGHTBOX                     */}
+      {/* MODE 2: FULLSCREEN EXPANDED LIGHTBOX WITH ZOOM & PAN     */}
       {/* ======================================================== */}
       {(viewMode === 'expanded' || !hasMultiplePhotos) && (
-        <div className="relative w-full h-full flex flex-col items-center justify-center p-2 sm:p-6 pt-16 pb-28">
-          {/* Main Displayed Photo */}
-          <div className="relative w-full flex-1 flex items-center justify-center max-w-5xl">
+        <div className="relative w-full h-full flex flex-col items-center justify-center pt-14 pb-28 sm:pb-32 overflow-hidden">
+          {/* Floating Zoom Controls Bar */}
+          <div className="absolute top-16 right-4 sm:top-18 sm:right-6 z-30 flex items-center gap-1 bg-black/80 backdrop-blur-md border border-white/20 rounded-full px-2 py-1 shadow-2xl text-white text-xs">
+            <button
+              onClick={() => {
+                setZoom((z) => {
+                  const next = Math.max(1, z - 0.5);
+                  if (next <= 1.05) setPan({ x: 0, y: 0 });
+                  return next;
+                });
+              }}
+              disabled={zoom <= 1.05}
+              className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
+              title="Zoom Out (-)"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+
+            <button
+              onClick={resetZoom}
+              className="px-2 py-0.5 text-[11px] font-mono hover:text-amber-400 transition"
+              title="Click to reset zoom (0)"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+
+            <button
+              onClick={() => setZoom((z) => Math.min(6, z + 0.5))}
+              disabled={zoom >= 6}
+              className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
+              title="Zoom In (+)"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+
+            {zoom > 1.05 && (
+              <button
+                onClick={resetZoom}
+                className="p-1 rounded-full hover:bg-white/20 text-neutral-300 hover:text-amber-400 transition ml-0.5 active:scale-95"
+                title="Reset Zoom (1x)"
+              >
+                <RotateCcw className="w-3 h-3 text-amber-400" />
+              </button>
+            )}
+          </div>
+
+          {/* Interactive Zoom & Pan Viewport */}
+          <div
+            ref={imageViewportRef}
+            onDoubleClick={handleDoubleClick}
+            className={`relative w-full flex-1 flex items-center justify-center overflow-hidden px-4 sm:px-12 touch-none select-none ${
+              zoom > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'
+            }`}
+          >
             {currentFile && (
               <img
                 src={currentFile.viewUrl || currentFile.thumbUrl}
                 alt={item.caption || 'Memory view'}
                 referrerPolicy="no-referrer"
+                draggable={false}
                 onError={(e) => {
                   const target = e.currentTarget;
                   if (!target.dataset.triedFallback && currentFile.storageKey) {
@@ -353,35 +519,57 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     target.src = `/api/storage/view?key=${encodeURIComponent(currentFile.storageKey)}`;
                   }
                 }}
-                className="max-w-full max-h-[72vh] object-contain rounded-xl shadow-2xl select-none animate-in fade-in zoom-in-95 duration-200"
+                style={{
+                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                  transformOrigin: 'center center',
+                  transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.2, 0, 0.2, 1)',
+                  maxHeight: '75vh',
+                  maxWidth: '92vw',
+                }}
+                className="w-auto h-auto object-contain rounded-xl shadow-2xl select-none pointer-events-none will-change-transform"
               />
             )}
 
-            {/* Left & Right Navigation Arrows */}
-            {hasMultiplePhotos && (
-              <>
-                <button
-                  onClick={() =>
-                    setFileIndex((prev) => (prev - 1 + files.length) % files.length)
-                  }
-                  className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 hover:bg-amber-500 hover:text-neutral-950 text-white flex items-center justify-center transition border border-white/20 shadow-xl"
-                  title="Previous Photo"
-                >
-                  <ChevronLeft className="w-6 h-6" />
-                </button>
-                <button
-                  onClick={() => setFileIndex((prev) => (prev + 1) % files.length)}
-                  className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-black/70 hover:bg-amber-500 hover:text-neutral-950 text-white flex items-center justify-center transition border border-white/20 shadow-xl"
-                  title="Next Photo"
-                >
-                  <ChevronRight className="w-6 h-6" />
-                </button>
-              </>
+            {/* Helpful pan hint when zoomed in */}
+            {zoom > 1.1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-neutral-300 text-[11px] font-medium pointer-events-none shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
+                <span>Scroll to zoom</span>
+                <span>•</span>
+                <span>Drag to pan</span>
+                <span>•</span>
+                <span>Double-click to reset</span>
+              </div>
             )}
           </div>
 
+          {/* Left & Right Navigation Arrows (only when not heavily zoomed) */}
+          {hasMultiplePhotos && (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFileIndex((prev) => (prev - 1 + files.length) % files.length);
+                }}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-black/70 hover:bg-amber-500 hover:text-neutral-950 text-white flex items-center justify-center transition border border-white/20 shadow-xl active:scale-95"
+                title="Previous Photo (Left Arrow)"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFileIndex((prev) => (prev + 1) % files.length);
+                }}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-black/70 hover:bg-amber-500 hover:text-neutral-950 text-white flex items-center justify-center transition border border-white/20 shadow-xl active:scale-95"
+                title="Next Photo (Right Arrow)"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </>
+          )}
+
           {/* Bottom Bar: Metadata, comments, and Filmstrip Reel */}
-          <div className="absolute bottom-0 left-0 right-0 z-30 p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/85 to-transparent text-white space-y-3">
+          <div className="absolute bottom-0 left-0 right-0 z-30 p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/85 to-transparent text-white space-y-2.5">
             <div className="max-w-4xl mx-auto">
               {/* Caption & Comments Bar */}
               <div className="flex items-center justify-between gap-4">

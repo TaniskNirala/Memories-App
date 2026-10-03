@@ -31,6 +31,8 @@ interface TimelineFeedProps {
   onDeletePost?: (postId: string, permanent?: boolean) => Promise<void>;
   onDeleteAlbum?: (albumId: string, permanent?: boolean) => Promise<void>;
   onMemoryUpdated?: () => void;
+  isFiltered?: boolean;
+  onResetFilters?: () => void;
 }
 
 interface PostCollageProps {
@@ -287,6 +289,8 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   onDeletePost,
   onDeleteAlbum,
   onMemoryUpdated,
+  isFiltered,
+  onResetFilters,
 }) => {
   const { user } = useAuth();
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -454,13 +458,31 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
       {/* Empty State */}
       {items.length === 0 && (
         <div className="p-8 text-center bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] space-y-3 shadow-md">
-          <p className="text-xs text-[var(--text-muted)] font-medium">No memories in this circle yet.</p>
-          <button
-            onClick={onOpenUpload}
-            className="px-4 py-2 rounded-xl bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 transition active:scale-95 shadow-xs"
-          >
-            Upload a Memory
-          </button>
+          {isFiltered ? (
+            <>
+              <p className="text-xs text-[var(--text-muted)] font-medium">
+                No memories match your search query or active filters.
+              </p>
+              {onResetFilters && (
+                <button
+                  onClick={onResetFilters}
+                  className="px-4 py-2 rounded-xl bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 transition active:scale-95 shadow-xs"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-[var(--text-muted)] font-medium">No memories in this circle yet.</p>
+              <button
+                onClick={onOpenUpload}
+                className="px-4 py-2 rounded-xl bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 transition active:scale-95 shadow-xs"
+              >
+                Upload a Memory
+              </button>
+            </>
+          )}
         </div>
       )}
 

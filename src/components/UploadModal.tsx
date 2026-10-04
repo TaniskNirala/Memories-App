@@ -20,6 +20,7 @@ interface UploadModalProps {
   onClose: () => void;
   groups: Group[];
   onUploadSuccess: () => void;
+  initialFiles?: File[];
 }
 
 interface QueuedFile {
@@ -65,12 +66,15 @@ async function resizeImage(file: File): Promise<{ mainBlob: Blob; thumbBlob: Blo
         const originalWidth = img.naturalWidth || img.width || 800;
         const originalHeight = img.naturalHeight || img.height || 600;
 
-        // 1. Main image: scale down so longest side is max 2048px
-        const maxDim = 2048;
+        // 1. High-Fidelity Main Image:
+        // If image is within 4096px (Ultra-HD 4K) and under 25MB, preserve the original untouched file
+        // to retain maximum crispness, original camera color space, and zero compression loss!
+        const maxDim = 4096;
+        let mainBlob: Blob = file;
         let targetWidth = originalWidth;
         let targetHeight = originalHeight;
 
-        if (targetWidth > maxDim || targetHeight > maxDim) {
+        if (originalWidth > maxDim || originalHeight > maxDim) {
           if (targetWidth > targetHeight) {
             targetHeight = Math.round((targetHeight * maxDim) / targetWidth);
             targetWidth = maxDim;
@@ -78,18 +82,32 @@ async function resizeImage(file: File): Promise<{ mainBlob: Blob; thumbBlob: Blo
             targetWidth = Math.round((targetWidth * maxDim) / targetHeight);
             targetHeight = maxDim;
           }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          }
+
+          mainBlob = await new Promise<Blob>((res) => {
+            try {
+              canvas.toBlob(
+                (b) => res(b || file),
+                file.type === 'image/png' ? 'image/png' : 'image/jpeg',
+                0.95
+              );
+            } catch {
+              res(file);
+            }
+          });
         }
 
-        const canvas = document.createElement('canvas');
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-        }
-
-        // 2. Thumbnail: scale down so longest side is max 400px
-        const thumbDim = 400;
+        // 2. High-DPI Retina Thumbnail: scale to max 960px at 0.88 quality with high smoothing
+        const thumbDim = 960;
         let tw = targetWidth;
         let th = targetHeight;
         if (tw > th) {
@@ -105,29 +123,20 @@ async function resizeImage(file: File): Promise<{ mainBlob: Blob; thumbBlob: Blo
         thumbCanvas.height = th;
         const tctx = thumbCanvas.getContext('2d');
         if (tctx) {
+          tctx.imageSmoothingEnabled = true;
+          tctx.imageSmoothingQuality = 'high';
           tctx.drawImage(img, 0, 0, tw, th);
         }
 
         cleanup();
 
-        // Convert canvases to blobs safely
-        const mainPromise = new Promise<Blob>((res) => {
+        const thumbBlob = await new Promise<Blob>((res) => {
           try {
-            canvas.toBlob((b) => res(b || file), 'image/jpeg', 0.88);
+            thumbCanvas.toBlob((b) => res(b || file), 'image/jpeg', 0.88);
           } catch {
             res(file);
           }
         });
-
-        const thumbPromise = new Promise<Blob>((res) => {
-          try {
-            thumbCanvas.toBlob((b) => res(b || file), 'image/jpeg', 0.75);
-          } catch {
-            res(file);
-          }
-        });
-
-        const [mainBlob, thumbBlob] = await Promise.all([mainPromise, thumbPromise]);
 
         resolve({
           mainBlob: mainBlob || file,
@@ -200,7 +209,13 @@ async function extractPhotoDate(file: File): Promise<string | null> {
   return null;
 }
 
-export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, groups, onUploadSuccess }) => {
+export const UploadModal: React.FC<UploadModalProps> = ({
+  isOpen,
+  onClose,
+  groups,
+  onUploadSuccess,
+  initialFiles,
+}) => {
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [caption, setCaption] = useState('');
   const [takenAt, setTakenAt] = useState<string>(() => new Date().toISOString().slice(0, 10));
@@ -209,8 +224,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
 
   const resetForm = () => {
     // Revoke object URLs to avoid memory leaks
@@ -229,17 +246,97 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
     setSelectedGroupIds([]);
     setGlobalError(null);
     setIsProcessing(false);
+    setIsDragOver(false);
+    dragCounterRef.current = 0;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Reset form whenever modal closes or opens freshly
+  const processIncomingFiles = async (filesArray: File[]) => {
+    const validFiles = filesArray.filter(
+      (f) => f.type.startsWith('image/') || f.type.startsWith('video/') || f.type.startsWith('audio/')
+    );
+    if (validFiles.length === 0) return;
+
+    const newFiles: QueuedFile[] = validFiles.map((f) => ({
+      id: crypto.randomUUID(),
+      file: f,
+      previewUrl: URL.createObjectURL(f),
+      status: 'pending' as const,
+      progress: 0,
+    }));
+
+    setQueue((prev) => [...prev, ...newFiles]);
+
+    // Inspect files for EXIF DateTimeOriginal / Capture Date
+    let detected: string | null = null;
+    for (const f of validFiles) {
+      const d = await extractPhotoDate(f);
+      if (d) {
+        detected = d;
+        break;
+      }
+    }
+
+    if (detected) {
+      setTakenAt(detected);
+      setMetadataSource(`Auto-detected date (${detected}) from photo EXIF metadata`);
+    }
+  };
+
+  // Process initialFiles when opened via app-wide drop or external trigger
+  useEffect(() => {
+    if (isOpen && initialFiles && initialFiles.length > 0) {
+      processIncomingFiles(initialFiles);
+    }
+  }, [isOpen, initialFiles]);
+
+  // Reset form whenever modal closes
   useEffect(() => {
     if (!isOpen) {
       resetForm();
     }
   }, [isOpen]);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer?.items && e.dataTransfer.items.length > 0) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDragOver(false);
+
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const filesArray = Array.from(e.dataTransfer.files);
+      processIncomingFiles(filesArray);
+    }
+  };
 
   const handleClose = () => {
     if (isProcessing) return;
@@ -253,31 +350,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
     if (!e.target.files) return;
     const filesArray = Array.from(e.target.files);
     if (filesArray.length === 0) return;
-
-    const newFiles: QueuedFile[] = filesArray.map((f) => ({
-      id: crypto.randomUUID(),
-      file: f,
-      previewUrl: URL.createObjectURL(f),
-      status: 'pending' as const,
-      progress: 0,
-    }));
-
-    setQueue((prev) => [...prev, ...newFiles]);
-
-    // Inspect files for EXIF DateTimeOriginal / Capture Date
-    let detected: string | null = null;
-    for (const f of filesArray) {
-      const d = await extractPhotoDate(f);
-      if (d) {
-        detected = d;
-        break;
-      }
-    }
-
-    if (detected) {
-      setTakenAt(detected);
-      setMetadataSource(`Auto-detected date (${detected}) from photo EXIF metadata`);
-    }
+    processIncomingFiles(filesArray);
   };
 
   const removeQueueItem = (id: string) => {
@@ -431,8 +504,37 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="w-full max-w-lg bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] playful-card">
+    <div
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150"
+    >
+      <div
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className="relative w-full max-w-lg bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] playful-card"
+      >
+        {/* Full modal drag-over overlay when user drops more files onto an existing queue */}
+        {isDragOver && queue.length > 0 && (
+          <div
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className="absolute inset-0 z-50 bg-black/90 backdrop-blur-sm border-2 border-dashed border-amber-400 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95 duration-150"
+          >
+            <div className="w-16 h-16 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center text-amber-400 mb-3 animate-bounce">
+              <Upload className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-bold text-white mb-1">Drop to add photos</h3>
+            <p className="text-xs text-neutral-300">Files will be added to your current memory upload queue</p>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2">
@@ -473,26 +575,48 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, group
             {queue.length === 0 ? (
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-[var(--border-color)] hover:border-[var(--accent-coral)] rounded-2xl p-8 text-center cursor-pointer transition flex flex-col items-center justify-center space-y-2 group bg-[var(--bg-surface)]/50"
+                onDragEnter={handleDragEnter}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-2xl p-8 sm:p-10 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center space-y-3 group ${
+                  isDragOver
+                    ? 'border-amber-400 bg-amber-500/15 ring-4 ring-amber-400/25 scale-[1.01] shadow-xl shadow-amber-500/10'
+                    : 'border-[var(--border-color)] hover:border-amber-400/70 bg-[var(--bg-surface)]/60 hover:bg-[var(--bg-surface)]'
+                }`}
               >
-                <div className="w-12 h-12 rounded-full bg-[var(--bg-surface-elevated)] flex items-center justify-center text-[var(--accent-coral)] group-hover:scale-110 transition-transform">
-                  <Upload className="w-6 h-6" />
+                <div
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+                    isDragOver
+                      ? 'bg-amber-500 text-neutral-950 scale-110 rotate-2 shadow-lg shadow-amber-500/40'
+                      : 'bg-[var(--bg-surface-elevated)] text-[var(--accent-coral)] group-hover:scale-105 group-hover:text-amber-400'
+                  }`}
+                >
+                  <Upload className={`w-7 h-7 ${isDragOver ? 'animate-bounce' : ''}`} />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-[var(--text-primary)]">
-                    Choose photos or videos
+                  <p className="text-sm font-bold text-[var(--text-primary)]">
+                    {isDragOver ? 'Drop photos or videos right here!' : 'Drag & drop photos here, or browse'}
                   </p>
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Supports high-res images, auto-detects date taken from EXIF
+                  <p className="text-[11px] text-[var(--text-muted)] mt-1">
+                    Ultra-HD 4K clarity preserved • Auto-detects date taken from EXIF
                   </p>
                 </div>
+                <span className="px-3.5 py-1.5 rounded-full bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-xs font-semibold text-[var(--text-primary)] group-hover:border-amber-400 transition shadow-xs">
+                  Choose from computer
+                </span>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-[var(--text-secondary)]">
-                    Upload Queue ({queue.length} files)
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-[var(--text-secondary)]">
+                      Upload Queue ({queue.length} files)
+                    </span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-500 font-medium flex items-center gap-1 border border-amber-500/20">
+                      <Sparkles className="w-2.5 h-2.5" /> 4K Ultra-HD
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}

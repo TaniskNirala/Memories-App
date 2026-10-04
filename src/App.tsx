@@ -20,7 +20,7 @@ import { TrashView } from './components/TrashView.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { FeedItem, Group, NotificationItem } from './types/index.ts';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Upload } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const { user, loading, isPending, isAdmin } = useAuth();
@@ -47,6 +47,8 @@ const MainContent: React.FC = () => {
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [dragUploadFiles, setDragUploadFiles] = useState<File[]>([]);
+  const [isWindowDragging, setIsWindowDragging] = useState(false);
   const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
   const [isCreateGroupMode, setIsCreateGroupMode] = useState(false);
   const [isProposeModalOpen, setIsProposeModalOpen] = useState(false);
@@ -229,6 +231,63 @@ const MainContent: React.FC = () => {
 
   const selectedGroup = groups.find((g) => g.id === selectedGroupId);
 
+  // Global drag-and-drop support: dragging files into window initiates upload
+  useEffect(() => {
+    let counter = 0;
+
+    const handleWindowDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types?.includes('Files')) {
+        counter++;
+        setIsWindowDragging(true);
+      }
+    };
+
+    const handleWindowDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      counter--;
+      if (counter <= 0) {
+        counter = 0;
+        setIsWindowDragging(false);
+      }
+    };
+
+    const handleWindowDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const handleWindowDrop = (e: DragEvent) => {
+      e.preventDefault();
+      counter = 0;
+      setIsWindowDragging(false);
+
+      if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+        const filesArray = Array.from(e.dataTransfer.files).filter(
+          (f) => f.type.startsWith('image/') || f.type.startsWith('video/') || f.type.startsWith('audio/')
+        );
+        if (filesArray.length > 0) {
+          setDragUploadFiles(filesArray);
+          setIsUploadOpen(true);
+        }
+      }
+    };
+
+    window.addEventListener('dragenter', handleWindowDragEnter);
+    window.addEventListener('dragleave', handleWindowDragLeave);
+    window.addEventListener('dragover', handleWindowDragOver);
+    window.addEventListener('drop', handleWindowDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleWindowDragEnter);
+      window.removeEventListener('dragleave', handleWindowDragLeave);
+      window.removeEventListener('dragover', handleWindowDragOver);
+      window.removeEventListener('drop', handleWindowDrop);
+    };
+  }, []);
+
   // Handle direct sharing from timeline card dropdown
   const handleDirectShare = async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
     try {
@@ -293,6 +352,8 @@ const MainContent: React.FC = () => {
             };
           });
         }
+        // Background refresh feed to ensure server state is completely in sync
+        fetchFeed(false);
       }
     } catch (e) {
       console.error('Failed to delete single photo', e);
@@ -596,10 +657,29 @@ const MainContent: React.FC = () => {
       {/* Modals */}
       <UploadModal
         isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
+        onClose={() => {
+          setIsUploadOpen(false);
+          setDragUploadFiles([]);
+        }}
         groups={groups}
+        initialFiles={dragUploadFiles}
         onUploadSuccess={() => fetchFeed(true)}
       />
+
+      {/* App-Wide Drag-and-Drop Overlay */}
+      {isWindowDragging && !isUploadOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-6 border-4 border-dashed border-amber-400 pointer-events-none animate-in fade-in duration-150">
+          <div className="w-20 h-20 rounded-3xl bg-amber-500/20 border-2 border-amber-400/60 flex items-center justify-center text-amber-400 mb-4 animate-bounce shadow-2xl shadow-amber-500/30">
+            <Upload className="w-10 h-10" />
+          </div>
+          <h2 className="font-display font-bold text-2xl text-white mb-2 tracking-tight">
+            Drop photos anywhere to share
+          </h2>
+          <p className="text-xs text-neutral-300 max-w-sm text-center">
+            Release your files to start creating a new memory in Ultra-HD 4K quality
+          </p>
+        </div>
+      )}
 
       <MediaViewerModal
         item={viewerItem}

@@ -58,20 +58,37 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const imageViewportRef = useRef<HTMLDivElement>(null);
+  const activePostIdRef = useRef<string | null>(null);
 
-  // Reset fileIndex and viewMode on prop updates
+  // Reset fileIndex and viewMode only when opening a different item or when modal opens
   useEffect(() => {
-    setFileIndex(initialIndex);
-    setShowDeleteConfirm(false);
-    setDeleteTargetPhoto(null);
-    if (initialMode) {
-      setViewMode(initialMode);
-    } else if (item && item.type === 'single_post' && item.files.length > 1) {
-      setViewMode('grid');
-    } else {
-      setViewMode('expanded');
+    if (!isOpen || !item) {
+      activePostIdRef.current = null;
+      return;
     }
-  }, [initialIndex, initialMode, item]);
+
+    if (activePostIdRef.current !== item.id) {
+      // Opening modal on a NEW post: initialize view and index
+      activePostIdRef.current = item.id;
+      setFileIndex(initialIndex || 0);
+      setShowDeleteConfirm(false);
+      setDeleteTargetPhoto(null);
+      if (initialMode) {
+        setViewMode(initialMode);
+      } else if (item.type === 'single_post' && item.files.length > 1) {
+        setViewMode('grid');
+      } else {
+        setViewMode('expanded');
+      }
+    } else {
+      // Same post updated (e.g. photo deleted):
+      // Keep user in current viewMode and clamp fileIndex to remaining files
+      const newCount = item.type === 'single_post' ? (item.files?.length || 1) : 1;
+      setFileIndex((prev) => Math.max(0, Math.min(prev, newCount - 1)));
+      setShowDeleteConfirm(false);
+      setDeleteTargetPhoto(null);
+    }
+  }, [isOpen, item, initialIndex, initialMode]);
 
   // Reset zoom & pan when switching photos, changing mode, or changing item
   useEffect(() => {
@@ -696,10 +713,10 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   onClick={async () => {
                     if (isDeletingFile) return;
                     setIsDeletingFile(true);
+                    const photoToDelete = currentFile;
                     try {
-                      await onDeleteFile(item.id, currentFile.id);
+                      await onDeleteFile(item.id, photoToDelete.id);
                       setShowDeleteConfirm(false);
-                      setFileIndex((prev) => Math.max(0, Math.min(prev, files.length - 2)));
                       resetZoom();
                     } finally {
                       setIsDeletingFile(false);
@@ -767,10 +784,10 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 onClick={async () => {
                   if (isDeletingFile || !onDeleteFile) return;
                   setIsDeletingFile(true);
+                  const targetId = deleteTargetPhoto.id;
                   try {
-                    await onDeleteFile(item.id, deleteTargetPhoto.id);
+                    await onDeleteFile(item.id, targetId);
                     setDeleteTargetPhoto(null);
-                    setFileIndex((prev) => Math.max(0, Math.min(prev, files.length - 2)));
                     resetZoom();
                   } finally {
                     setIsDeletingFile(false);

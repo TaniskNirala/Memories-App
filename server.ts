@@ -193,10 +193,15 @@ async function startServer() {
   const app = await createApp();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
-  if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+  const distDir = path.resolve(__dirname, 'dist');
+  const distIndexHtml = path.join(distDir, 'index.html');
+  const hasDist = fs.existsSync(distIndexHtml);
+
+  if (process.env.NODE_ENV === 'production' || hasDist) {
+    console.log('Serving production static build from dist/');
+    app.use(express.static(distDir));
     app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      res.sendFile(distIndexHtml);
     });
   } else {
     // Mount Vite middleware in development mode

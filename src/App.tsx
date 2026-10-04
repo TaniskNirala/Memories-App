@@ -19,6 +19,7 @@ import { PendingReferencesBanner } from './components/PendingReferencesBanner.ts
 import { TrashView } from './components/TrashView.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
+import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { FeedItem, Group, NotificationItem } from './types/index.ts';
 import { RefreshCw, Upload } from 'lucide-react';
 
@@ -207,30 +208,6 @@ const MainContent: React.FC = () => {
     }
   }, [user, isPending, selectedGroupId]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] text-amber-500">
-        <RefreshCw className="w-6 h-6 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthScreen />;
-  }
-
-  if (isPending) {
-    return (
-      <div className="min-h-screen bg-[var(--bg-page)] flex flex-col">
-        <Header />
-        <PendingApprovalScreen />
-        <OfflineIndicator />
-      </div>
-    );
-  }
-
-  const selectedGroup = groups.find((g) => g.id === selectedGroupId);
-
   // Global drag-and-drop support: dragging files into window initiates upload
   useEffect(() => {
     let counter = 0;
@@ -264,6 +241,8 @@ const MainContent: React.FC = () => {
       counter = 0;
       setIsWindowDragging(false);
 
+      if (!user || isPending) return;
+
       if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
         const filesArray = Array.from(e.dataTransfer.files).filter(
           (f) => f.type.startsWith('image/') || f.type.startsWith('video/') || f.type.startsWith('audio/')
@@ -286,7 +265,31 @@ const MainContent: React.FC = () => {
       window.removeEventListener('dragover', handleWindowDragOver);
       window.removeEventListener('drop', handleWindowDrop);
     };
-  }, []);
+  }, [user, isPending]);
+
+  const selectedGroup = groups.find((g) => g.id === selectedGroupId);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] text-amber-500">
+        <RefreshCw className="w-6 h-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  if (isPending) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-page)] flex flex-col">
+        <Header />
+        <PendingApprovalScreen />
+        <OfflineIndicator />
+      </div>
+    );
+  }
 
   // Handle direct sharing from timeline card dropdown
   const handleDirectShare = async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
@@ -806,10 +809,12 @@ const MainContent: React.FC = () => {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <MainContent />
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <MainContent />
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }

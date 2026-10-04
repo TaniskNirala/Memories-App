@@ -10,10 +10,12 @@ import {
   Users,
   Sparkles,
   Clock,
+  Crop,
 } from 'lucide-react';
 import exifr from 'exifr';
 import { Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -225,6 +227,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [editingQueueItemId, setEditingQueueItemId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -247,10 +250,32 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setGlobalError(null);
     setIsProcessing(false);
     setIsDragOver(false);
+    setEditingQueueItemId(null);
     dragCounterRef.current = 0;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleSaveQueueEditedPhoto = (result: PhotoEditorResult) => {
+    if (!editingQueueItemId) return;
+    setQueue((prev) =>
+      prev.map((item) => {
+        if (item.id === editingQueueItemId) {
+          return {
+            ...item,
+            file: new File([result.blob], item.file.name, { type: 'image/jpeg' }),
+            previewUrl: result.previewUrl,
+            mainBlob: result.blob,
+            thumbBlob: result.thumbBlob,
+            width: result.width,
+            height: result.height,
+          };
+        }
+        return item;
+      })
+    );
+    setEditingQueueItemId(null);
   };
 
   const processIncomingFiles = async (filesArray: File[]) => {
@@ -663,13 +688,26 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       )}
 
                       {!isProcessing && item.status !== 'done' && (
-                        <button
-                          type="button"
-                          onClick={() => removeQueueItem(item.id)}
-                          className="absolute top-1 right-1 w-5 h-5 bg-black/70 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                        <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition z-10">
+                          {item.file.type.startsWith('image/') && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingQueueItemId(item.id)}
+                              className="w-5 h-5 bg-black/75 hover:bg-amber-500 hover:text-neutral-950 rounded-full flex items-center justify-center text-white transition shadow-xs"
+                              title="Crop & Rotate photo"
+                            >
+                              <Crop className="w-3 h-3" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeQueueItem(item.id)}
+                            className="w-5 h-5 bg-black/75 hover:bg-rose-500 rounded-full flex items-center justify-center text-white transition shadow-xs"
+                            title="Remove file"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -795,6 +833,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Photo Editor for Queued Photo */}
+      {editingQueueItemId && (
+        <PhotoEditorModal
+          isOpen={Boolean(editingQueueItemId)}
+          onClose={() => setEditingQueueItemId(null)}
+          imageUrl={queue.find((q) => q.id === editingQueueItemId)?.previewUrl || ''}
+          imageAlt="Queued Photo"
+          onSave={handleSaveQueueEditedPhoto}
+          title="Crop & Rotate Photo"
+        />
+      )}
     </div>
   );
 };

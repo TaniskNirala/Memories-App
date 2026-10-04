@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Calendar, MapPin, Users, Plus, Check, Trash2, Eye, EyeOff } from 'lucide-react';
 import { EventAttendee, EventNote } from '../types/index.ts';
 import { useAuth } from '../context/AuthContext.tsx';
+import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 
 interface CollectionDetailModalProps {
   collectionId: string | null;
@@ -22,6 +23,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isAddPhotosOpen, setIsAddPhotosOpen] = useState(false);
 
   // Attendance
   const [attendees, setAttendees] = useState<EventAttendee[]>([]);
@@ -299,10 +301,22 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
           {/* Lazily Loaded Grid (60 at a time) */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-bold text-[var(--text-secondary)]">Photo Grid</h4>
-              <span className="text-[11px] text-[var(--text-muted)] font-mono">
-                Showing {items.length} of {collection?.itemCount || items.length}
-              </span>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-[var(--text-secondary)]">Photo Grid</h4>
+                <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                  ({items.length} of {collection?.itemCount || items.length})
+                </span>
+              </div>
+
+              {isHost && (
+                <button
+                  onClick={() => setIsAddPhotosOpen(true)}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Photos to Album</span>
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
@@ -407,6 +421,23 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Add Photos to Album Modal */}
+      {isAddPhotosOpen && collectionId && (
+        <AddPhotosToAlbumModal
+          isOpen={isAddPhotosOpen}
+          onClose={() => setIsAddPhotosOpen(false)}
+          target={{
+            type: 'collection',
+            collectionId,
+            collectionTitle: collection?.title,
+          }}
+          onSuccess={() => {
+            fetchItems(true);
+            fetchCollection();
+          }}
+        />
+      )}
     </div>
   );
 };

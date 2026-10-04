@@ -258,6 +258,55 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
   });
 });
 
+// Add photos / items to curated album
+albumsRouter.post('/:id/items', async (req: AuthenticatedRequest, res) => {
+  try {
+    const albumId = req.params.id;
+    const userId = req.user!.id;
+    const isAdmin = req.user!.role === 'admin';
+
+    const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
+    if (!album) return res.status(404).json({ error: 'Album not found' });
+    if (!isAdmin && album.creator_id !== userId) {
+      return res.status(403).json({ error: 'Only the creator or an admin can add photos to this album' });
+    }
+
+    const { postIds } = req.body;
+    if (!Array.isArray(postIds) || postIds.length === 0) {
+      return res.status(400).json({ error: 'postIds array is required' });
+    }
+
+    const maxPosRow = queryOne<{ maxPos: number }>(
+      'SELECT COALESCE(MAX(position), -1) as maxPos FROM album_items WHERE album_id = ?',
+      [albumId]
+    );
+    let startPos = (maxPosRow?.maxPos ?? -1) + 1;
+    const now = new Date().toISOString();
+
+    let addedCount = 0;
+    for (let i = 0; i < postIds.length; i++) {
+      const pId = postIds[i];
+      const existing = queryOne('SELECT id FROM album_items WHERE album_id = ? AND post_id = ?', [albumId, pId]);
+      if (!existing) {
+        run(
+          'INSERT INTO album_items (id, album_id, post_id, position, added_at) VALUES (?, ?, ?, ?, ?)',
+          [crypto.randomUUID(), albumId, pId, startPos + addedCount, now]
+        );
+        addedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      addedCount,
+      message: `${addedCount} photo(s) linked to album`,
+    });
+  } catch (err: any) {
+    console.error('Failed to add items to album:', err);
+    res.status(500).json({ error: err.message || 'Failed to add items to album' });
+  }
+});
+
 // Event attendance: "anyone can mark 'I was there', and the owner can tag friends as present, who can remove the tag"
 albumsRouter.get('/:id/attendance', (req: AuthenticatedRequest, res) => {
   const albumId = req.params.id;

@@ -66,7 +66,7 @@ adminRouter.post('/approve-user/:id', (req: AuthenticatedRequest, res) => {
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   const now = new Date().toISOString();
-  run('UPDATE users SET role = "member" WHERE id = ?', [targetId]);
+  run('UPDATE users SET role = "member", status = "active" WHERE id = ?', [targetId]);
 
   // Ensure "Everyone" group exists and add user
   let everyone = queryOne<any>('SELECT id FROM groups WHERE is_everyone = 1');

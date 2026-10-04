@@ -1,6 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Check, X, Key, UserX, UserCheck, AlertTriangle, FileText, Clock, Copy, CheckCheck } from 'lucide-react';
-import { useAuth } from '../context/AuthContext.tsx';
+import {
+  Shield,
+  Check,
+  X,
+  Key,
+  UserX,
+  UserCheck,
+  AlertTriangle,
+  FileText,
+  Clock,
+  Copy,
+  CheckCheck,
+  Sparkles,
+  CheckCircle2,
+} from 'lucide-react';
+import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
 
 export const AdminPanel: React.FC = () => {
@@ -18,14 +32,22 @@ export const AdminPanel: React.FC = () => {
   const [reports, setReports] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [actionToast, setActionToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Generated reset link modal
   const [generatedLink, setGeneratedLink] = useState<{ username: string; link: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (actionToast) {
+      const timer = setTimeout(() => setActionToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [actionToast]);
+
   const fetchSignups = async () => {
     try {
-      const res = await fetch('/api/admin/pending-signups');
+      const res = await apiFetch('/api/admin/pending-signups');
       if (res.ok) {
         const data = await res.json();
         setPendingSignups(data.pending || []);
@@ -35,7 +57,7 @@ export const AdminPanel: React.FC = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/admin/users');
+      const res = await apiFetch('/api/admin/users');
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
@@ -45,7 +67,7 @@ export const AdminPanel: React.FC = () => {
 
   const fetchProposals = async () => {
     try {
-      const res = await fetch('/api/admin/pending-proposals');
+      const res = await apiFetch('/api/admin/pending-proposals');
       if (res.ok) {
         const data = await res.json();
         setProposals(data.proposals || []);
@@ -55,7 +77,7 @@ export const AdminPanel: React.FC = () => {
 
   const fetchReports = async () => {
     try {
-      const res = await fetch('/api/admin/reports');
+      const res = await apiFetch('/api/admin/reports');
       if (res.ok) {
         const data = await res.json();
         setReports(data.reports || []);
@@ -65,7 +87,7 @@ export const AdminPanel: React.FC = () => {
 
   const fetchAuditLogs = async () => {
     try {
-      const res = await fetch('/api/admin/audit-log');
+      const res = await apiFetch('/api/admin/audit-log');
       if (res.ok) {
         const data = await res.json();
         setAuditLogs(data.logs || []);
@@ -81,28 +103,47 @@ export const AdminPanel: React.FC = () => {
     if (activeTab === 'audit') fetchAuditLogs();
   }, [activeTab]);
 
-  const handleApproveUser = async (userId: string) => {
+  const handleApproveUser = async (userId: string, username?: string) => {
     try {
-      const res = await fetch(`/api/admin/approve-user/${userId}`, { method: 'POST' });
+      const res = await apiFetch(`/api/admin/approve-user/${userId}`, { method: 'POST' });
       if (res.ok) {
+        setActionToast({
+          message: username
+            ? `Account @${username} approved permanently! They can now log in freely without ever needing approval again.`
+            : 'Account approved permanently! User can now log in without needing approval again.',
+          type: 'success',
+        });
         fetchSignups();
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        setActionToast({ message: data.error || 'Failed to approve account', type: 'error' });
       }
-    } catch (e) {}
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Failed to approve account', type: 'error' });
+    }
   };
 
   const handleRejectUser = async (userId: string) => {
     try {
-      const res = await fetch(`/api/admin/reject-user/${userId}`, { method: 'POST' });
+      const res = await apiFetch(`/api/admin/reject-user/${userId}`, { method: 'POST' });
       if (res.ok) {
+        setActionToast({ message: 'User signup rejected', type: 'success' });
         fetchSignups();
+        fetchUsers();
       }
     } catch (e) {}
   };
 
   const handleToggleSuspend = async (userId: string) => {
     try {
-      const res = await fetch(`/api/admin/toggle-suspend/${userId}`, { method: 'POST' });
+      const res = await apiFetch(`/api/admin/toggle-suspend/${userId}`, { method: 'POST' });
       if (res.ok) {
+        const data = await res.json();
+        setActionToast({
+          message: data.status === 'active' ? 'Account activated!' : 'Account suspended',
+          type: 'success',
+        });
         fetchUsers();
       }
     } catch (e) {}
@@ -110,7 +151,7 @@ export const AdminPanel: React.FC = () => {
 
   const handleGenerateReset = async (userId: string) => {
     try {
-      const res = await fetch(`/api/admin/generate-reset-link/${userId}`, { method: 'POST' });
+      const res = await apiFetch(`/api/admin/generate-reset-link/${userId}`, { method: 'POST' });
       if (res.ok) {
         const data = await res.json();
         setGeneratedLink({ username: data.username, link: data.resetUrl });
@@ -121,7 +162,7 @@ export const AdminPanel: React.FC = () => {
 
   const handleProposalDecision = async (proposalId: string, decision: 'approved' | 'rejected') => {
     try {
-      const res = await fetch(`/api/admin/proposals/${proposalId}/decide`, {
+      const res = await apiFetch(`/api/admin/proposals/${proposalId}/decide`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),
@@ -134,7 +175,7 @@ export const AdminPanel: React.FC = () => {
 
   const handleReportDecision = async (reportId: string, status: string) => {
     try {
-      const res = await fetch(`/api/admin/reports/${reportId}/decide`, {
+      const res = await apiFetch(`/api/admin/reports/${reportId}/decide`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -154,6 +195,32 @@ export const AdminPanel: React.FC = () => {
           Admin Portal
         </h2>
       </div>
+
+      {/* Action Feedback Toast */}
+      {actionToast && (
+        <div
+          className={`p-3 rounded-2xl flex items-center justify-between gap-2 text-xs transition animate-in fade-in duration-200 ${
+            actionToast.type === 'success'
+              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+              : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {actionToast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span className="font-medium">{actionToast.message}</span>
+          </div>
+          <button
+            onClick={() => setActionToast(null)}
+            className="text-neutral-400 hover:text-white p-1"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-1.5 p-1 bg-[var(--bg-surface)] rounded-2xl overflow-x-auto text-xs font-semibold">
@@ -245,10 +312,11 @@ export const AdminPanel: React.FC = () => {
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleApproveUser(u.id)}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 transition playful-btn"
+                    onClick={() => handleApproveUser(u.id, u.username)}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 transition playful-btn shadow-xs"
+                    title="Approve this account permanently"
                   >
-                    <Check className="w-3.5 h-3.5" /> Approve
+                    <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Approve Once
                   </button>
                   <button
                     onClick={() => handleRejectUser(u.id)}
@@ -325,15 +393,31 @@ export const AdminPanel: React.FC = () => {
                   {u.display_name.charAt(0)}
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-bold text-[var(--text-primary)]">{u.display_name}</span>
                     <span className="text-[10px] text-[var(--text-muted)] font-mono">@{u.username}</span>
-                    <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-[var(--bg-surface)] text-[var(--text-secondary)] font-mono">
-                      {u.role}
-                    </span>
+
+                    {u.role === 'admin' && (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold font-mono">
+                        Admin
+                      </span>
+                    )}
+
+                    {u.role === 'member' && u.status === 'active' && (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold font-mono flex items-center gap-0.5">
+                        <Check className="w-2.5 h-2.5 stroke-[2.5]" /> Approved Member
+                      </span>
+                    )}
+
+                    {u.role === 'pending' && (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-semibold font-mono flex items-center gap-0.5">
+                        <Clock className="w-2.5 h-2.5" /> Pending Approval
+                      </span>
+                    )}
+
                     {u.status === 'suspended' && (
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-mono">
-                        SUSPENDED
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold font-mono">
+                        Suspended
                       </span>
                     )}
                   </div>
@@ -341,6 +425,17 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* One-click Approve for any user in User Directory who is pending */}
+                {u.role === 'pending' && (
+                  <button
+                    onClick={() => handleApproveUser(u.id, u.username)}
+                    className="px-2.5 py-1 text-xs rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 transition playful-btn shadow-xs"
+                    title="Approve this account permanently"
+                  >
+                    <Check className="w-3 h-3 stroke-[2.5]" /> Approve Account
+                  </button>
+                )}
+
                 <button
                   onClick={() => handleGenerateReset(u.id)}
                   title="Generate 1-time Password Reset Link"

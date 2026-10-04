@@ -16,9 +16,13 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Crop,
+  Plus,
 } from 'lucide-react';
 import { FeedItem } from '../types/index.ts';
-import { useAuth } from '../context/AuthContext.tsx';
+import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
+import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 
 interface MediaViewerModalProps {
   item: FeedItem | null;
@@ -30,6 +34,7 @@ interface MediaViewerModalProps {
   onOpenShareModal: (item: FeedItem) => void;
   onDeletePost: (postId: string, permanent?: boolean) => void;
   onDeleteFile?: (postId: string, fileId: string) => Promise<void> | void;
+  onPhotoUpdated?: (postId: string, updatedFile: any) => void;
   onOverrideVisibility?: (postId: string, override: string | null) => void;
 }
 
@@ -43,6 +48,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   onOpenShareModal,
   onDeletePost,
   onDeleteFile,
+  onPhotoUpdated,
   onOverrideVisibility,
 }) => {
   const { user, isAdmin } = useAuth();
@@ -52,6 +58,8 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [deleteTargetPhoto, setDeleteTargetPhoto] = useState<{ id: string; index: number } | null>(null);
   const [isDeletingFile, setIsDeletingFile] = useState(false);
   const [showOverrideMenu, setShowOverrideMenu] = useState(false);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isAddPhotosModalOpen, setIsAddPhotosModalOpen] = useState(false);
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState(1);
@@ -226,6 +234,62 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     setPan({ x: 0, y: 0 });
   };
 
+  const handleSaveEditedPhoto = async (result: PhotoEditorResult) => {
+    if (!currentFile || !item) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', result.blob, 'edited_photo.jpg');
+      formData.append('thumb', result.thumbBlob, 'thumb_edited_photo.jpg');
+      formData.append('width', String(result.width));
+      formData.append('height', String(result.height));
+
+      const res = await apiFetch(`/api/posts/${item.id}/files/${currentFile.id}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.updatedFile) {
+          // Update in-memory file record
+          if (item.type === 'single_post') {
+            item.files = item.files.map((f) => (f.id === currentFile.id ? data.updatedFile : f));
+          }
+          if (onPhotoUpdated) {
+            onPhotoUpdated(item.id, data.updatedFile);
+          }
+          resetZoom();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to save edited photo:', err);
+    }
+  };
+
+  const handleSaveAndShareEditedPhoto = async (result: PhotoEditorResult) => {
+    await handleSaveEditedPhoto(result);
+    onOpenShareModal(item);
+  };
+
+  const handleAddPhotosSuccess = async () => {
+    if (!item) return;
+    try {
+      const res = await apiFetch(`/api/posts/${item.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.post && item.type === 'single_post') {
+          item.files = data.post.files;
+          if (onPhotoUpdated && data.post.files?.[0]) {
+            onPhotoUpdated(item.id, data.post.files[0]);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to refresh album after adding photos', e);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-150 select-none">
       {/* Top action bar */}
@@ -283,6 +347,30 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 <span className="hidden sm:inline">Expanded</span>
               </button>
             </div>
+          )}
+
+          {/* Add More Photos to Album */}
+          {(canDelete || isAdmin || item.owner?.id === user?.id) && (
+            <button
+              onClick={() => setIsAddPhotosModalOpen(true)}
+              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 border border-amber-500/30 text-amber-300 hover:text-white hover:border-amber-400 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+              title="Add More Photos to this Album"
+            >
+              <Plus className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Add Photos</span>
+            </button>
+          )}
+
+          {/* Photo Editor: Crop & Rotate */}
+          {currentFile && (!currentFile.fileType || currentFile.fileType === 'photo') && (canDelete || isAdmin || item.owner?.id === user?.id) && (
+            <button
+              onClick={() => setIsEditorOpen(true)}
+              className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-amber-500/20 text-white hover:text-amber-300 transition flex items-center gap-1.5 text-xs font-semibold"
+              title="Crop & Rotate Photo"
+            >
+              <Crop className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Edit Photo</span>
+            </button>
           )}
 
           {/* Share to circle */}
@@ -469,6 +557,21 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     #{idx + 1}
                   </div>
 
+                  {/* Edit Photo Button on Thumbnail in Grid */}
+                  {(canDelete || isAdmin || item.owner?.id === user?.id) && (!file.fileType || file.fileType === 'photo') && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFileIndex(idx);
+                        setIsEditorOpen(true);
+                      }}
+                      className="absolute top-2 right-9 p-1.5 rounded-full bg-black/75 hover:bg-amber-500 text-neutral-300 hover:text-neutral-950 backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
+                      title={`Crop & Rotate Photo #${idx + 1}`}
+                    >
+                      <Crop className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
                   {/* Delete Single Photo Button on Thumbnail in Grid */}
                   {canDelete && files.length > 1 && (
                     <button
@@ -492,6 +595,22 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   </div>
                 </div>
               ))}
+
+              {/* Add More Photos Card in Album Grid */}
+              {(canDelete || isAdmin || item.owner?.id === user?.id) && (
+                <div
+                  onClick={() => setIsAddPhotosModalOpen(true)}
+                  className="aspect-square rounded-2xl border-2 border-dashed border-white/20 hover:border-amber-400 bg-white/5 hover:bg-white/10 cursor-pointer flex flex-col items-center justify-center p-3 text-center transition group shadow-lg"
+                >
+                  <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-400 group-hover:scale-110 flex items-center justify-center mb-1.5 transition-transform shadow-sm">
+                    <Plus className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
+                    Add Photos
+                  </span>
+                  <span className="text-[10px] text-neutral-400 mt-0.5">to this album</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -808,6 +927,33 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Interactive Photo Editor Modal: Crop & Rotate */}
+      {isEditorOpen && currentFile && (
+        <PhotoEditorModal
+          isOpen={isEditorOpen}
+          onClose={() => setIsEditorOpen(false)}
+          imageUrl={currentFile.viewUrl || currentFile.thumbUrl}
+          imageAlt={item.caption || 'Memory Photo'}
+          onSave={handleSaveEditedPhoto}
+          onSaveAndShare={handleSaveAndShareEditedPhoto}
+          title={`Edit Photo #${fileIndex + 1}`}
+        />
+      )}
+
+      {/* Add Photos to Album Modal */}
+      {isAddPhotosModalOpen && item && (
+        <AddPhotosToAlbumModal
+          isOpen={isAddPhotosModalOpen}
+          onClose={() => setIsAddPhotosModalOpen(false)}
+          target={{
+            type: 'post',
+            postId: item.id,
+            albumTitle: item.caption ? item.caption.slice(0, 30) : 'Memory Album',
+          }}
+          onSuccess={handleAddPhotosSuccess}
+        />
       )}
     </div>
   );

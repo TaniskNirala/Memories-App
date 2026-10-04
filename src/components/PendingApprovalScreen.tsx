@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Clock, ShieldAlert, LogOut, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 
 export const PendingApprovalScreen: React.FC = () => {
   const { user, logout, refreshUser } = useAuth();
+
+  // Auto-poll approval status every 4 seconds so the user is immediately admitted when approved
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshUser();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4 text-center">

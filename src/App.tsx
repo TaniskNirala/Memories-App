@@ -360,6 +360,28 @@ const MainContent: React.FC = () => {
     }
   };
 
+  const handlePhotoUpdated = (postId: string, updatedFile: any) => {
+    setFeedItems((prev) =>
+      prev.map((item) => {
+        if (item.id === postId && item.type === 'single_post') {
+          return {
+            ...item,
+            files: item.files.map((f) => (f.id === updatedFile.id ? updatedFile : f)),
+          };
+        }
+        return item;
+      })
+    );
+    setViewerItem((prev) => {
+      if (!prev || prev.id !== postId || prev.type !== 'single_post') return prev;
+      return {
+        ...prev,
+        files: prev.files.map((f) => (f.id === updatedFile.id ? updatedFile : f)),
+      };
+    });
+    fetchFeed(false);
+  };
+
   const handleDeleteAlbum = async (albumId: string, permanent: boolean = false) => {
     try {
       await apiFetch(`/api/albums/${albumId}`, {
@@ -691,6 +713,7 @@ const MainContent: React.FC = () => {
         onOpenShareModal={(item) => setShareItem(item)}
         onDeletePost={handleDeletePost}
         onDeleteFile={handleDeleteSinglePhoto}
+        onPhotoUpdated={handlePhotoUpdated}
         onOverrideVisibility={handleAdminOverride}
       />
 

@@ -441,6 +441,170 @@ postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// Update edited photo/file (crop/rotate)
+postsRouter.put(
+  '/:id/files/:fileId',
+  upload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'thumb', maxCount: 1 },
+  ]),
+  async (req: AuthenticatedRequest, res) => {
+    try {
+      const postId = req.params.id;
+      const fileId = req.params.fileId;
+      const userId = req.user!.id;
+      const isAdmin = req.user!.role === 'admin';
+
+      const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+      if (!post) return res.status(404).json({ error: 'Post not found' });
+      if (!isAdmin && post.owner_id !== userId) {
+        return res.status(403).json({ error: 'Only the author or an admin can edit photos in this post' });
+      }
+
+      const fileRecord = queryOne<any>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
+      if (!fileRecord) return res.status(404).json({ error: 'Photo not found in this post' });
+
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      const mainFile = files?.file?.[0];
+      const thumbFile = files?.thumb?.[0];
+
+      if (!mainFile) {
+        return res.status(400).json({ error: 'No edited photo received' });
+      }
+
+      const mainStorageKey = `posts/${userId}/${mainFile.filename}`;
+      const thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
+
+      const storage = getStorageAdapter();
+      const backend = process.env.STORAGE_BACKEND;
+      if (backend === 's3' || backend === 'r2') {
+        try {
+          const fileBuf = fs.readFileSync(mainFile.path);
+          await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype);
+          if (thumbFile) {
+            const thumbBuf = fs.readFileSync(thumbFile.path);
+            await storage.putObject(thumbStorageKey, thumbBuf, thumbFile.mimetype);
+          }
+        } catch (cloudErr: any) {
+          console.error('Cloud storage sync warning:', cloudErr.message);
+        }
+      }
+
+      // Delete old file from storage adapter
+      await storage.deleteObject(fileRecord.storage_key).catch(() => {});
+      if (fileRecord.thumb_key && fileRecord.thumb_key !== fileRecord.storage_key) {
+        await storage.deleteObject(fileRecord.thumb_key).catch(() => {});
+      }
+
+      const width = parseInt(req.body.width, 10) || 1200;
+      const height = parseInt(req.body.height, 10) || 800;
+
+      run(
+        `UPDATE post_files
+         SET storage_key = ?, thumb_key = ?, mime_type = ?, file_size = ?, width = ?, height = ?
+         WHERE id = ? AND post_id = ?`,
+        [mainStorageKey, thumbStorageKey, mainFile.mimetype, mainFile.size, width, height, fileId, postId]
+      );
+
+      const viewUrl = await storage.getSignedViewUrl(mainStorageKey, 86400);
+      const thumbUrl = await storage.getSignedViewUrl(thumbStorageKey, 86400);
+
+      res.json({
+        success: true,
+        updatedFile: {
+          id: fileId,
+          storageKey: mainStorageKey,
+          thumbKey: thumbStorageKey,
+          fileType: 'photo',
+          mimeType: mainFile.mimetype,
+          fileSize: mainFile.size,
+          width,
+          height,
+          viewUrl,
+          thumbUrl,
+        },
+      });
+    } catch (err: any) {
+      console.error('Photo update error:', err);
+      res.status(500).json({ error: err.message || 'Failed to update photo' });
+    }
+  }
+);
+
+// Add more photos to an existing post / album
+postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
+  try {
+    const postId = req.params.id;
+    const userId = req.user!.id;
+    const isAdmin = req.user!.role === 'admin';
+
+    const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+    if (!post) return res.status(404).json({ error: 'Post/Album not found' });
+    if (!isAdmin && post.owner_id !== userId) {
+      return res.status(403).json({ error: 'Only the author or an admin can add photos to this album' });
+    }
+
+    const { files } = req.body;
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: 'At least one file is required' });
+    }
+
+    const maxPosRow = queryOne<{ maxPos: number }>(
+      'SELECT COALESCE(MAX(position), -1) as maxPos FROM post_files WHERE post_id = ?',
+      [postId]
+    );
+    let startPos = (maxPosRow?.maxPos ?? -1) + 1;
+
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const fileId = crypto.randomUUID();
+      run(
+        `INSERT INTO post_files (id, post_id, storage_key, file_type, position, thumb_key, file_size, mime_type, width, height)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          fileId,
+          postId,
+          f.storageKey,
+          f.fileType || 'photo',
+          startPos + i,
+          f.thumbKey || f.storageKey,
+          f.fileSize || 0,
+          f.mimeType || 'image/jpeg',
+          f.width || null,
+          f.height || null,
+        ]
+      );
+    }
+
+    // Fetch all current files with fresh signed URLs
+    const allFiles = queryAll<any>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [postId]);
+    const storage = getStorageAdapter();
+    const filesWithUrls = await Promise.all(
+      allFiles.map(async (f) => ({
+        id: f.id,
+        storageKey: f.storage_key,
+        thumbKey: f.thumb_key,
+        fileType: f.file_type,
+        fileSize: f.file_size,
+        mimeType: f.mime_type,
+        width: f.width,
+        height: f.height,
+        viewUrl: await storage.getSignedViewUrl(f.storage_key, 86400),
+        thumbUrl: await storage.getSignedViewUrl(f.thumb_key || f.storage_key, 86400),
+      }))
+    );
+
+    res.json({
+      success: true,
+      files: filesWithUrls,
+      message: `${files.length} photo(s) added to album`,
+    });
+  } catch (err: any) {
+    console.error('Failed to add photos to post:', err);
+    res.status(500).json({ error: err.message || 'Failed to add photos' });
+  }
+});
+
 // Delete single photo/file from a multi-photo post
 postsRouter.delete('/:id/files/:fileId', async (req: AuthenticatedRequest, res) => {
   const postId = req.params.id;

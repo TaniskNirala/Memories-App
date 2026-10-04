@@ -72,21 +72,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await apiFetch('/api/auth/me');
       if (res.ok) {
         const data = await res.json();
-        setUser(data.user);
+        setUser(data.user || null);
       } else {
-        // If me failed, auto-login as aarav to demonstrate the locked reference walkthrough
-        const loginRes = await fetch('/api/auth/switch-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: 'aarav' }),
-        });
-        if (loginRes.ok) {
-          const lData = await loginRes.json();
-          setAuthToken(lData.token);
-          setUser(lData.user);
-        } else {
-          setUser(null);
-        }
+        setUser(null);
       }
     } catch (err) {
       console.error('Failed to fetch current user:', err);

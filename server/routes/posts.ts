@@ -748,6 +748,23 @@ postsRouter.post('/:id/override-visibility', requireAdmin, (req: AuthenticatedRe
   res.json({ success: true, visibilityOverride: override });
 });
 
+// Update post caption explicitly (when user chooses to apply a caption or suggestion)
+postsRouter.post('/:id/caption', async (req: AuthenticatedRequest, res) => {
+  const postId = req.params.id;
+  const { caption } = req.body;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (!isAdmin && post.owner_id !== userId) {
+    return res.status(403).json({ error: 'Permission denied to edit caption' });
+  }
+
+  run('UPDATE posts SET caption = ? WHERE id = ?', [caption || null, postId]);
+  res.json({ success: true, caption });
+});
+
 // Check if files to be uploaded are duplicates of existing photos
 postsRouter.post('/check-duplicates', async (req: AuthenticatedRequest, res) => {
   const { files } = req.body;
@@ -808,6 +825,13 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
   const isAdmin = req.user!.role === 'admin';
   const storage = getStorageAdapter();
 
+  // Retrieve match_keys user explicitly chose to keep both
+  const ignoredRows = queryAll<{ match_key: string }>(
+    'SELECT match_key FROM ignored_duplicates WHERE user_id = ?',
+    [userId]
+  );
+  const ignoredSet = new Set(ignoredRows.map((r) => r.match_key));
+
   // Find all file_sizes or checksums that have 2+ photos in active posts
   const duplicateSets = queryAll<any>(
     `SELECT file_size, width, height, COUNT(*) as count
@@ -824,6 +848,11 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
   const duplicateGroups: any[] = [];
 
   for (const set of duplicateSets) {
+    const matchKey = `${set.file_size}_${set.width}_${set.height}`;
+    if (ignoredSet.has(matchKey)) {
+      continue;
+    }
+
     const rawFiles = queryAll<any>(
       `SELECT pf.id as file_id, pf.post_id, pf.storage_key, pf.thumb_key, pf.file_size,
               pf.width, pf.height, pf.checksum, pf.position,
@@ -865,7 +894,7 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
       );
 
       duplicateGroups.push({
-        matchKey: `${set.file_size}_${set.width}_${set.height}`,
+        matchKey,
         fileSize: set.file_size,
         fileCount: rawFiles.length,
         wastedBytes: (rawFiles.length - 1) * set.file_size,
@@ -875,6 +904,86 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
   }
 
   res.json({ duplicateGroups });
+});
+
+// Option to keep both/all images in duplicate finder (dismisses the duplicate alert)
+postsRouter.post('/duplicates/keep-both', async (req: AuthenticatedRequest, res) => {
+  const { matchKey } = req.body;
+  const userId = req.user!.id;
+
+  if (!matchKey) {
+    return res.status(400).json({ error: 'matchKey is required' });
+  }
+
+  const now = new Date().toISOString();
+  try {
+    run(
+      `INSERT OR IGNORE INTO ignored_duplicates (id, user_id, match_key, created_at)
+       VALUES (?, ?, ?, ?)`,
+      [crypto.randomUUID(), userId, matchKey, now]
+    );
+  } catch (e) {}
+
+  res.json({
+    success: true,
+    message: 'Both images kept in your memory vault',
+    matchKey,
+  });
+});
+
+// Convert a memory/album post into an Event collection
+postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const { title, description, eventDate, eventPlace } = req.body;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [id]);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (!isAdmin && post.owner_id !== userId) {
+    return res.status(403).json({ error: 'Only the memory owner or an admin can convert this' });
+  }
+
+  const files = queryAll<any>('SELECT id FROM post_files WHERE post_id = ? ORDER BY position ASC', [id]);
+  const albumId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const eventTitle = title?.trim() || post.caption?.trim() || 'Event Memories';
+  const dateToUse = eventDate || post.taken_at || now.slice(0, 10);
+
+  // Create event album
+  run(
+    `INSERT INTO albums (id, title, description, creator_id, is_event, event_date, event_place, status, created_at)
+     VALUES (?, ?, ?, ?, 1, ?, ?, 'approved', ?)`,
+    [albumId, eventTitle, description?.trim() || post.caption || '', userId, dateToUse, eventPlace?.trim() || null, now]
+  );
+
+  // Link photos to this event album
+  for (let i = 0; i < files.length; i++) {
+    run(
+      `INSERT INTO album_items (id, album_id, post_id, added_by, position, added_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [crypto.randomUUID(), albumId, id, userId, i, now]
+    );
+  }
+
+  // Copy post group placements to album item_groups
+  const postPlacements = queryAll<any>(
+    'SELECT group_id FROM item_groups WHERE item_type = "post" AND item_id = ?',
+    [id]
+  );
+  for (const p of postPlacements) {
+    run(
+      `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+       VALUES (?, 'album', ?, ?, ?, 0, 'approved', ?)`,
+      [crypto.randomUUID(), albumId, p.group_id, userId, now]
+    );
+  }
+
+  res.json({
+    success: true,
+    message: 'Memory converted into Event collection',
+    albumId,
+  });
 });
 
 // Resolve duplicate photos by keeping selected one and cleaning up duplicates

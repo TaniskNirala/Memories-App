@@ -366,6 +366,14 @@ function initSchema(db: Database) {
       created_at TEXT NOT NULL,
       FOREIGN KEY (actor_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS ignored_duplicates (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      match_key TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(user_id, match_key)
+    );
   `);
 
   try {

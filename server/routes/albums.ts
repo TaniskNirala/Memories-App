@@ -457,6 +457,37 @@ albumsRouter.post('/:id/notes', (req: AuthenticatedRequest, res) => {
   res.status(201).json({ success: true, noteId });
 });
 
+// Convert an album into an event
+albumsRouter.post('/:id/convert-to-event', (req: AuthenticatedRequest, res) => {
+  const albumId = req.params.id;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+  const { eventDate, eventPlace } = req.body;
+
+  const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
+  if (!album) return res.status(404).json({ error: 'Album not found' });
+  if (!isAdmin && album.creator_id !== userId) {
+    return res.status(403).json({ error: 'Only the album creator or an admin can convert this album' });
+  }
+
+  const dateToUse = eventDate || album.event_date || new Date().toISOString().slice(0, 10);
+  const placeToUse = eventPlace !== undefined ? (eventPlace ? eventPlace.trim() : null) : album.event_place;
+
+  run(
+    'UPDATE albums SET is_event = 1, event_date = ?, event_place = ? WHERE id = ?',
+    [dateToUse, placeToUse, albumId]
+  );
+
+  res.json({
+    success: true,
+    message: 'Album converted into Event successfully',
+    albumId,
+    isEvent: true,
+    eventDate: dateToUse,
+    eventPlace: placeToUse,
+  });
+});
+
 // Delete album / collection
 albumsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
   const albumId = req.params.id;

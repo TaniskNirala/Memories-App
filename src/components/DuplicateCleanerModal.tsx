@@ -118,6 +118,62 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
     }
   };
 
+  const handleKeepBoth = async (group: DuplicateGroup) => {
+    setResolvingKey(group.matchKey);
+    setToast(null);
+
+    try {
+      const res = await apiFetch('/api/posts/duplicates/keep-both', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchKey: group.matchKey }),
+      });
+
+      if (res.ok) {
+        setToast({
+          message: 'Both images kept! They will remain in your vault and won’t be flagged as duplicates.',
+          type: 'success',
+        });
+        setDuplicateGroups((prev) => prev.filter((g) => g.matchKey !== group.matchKey));
+        if (onDuplicatesResolved) {
+          onDuplicatesResolved();
+        }
+      } else {
+        setToast({ message: 'Failed to record preference', type: 'error' });
+      }
+    } catch (err: any) {
+      setToast({ message: err.message || 'Error keeping both images', type: 'error' });
+    } finally {
+      setResolvingKey(null);
+    }
+  };
+
+  const handleKeepBothAll = async () => {
+    setLoading(true);
+    setToast(null);
+    try {
+      for (const group of duplicateGroups) {
+        await apiFetch('/api/posts/duplicates/keep-both', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ matchKey: group.matchKey }),
+        });
+      }
+      setToast({
+        message: 'All selected photos kept in your vault.',
+        type: 'success',
+      });
+      setDuplicateGroups([]);
+      if (onDuplicatesResolved) {
+        onDuplicatesResolved();
+      }
+    } catch (err: any) {
+      setToast({ message: err.message || 'Error keeping all images', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleResolveAll = async () => {
     setLoading(true);
     setToast(null);
@@ -256,14 +312,26 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
           </div>
 
           {duplicateGroups.length > 0 && (
-            <button
-              onClick={handleResolveAll}
-              disabled={loading}
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-95 text-white font-semibold text-xs shadow-md transition flex items-center gap-1.5 playful-btn"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Clean All ({duplicateGroups.length})</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleKeepBothAll}
+                disabled={loading}
+                className="px-3 py-2 rounded-xl bg-white/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-white border border-white/10 hover:border-emerald-500/30 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                title="Keep both copies for all detected groups"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Keep Both for All</span>
+              </button>
+
+              <button
+                onClick={handleResolveAll}
+                disabled={loading}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-95 text-white font-semibold text-xs shadow-md transition flex items-center gap-1.5 playful-btn cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Clean All ({duplicateGroups.length})</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -327,20 +395,33 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
                       </span>
                     </div>
 
-                    <button
-                      onClick={() => handleResolveGroup(group, original.fileId)}
-                      disabled={resolvingKey === group.matchKey}
-                      className="px-3 py-1 rounded-xl bg-white/10 hover:bg-rose-500/20 text-rose-300 hover:text-white border border-white/10 hover:border-rose-500/40 text-[11px] font-semibold transition flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      {resolvingKey === group.matchKey ? (
-                        <span>Resolving...</span>
-                      ) : (
-                        <>
-                          <Trash2 className="w-3 h-3 text-rose-400" />
-                          <span>Keep Oldest & Clean Copy</span>
-                        </>
-                      )}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => handleKeepBoth(group)}
+                        disabled={resolvingKey === group.matchKey}
+                        className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-white border border-white/10 hover:border-emerald-500/30 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        title="Keep both copies of this image in your vault"
+                      >
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                        <span>Keep Both Images</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleResolveGroup(group, original.fileId)}
+                        disabled={resolvingKey === group.matchKey}
+                        className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-rose-500/20 text-rose-300 hover:text-white border border-white/10 hover:border-rose-500/40 text-[11px] font-semibold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        title="Keep the oldest version and delete duplicate copy"
+                      >
+                        {resolvingKey === group.matchKey ? (
+                          <span>Resolving...</span>
+                        ) : (
+                          <>
+                            <Trash2 className="w-3 h-3 text-rose-400" />
+                            <span>Keep Oldest Only</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Side-by-side comparison cards */}

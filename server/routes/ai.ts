@@ -220,7 +220,7 @@ Respond ONLY with valid JSON in this exact structure:
 aiRouter.post('/caption-post/:postId', async (req: AuthenticatedRequest, res) => {
   try {
     const { postId } = req.params;
-    const { tone = 'warm', updateDatabase = true } = req.body;
+    const { tone = 'warm', updateDatabase = false } = req.body;
     const userId = req.user!.id;
     const isAdmin = req.user!.role === 'admin';
 
@@ -276,6 +276,7 @@ aiRouter.post('/caption-post/:postId', async (req: AuthenticatedRequest, res) =>
 
     res.json({
       success: true,
+      currentCaption: post.caption,
       caption: newCaption,
       suggestions: result.suggestions || [],
       message: 'Caption generated successfully',

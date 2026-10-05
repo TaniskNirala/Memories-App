@@ -235,6 +235,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [captionSuggestions, setCaptionSuggestions] = useState<Array<{ tone: string; text: string }>>([]);
   const [captionTags, setCaptionTags] = useState<string[]>([]);
+  const [userTypedCaption, setUserTypedCaption] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -262,6 +263,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setIsGeneratingCaption(false);
     setCaptionSuggestions([]);
     setCaptionTags([]);
+    setUserTypedCaption(null);
     dragCounterRef.current = 0;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -331,7 +333,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           if (res.ok) {
             const data = await res.json();
             if (data.caption) {
-              setCaption(data.caption);
+              // If user hasn't typed a caption, keep AI caption as initial default
+              if (!caption.trim()) {
+                setCaption(data.caption);
+              } else {
+                // Keep manual caption intact, save for restoring
+                setUserTypedCaption(caption);
+              }
               setCaptionSuggestions(data.suggestions || []);
               setCaptionTags(data.tags || []);
             }
@@ -873,9 +881,20 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             {/* Gemini Caption Suggestions Chips */}
             {captionSuggestions.length > 0 && (
               <div className="mt-2 space-y-1.5 p-2.5 rounded-xl bg-white/5 border border-white/10 animate-in fade-in duration-150">
-                <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
-                  ✨ Gemini Caption Ideas (click to apply)
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                    ✨ Gemini Caption Suggestions (click to apply)
+                  </span>
+                  {userTypedCaption && caption !== userTypedCaption && (
+                    <button
+                      type="button"
+                      onClick={() => setCaption(userTypedCaption)}
+                      className="text-[10px] text-amber-300 hover:text-white font-semibold flex items-center gap-1 transition cursor-pointer"
+                    >
+                      ↩️ Restore my text
+                    </button>
+                  )}
+                </div>
                 <div className="flex flex-col gap-1">
                   {captionSuggestions.map((s, idx) => (
                     <button

@@ -19,12 +19,14 @@ import {
   Crop,
   Plus,
   Sparkles,
+  MapPin,
 } from 'lucide-react';
 import { FeedItem, Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
+import { CaptionSuggestionsModal } from './CaptionSuggestionsModal.tsx';
 
 interface MediaViewerModalProps {
   item: FeedItem | null;
@@ -67,8 +69,13 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isAddPhotosModalOpen, setIsAddPhotosModalOpen] = useState(false);
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
-  const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
+  const [isCaptionSuggestionsOpen, setIsCaptionSuggestionsOpen] = useState(false);
   const [captionToast, setCaptionToast] = useState<string | null>(null);
+  const [showConvertPostToEvent, setShowConvertPostToEvent] = useState(false);
+  const [postEventTitle, setPostEventTitle] = useState('');
+  const [postEventDate, setPostEventDate] = useState('');
+  const [postEventPlace, setPostEventPlace] = useState('');
+  const [isConvertingPost, setIsConvertingPost] = useState(false);
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState(1);
@@ -299,30 +306,32 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     }
   };
 
-  const handleAutoCaptionPost = async () => {
-    if (!item || item.type !== 'single_post') return;
-    setIsGeneratingCaption(true);
+  const handleConvertPostToEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!item) return;
+    setIsConvertingPost(true);
     try {
-      const res = await apiFetch(`/api/ai/caption-post/${item.id}`, {
+      const res = await apiFetch(`/api/posts/${item.id}/convert-to-event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tone: 'warm' }),
+        body: JSON.stringify({
+          title: postEventTitle,
+          eventDate: postEventDate,
+          eventPlace: postEventPlace,
+        }),
       });
+
       if (res.ok) {
-        const data = await res.json();
-        if (data.caption) {
-          item.caption = data.caption;
-          setCaptionToast('✨ Caption auto-generated and saved!');
-          setTimeout(() => setCaptionToast(null), 3000);
-          if (onPhotoUpdated && currentFile) {
-            onPhotoUpdated(item.id, currentFile);
-          }
-        }
+        setCaptionToast('✨ Converted into an Event collection!');
+        setShowConvertPostToEvent(false);
+        setTimeout(() => {
+          onClose();
+        }, 1200);
       }
-    } catch (e) {
-      console.error('Failed to auto-caption post:', e);
+    } catch (err) {
+      console.error('Failed to convert post to event:', err);
     } finally {
-      setIsGeneratingCaption(false);
+      setIsConvertingPost(false);
     }
   };
 
@@ -430,16 +439,32 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             </button>
           )}
 
-          {/* AI Auto-Caption Button */}
+          {/* AI Caption Suggestions Button (Opens suggestions review, never overrides) */}
           {(canDelete || isAdmin || item.owner?.id === user?.id) && item.type === 'single_post' && (
             <button
-              onClick={handleAutoCaptionPost}
-              disabled={isGeneratingCaption}
-              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs disabled:opacity-50 cursor-pointer"
-              title="Auto-generate or enhance caption with Gemini AI"
+              onClick={() => setIsCaptionSuggestionsOpen(true)}
+              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+              title="View AI caption suggestions (does not override)"
             >
-              <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${isGeneratingCaption ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isGeneratingCaption ? 'Captioning...' : 'AI Caption'}</span>
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Caption Ideas</span>
+            </button>
+          )}
+
+          {/* Convert Album/Memory to Event Button */}
+          {(canDelete || isAdmin || item.owner?.id === user?.id) && item.type === 'single_post' && (
+            <button
+              onClick={() => {
+                setPostEventTitle(item.caption ? item.caption.slice(0, 50) : 'Event Memory');
+                setPostEventDate(item.takenAt ? new Date(item.takenAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+                setPostEventPlace('');
+                setShowConvertPostToEvent(true);
+              }}
+              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+              title="Convert this memory into an interactive event with attendees & notes"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">To Event</span>
             </button>
           )}
 
@@ -483,6 +508,95 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-xl bg-emerald-500 text-neutral-950 font-bold text-xs shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150 flex items-center gap-1.5 pointer-events-none">
           <Sparkles className="w-4 h-4 fill-current" />
           <span>{captionToast}</span>
+        </div>
+      )}
+
+      {/* Convert Memory/Album to Event Modal Dialog */}
+      {showConvertPostToEvent && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#16162a] border border-[#2b2b52] rounded-3xl p-5 text-white space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center shadow-xs">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <h3 className="font-display font-bold text-sm text-white">Convert into Event Collection</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConvertPostToEvent(false)}
+                className="text-neutral-400 hover:text-white text-xs cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Transform this memory into an official Event collection with attendee check-ins and shared guest memory notes.
+            </p>
+
+            <form onSubmit={handleConvertPostToEvent} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
+                  Event Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={postEventTitle}
+                  onChange={(e) => setPostEventTitle(e.target.value)}
+                  placeholder="e.g. Summer Lake Trip, Birthday Party"
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 text-amber-400" /> Event Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={postEventDate}
+                    onChange={(e) => setPostEventDate(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-rose-400" /> Location / Venue
+                  </label>
+                  <input
+                    type="text"
+                    value={postEventPlace}
+                    onChange={(e) => setPostEventPlace(e.target.value)}
+                    placeholder="e.g. Lake Tahoe"
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white placeholder-neutral-500 focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setShowConvertPostToEvent(false)}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 text-neutral-300 hover:text-white font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isConvertingPost}
+                  className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white font-semibold shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{isConvertingPost ? 'Converting...' : 'Confirm & Convert'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -762,10 +876,24 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             <div className="max-w-4xl mx-auto">
               {/* Caption & Comments Bar */}
               <div className="flex items-center justify-between gap-4">
-                <div className="truncate">
-                  {item.caption && (
-                    <p className="text-sm font-semibold truncate mb-0.5">{item.caption}</p>
-                  )}
+                <div className="truncate flex-1">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    {item.caption ? (
+                      <p className="text-sm font-semibold truncate">{item.caption}</p>
+                    ) : (
+                      <p className="text-sm italic text-neutral-400">No caption yet</p>
+                    )}
+                    {(canDelete || isAdmin || item.owner?.id === user?.id) && item.type === 'single_post' && (
+                      <button
+                        onClick={() => setIsCaptionSuggestionsOpen(true)}
+                        className="px-2 py-0.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1 transition shrink-0 cursor-pointer"
+                        title="View AI caption suggestions"
+                      >
+                        <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                        <span>Suggestions</span>
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-xs text-neutral-400">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-amber-400" />
@@ -986,6 +1114,20 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         onPermissionsUpdated={(updatedPlacements, newOverride) => {
           if (onPermissionsUpdated) {
             onPermissionsUpdated(updatedPlacements, newOverride);
+          }
+        }}
+      />
+
+      {/* Caption Suggestions Modal (Review AI suggestions before choosing to apply) */}
+      <CaptionSuggestionsModal
+        isOpen={isCaptionSuggestionsOpen}
+        onClose={() => setIsCaptionSuggestionsOpen(false)}
+        item={item}
+        onCaptionUpdated={(newCaption) => {
+          setCaptionToast('✨ Caption updated successfully!');
+          setTimeout(() => setCaptionToast(null), 3000);
+          if (onPhotoUpdated && currentFile) {
+            onPhotoUpdated(item.id, currentFile);
           }
         }}
       />

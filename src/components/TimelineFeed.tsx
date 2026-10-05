@@ -694,12 +694,25 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
 
                         {/* Open button for collections */}
                         {item.type === 'collection_card' && (
-                          <button
-                            onClick={() => onOpenCollection(item.id)}
-                            className="px-3 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium transition"
-                          >
-                            Open
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => onOpenCollection(item.id)}
+                              className="px-3 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium transition cursor-pointer"
+                            >
+                              Open
+                            </button>
+
+                            {!item.isEvent && (
+                              <button
+                                onClick={() => onOpenCollection(item.id)}
+                                className="px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/15 to-rose-500/15 hover:from-amber-500/25 hover:to-rose-500/25 border border-amber-500/30 text-amber-300 font-medium transition flex items-center gap-1 cursor-pointer text-xs"
+                                title="Convert this album into an interactive event"
+                              >
+                                <Sparkles className="w-3 h-3 text-amber-400" />
+                                <span>Convert to Event</span>
+                              </button>
+                            )}
+                          </div>
                         )}
 
                         {/* Share to a group dropdown button */}

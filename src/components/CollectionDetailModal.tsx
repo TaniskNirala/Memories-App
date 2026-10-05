@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, MapPin, Users, Plus, Check, Trash2, Eye, EyeOff } from 'lucide-react';
+import { X, Calendar, MapPin, Users, Plus, Check, Trash2, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { EventAttendee, EventNote } from '../types/index.ts';
-import { useAuth } from '../context/AuthContext.tsx';
+import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 
 interface CollectionDetailModalProps {
@@ -34,6 +34,12 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   const [notes, setNotes] = useState<EventNote[]>([]);
   const [noteText, setNoteText] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+
+  // Convert to event state
+  const [showConvertToEvent, setShowConvertToEvent] = useState(false);
+  const [eventDateInput, setEventDateInput] = useState(() => new Date().toISOString().slice(0, 10));
+  const [eventPlaceInput, setEventPlaceInput] = useState('');
+  const [isConverting, setIsConverting] = useState(false);
 
   const fetchCollection = async () => {
     if (!collectionId) return;
@@ -161,6 +167,38 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
     } catch (e) {}
   };
 
+  const handleConvertToEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!collectionId) return;
+    setIsConverting(true);
+    try {
+      const res = await apiFetch(`/api/albums/${collectionId}/convert-to-event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventDate: eventDateInput,
+          eventPlace: eventPlaceInput,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCollection((prev: any) => ({
+          ...prev,
+          isEvent: true,
+          eventDate: data.eventDate,
+          eventPlace: data.eventPlace,
+        }));
+        setShowConvertToEvent(false);
+        fetchAttendance();
+        fetchNotes();
+      }
+    } catch (err) {
+      console.error('Failed to convert album to event:', err);
+    } finally {
+      setIsConverting(false);
+    }
+  };
+
   const isUserAttending = attendees.some((a) => a.userId === user?.id);
   const isHost = collection?.creator.id === user?.id || isAdmin;
 
@@ -202,13 +240,93 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition shrink-0"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {!collection?.isEvent && isHost && (
+              <button
+                onClick={() => setShowConvertToEvent((prev) => !prev)}
+                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+                title="Convert this photo album into an event with guest attendees and notes"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Convert to Event</span>
+                <span className="sm:hidden">To Event</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition shrink-0"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
+
+        {/* Inline Convert to Event Form */}
+        {showConvertToEvent && (
+          <div className="p-4 bg-amber-500/10 border-b border-amber-500/30 animate-in fade-in duration-150">
+            <form onSubmit={handleConvertToEvent} className="max-w-2xl mx-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  <span>Convert Album into an Interactive Event</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowConvertToEvent(false)}
+                  className="text-neutral-400 hover:text-white text-xs cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                Transform this album into an event to unlock guest attendee tagging and a shared board for guest notes and memories.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" /> Event Date
+                  </label>
+                  <input
+                    type="date"
+                    value={eventDateInput}
+                    onChange={(e) => setEventDateInput(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-rose-400" /> Event Location / Place
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Grandma's Garden, Central Park"
+                    value={eventPlaceInput}
+                    onChange={(e) => setEventPlaceInput(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-neutral-500 focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowConvertToEvent(false)}
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isConverting}
+                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-95 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isConverting ? 'Converting...' : 'Confirm & Convert to Event'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6">

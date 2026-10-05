@@ -131,6 +131,13 @@ postsRouter.post(
       const mainStorageKey = `posts/${userId}/${mainFile.filename}`;
       const thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
 
+      // Compute SHA-256 checksum for duplicate detection
+      let checksum = '';
+      try {
+        const fileBuf = fs.readFileSync(mainFile.path);
+        checksum = crypto.createHash('sha256').update(fileBuf).digest('hex');
+      } catch {}
+
       // If cloud storage backend is configured, sync uploaded buffers to cloud safely
       const storage = getStorageAdapter();
       const backend = process.env.STORAGE_BACKEND;
@@ -165,6 +172,7 @@ postsRouter.post(
         fileSize: mainFile.size,
         width,
         height,
+        checksum,
       });
     } catch (err: any) {
       console.error('File upload error:', err);
@@ -244,8 +252,8 @@ postsRouter.post('/', async (req: AuthenticatedRequest, res) => {
     const f = files[i];
     const fileId = crypto.randomUUID();
     run(
-      `INSERT INTO post_files (id, post_id, storage_key, file_type, position, thumb_key, file_size, mime_type, width, height)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO post_files (id, post_id, storage_key, file_type, position, thumb_key, file_size, mime_type, width, height, checksum)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         fileId,
         postId,
@@ -257,6 +265,7 @@ postsRouter.post('/', async (req: AuthenticatedRequest, res) => {
         f.mimeType || 'image/jpeg',
         f.width || null,
         f.height || null,
+        f.checksum || null,
       ]
     );
   }
@@ -738,3 +747,209 @@ postsRouter.post('/:id/override-visibility', requireAdmin, (req: AuthenticatedRe
 
   res.json({ success: true, visibilityOverride: override });
 });
+
+// Check if files to be uploaded are duplicates of existing photos
+postsRouter.post('/check-duplicates', async (req: AuthenticatedRequest, res) => {
+  const { files } = req.body;
+  const userId = req.user!.id;
+
+  if (!Array.isArray(files) || files.length === 0) {
+    return res.json({ duplicates: [] });
+  }
+
+  const duplicates: any[] = [];
+  const storage = getStorageAdapter();
+
+  for (const f of files) {
+    let match: any = null;
+
+    if (f.checksum) {
+      match = queryOne<any>(
+        `SELECT pf.*, p.caption, p.taken_at, p.id as post_id, p.owner_id
+         FROM post_files pf
+         JOIN posts p ON pf.post_id = p.id
+         WHERE pf.checksum = ? AND p.deleted_at IS NULL
+         LIMIT 1`,
+        [f.checksum]
+      );
+    }
+
+    if (!match && f.size && f.size > 0) {
+      match = queryOne<any>(
+        `SELECT pf.*, p.caption, p.taken_at, p.id as post_id, p.owner_id
+         FROM post_files pf
+         JOIN posts p ON pf.post_id = p.id
+         WHERE pf.file_size = ? AND p.deleted_at IS NULL
+         LIMIT 1`,
+        [f.size]
+      );
+    }
+
+    if (match) {
+      duplicates.push({
+        fileName: f.name || f.fileName,
+        fileSize: f.size,
+        checksum: f.checksum,
+        existingPostId: match.post_id,
+        existingCaption: match.caption,
+        existingTakenAt: match.taken_at,
+        existingThumbUrl: await storage.getSignedViewUrl(match.thumb_key || match.storage_key),
+        isOwnMemory: match.owner_id === userId,
+      });
+    }
+  }
+
+  res.json({ duplicates });
+});
+
+// List duplicate photos across library
+postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+  const storage = getStorageAdapter();
+
+  // Find all file_sizes or checksums that have 2+ photos in active posts
+  const duplicateSets = queryAll<any>(
+    `SELECT file_size, width, height, COUNT(*) as count
+     FROM post_files pf
+     JOIN posts p ON pf.post_id = p.id
+     WHERE p.deleted_at IS NULL AND pf.file_size > 0
+     ${isAdmin ? '' : 'AND p.owner_id = ?'}
+     GROUP BY file_size, width, height
+     HAVING COUNT(*) > 1
+     ORDER BY count DESC, file_size DESC`,
+    isAdmin ? [] : [userId]
+  );
+
+  const duplicateGroups: any[] = [];
+
+  for (const set of duplicateSets) {
+    const rawFiles = queryAll<any>(
+      `SELECT pf.id as file_id, pf.post_id, pf.storage_key, pf.thumb_key, pf.file_size,
+              pf.width, pf.height, pf.checksum, pf.position,
+              p.caption, p.taken_at, p.uploaded_at, p.owner_id,
+              u.username as owner_username, u.display_name as owner_display_name
+       FROM post_files pf
+       JOIN posts p ON pf.post_id = p.id
+       JOIN users u ON p.owner_id = u.id
+       WHERE pf.file_size = ? AND pf.width = ? AND pf.height = ? AND p.deleted_at IS NULL
+       ${isAdmin ? '' : 'AND p.owner_id = ?'}
+       ORDER BY p.taken_at ASC`,
+      isAdmin ? [set.file_size, set.width, set.height] : [set.file_size, set.width, set.height, userId]
+    );
+
+    if (rawFiles.length > 1) {
+      const filesWithUrls = await Promise.all(
+        rawFiles.map(async (rf) => {
+          const placements = queryAll<any>(
+            `SELECT g.id, g.name FROM item_groups ig JOIN groups g ON ig.group_id = g.id WHERE ig.item_type = 'post' AND ig.item_id = ?`,
+            [rf.post_id]
+          );
+
+          return {
+            fileId: rf.file_id,
+            postId: rf.post_id,
+            caption: rf.caption,
+            takenAt: rf.taken_at,
+            uploadedAt: rf.uploaded_at,
+            fileSize: rf.file_size,
+            width: rf.width,
+            height: rf.height,
+            isOwner: rf.owner_id === userId,
+            ownerName: rf.owner_display_name,
+            viewUrl: await storage.getSignedViewUrl(rf.storage_key),
+            thumbUrl: await storage.getSignedViewUrl(rf.thumb_key || rf.storage_key),
+            placements: placements.map((p) => ({ id: p.id, name: p.name })),
+          };
+        })
+      );
+
+      duplicateGroups.push({
+        matchKey: `${set.file_size}_${set.width}_${set.height}`,
+        fileSize: set.file_size,
+        fileCount: rawFiles.length,
+        wastedBytes: (rawFiles.length - 1) * set.file_size,
+        files: filesWithUrls,
+      });
+    }
+  }
+
+  res.json({ duplicateGroups });
+});
+
+// Resolve duplicate photos by keeping selected one and cleaning up duplicates
+postsRouter.post('/duplicates/resolve', async (req: AuthenticatedRequest, res) => {
+  const { keepFileId, removeFileIds, mergePlacements = true } = req.body;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  if (!keepFileId || !Array.isArray(removeFileIds) || removeFileIds.length === 0) {
+    return res.status(400).json({ error: 'keepFileId and removeFileIds array required' });
+  }
+
+  const keepFile = queryOne<any>(
+    `SELECT pf.*, p.id as post_id, p.owner_id
+     FROM post_files pf
+     JOIN posts p ON pf.post_id = p.id
+     WHERE pf.id = ?`,
+    [keepFileId]
+  );
+
+  if (!keepFile) return res.status(404).json({ error: 'Kept file not found' });
+
+  let removedCount = 0;
+  let freedBytes = 0;
+
+  for (const removeId of removeFileIds) {
+    const toRemove = queryOne<any>(
+      `SELECT pf.*, p.id as post_id, p.owner_id
+       FROM post_files pf
+       JOIN posts p ON pf.post_id = p.id
+       WHERE pf.id = ?`,
+      [removeId]
+    );
+
+    if (!toRemove) continue;
+    if (!isAdmin && toRemove.owner_id !== userId) continue;
+
+    // Merge group placements so no friends lose access to this memory
+    if (mergePlacements && toRemove.post_id !== keepFile.post_id) {
+      const sourcePlacements = queryAll<any>(
+        'SELECT group_id FROM item_groups WHERE item_type = "post" AND item_id = ?',
+        [toRemove.post_id]
+      );
+      for (const sp of sourcePlacements) {
+        const existsInKeep = queryOne(
+          'SELECT id FROM item_groups WHERE item_type = "post" AND item_id = ? AND group_id = ?',
+          [keepFile.post_id, sp.group_id]
+        );
+        if (!existsInKeep) {
+          run(
+            `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+             VALUES (?, 'post', ?, ?, ?, 0, 'approved', ?)`,
+            [crypto.randomUUID(), keepFile.post_id, sp.group_id, userId, new Date().toISOString()]
+          );
+        }
+      }
+    }
+
+    // Delete or soft-delete post if it only contains this file
+    const postFiles = queryAll<any>('SELECT id FROM post_files WHERE post_id = ?', [toRemove.post_id]);
+    if (postFiles.length <= 1) {
+      run('UPDATE posts SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), toRemove.post_id]);
+    } else {
+      run('DELETE FROM post_files WHERE id = ?', [removeId]);
+    }
+
+    freedBytes += toRemove.file_size || 0;
+    removedCount++;
+  }
+
+  res.json({
+    success: true,
+    removedCount,
+    freedBytes,
+    message: `Cleaned ${removedCount} duplicate photo(s), freeing ${(freedBytes / (1024 * 1024)).toFixed(1)} MB.`,
+  });
+});
+

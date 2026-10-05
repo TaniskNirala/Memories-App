@@ -21,6 +21,7 @@ import { reactionsRouter } from './server/routes/reactions.ts';
 import { feedRouter } from './server/routes/feed.ts';
 import { adminRouter, reportsRouter } from './server/routes/admin.ts';
 import { notificationsRouter } from './server/routes/notifications.ts';
+import { aiRouter } from './server/routes/ai.ts';
 
 dotenv.config();
 
@@ -180,6 +181,7 @@ export async function createApp() {
   app.use('/api/admin', adminRouter);
   app.use('/api/reports', reportsRouter);
   app.use('/api/notifications', notificationsRouter);
+  app.use('/api/ai', aiRouter);
 
   // Health check
   app.get('/api/health', (_req, res) => {

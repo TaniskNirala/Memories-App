@@ -20,6 +20,7 @@ import { TrashView } from './components/TrashView.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { DuplicateCleanerModal } from './components/DuplicateCleanerModal.tsx';
 import { FeedItem, Group, NotificationItem } from './types/index.ts';
 import { RefreshCw, Upload } from 'lucide-react';
 
@@ -61,6 +62,7 @@ const MainContent: React.FC = () => {
   const [highlightCommentId, setHighlightCommentId] = useState<string | undefined>(undefined);
   const [shareItem, setShareItem] = useState<FeedItem | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+  const [isDuplicatesModalOpen, setIsDuplicatesModalOpen] = useState(false);
 
   // Search & filter state
   const initialFeedFilters: FeedFilterState = {
@@ -511,6 +513,7 @@ const MainContent: React.FC = () => {
         selectedGroupName={selectedGroup?.name}
         onSelectGroup={(gid) => setSelectedGroupId(gid)}
         onNotificationClick={handleNotificationClick}
+        onOpenDuplicates={() => setIsDuplicatesModalOpen(true)}
         onUserSwitched={() => {
           setSelectedGroupId(undefined);
           fetchGroups();
@@ -718,6 +721,8 @@ const MainContent: React.FC = () => {
         onDeleteFile={handleDeleteSinglePhoto}
         onPhotoUpdated={handlePhotoUpdated}
         onOverrideVisibility={handleAdminOverride}
+        groups={groups}
+        onPermissionsUpdated={() => fetchFeed(true)}
       />
 
       <CommentsDrawer
@@ -800,6 +805,12 @@ const MainContent: React.FC = () => {
         onClose={() => setIsProposeModalOpen(false)}
         groups={groups}
         onCreated={() => fetchFeed(true)}
+      />
+
+      <DuplicateCleanerModal
+        isOpen={isDuplicatesModalOpen}
+        onClose={() => setIsDuplicatesModalOpen(false)}
+        onDuplicatesResolved={() => fetchFeed(true)}
       />
 
       <OfflineIndicator />

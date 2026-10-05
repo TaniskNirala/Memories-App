@@ -233,6 +233,7 @@ function initSchema(db: Database) {
       mime_type TEXT NOT NULL,
       width INTEGER,
       height INTEGER,
+      checksum TEXT,
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
 
@@ -366,4 +367,8 @@ function initSchema(db: Database) {
       FOREIGN KEY (actor_id) REFERENCES users(id)
     );
   `);
+
+  try {
+    db.run('ALTER TABLE post_files ADD COLUMN checksum TEXT');
+  } catch {}
 }

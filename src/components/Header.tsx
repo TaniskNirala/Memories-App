@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Bell, LogOut, CheckCircle2 } from 'lucide-react';
+import { Moon, Sun, Bell, LogOut, CheckCircle2, Copy } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
@@ -11,9 +11,10 @@ interface HeaderProps {
   selectedGroupName?: string;
   onUserSwitched?: () => void;
   onNotificationClick?: (notification: NotificationItem) => void;
+  onOpenDuplicates?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificationClick }) => {
+export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificationClick, onOpenDuplicates }) => {
   const { user, logout, isPending } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -118,6 +119,18 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
               </>
             )}
           </button>
+
+          {/* Duplicate Photo Cleaner Button */}
+          {user && !isPending && onOpenDuplicates && (
+            <button
+              onClick={onOpenDuplicates}
+              title="Duplicate Photo Cleaner"
+              className="px-3 py-1.5 rounded-full bg-[var(--bg-surface)] hover:bg-amber-500/20 border border-[var(--border-color)] hover:border-amber-500/30 text-xs font-medium text-[var(--text-primary)] hover:text-amber-400 transition flex items-center gap-1.5 shrink-0"
+            >
+              <Copy className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Duplicates</span>
+            </button>
+          )}
 
           {/* Notifications Trigger */}
           {user && !isPending && (

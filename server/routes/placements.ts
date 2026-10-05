@@ -198,3 +198,146 @@ placementsRouter.post('/pending-references/:placementId/decide', (req: Authentic
 
   res.json({ success: true, decision });
 });
+
+// Get current viewing permissions & placements for an item
+placementsRouter.get('/item/:itemType/:itemId', (req: AuthenticatedRequest, res) => {
+  const { itemType, itemId } = req.params;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  let ownerId = '';
+  let visibilityOverride: string | null = null;
+
+  if (itemType === 'post') {
+    const post = queryOne<any>('SELECT owner_id, visibility_override FROM posts WHERE id = ?', [itemId]);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    ownerId = post.owner_id;
+    visibilityOverride = post.visibility_override;
+  } else {
+    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
+    if (!album) return res.status(404).json({ error: 'Album not found' });
+    ownerId = album.creator_id;
+  }
+
+  const isOwner = ownerId === userId;
+  const canManage = isOwner || isAdmin;
+
+  const placements = queryAll<any>(
+    `SELECT ig.id, ig.group_id, ig.is_reference, ig.reference_status, ig.added_by, ig.added_at,
+            g.name as group_name, g.is_everyone
+     FROM item_groups ig
+     JOIN groups g ON ig.group_id = g.id
+     WHERE ig.item_type = ? AND ig.item_id = ?
+     ORDER BY g.is_everyone DESC, g.name ASC`,
+    [itemType, itemId]
+  );
+
+  res.json({
+    itemId,
+    itemType,
+    ownerId,
+    isOwner,
+    isAdmin,
+    canManage,
+    visibilityOverride,
+    placements,
+  });
+});
+
+// Adjust viewing permissions (add/remove circles, adjust visibility)
+placementsRouter.post('/adjust-permissions', async (req: AuthenticatedRequest, res) => {
+  const { itemId, itemType = 'post', targetGroupIds, visibilityOverride } = req.body;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  if (!itemId || !Array.isArray(targetGroupIds)) {
+    return res.status(400).json({ error: 'itemId and targetGroupIds array required' });
+  }
+
+  let ownerId = '';
+  if (itemType === 'post') {
+    const post = queryOne<any>('SELECT owner_id, visibility_override FROM posts WHERE id = ?', [itemId]);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    ownerId = post.owner_id;
+  } else {
+    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
+    if (!album) return res.status(404).json({ error: 'Album not found' });
+    ownerId = album.creator_id;
+  }
+
+  const isOwner = ownerId === userId;
+  if (!isOwner && !isAdmin) {
+    return res.status(403).json({ error: 'Only the memory owner or an administrator can adjust viewing permissions' });
+  }
+
+  const now = new Date().toISOString();
+
+  // Current active placements
+  const currentPlacements = queryAll<any>(
+    'SELECT id, group_id FROM item_groups WHERE item_type = ? AND item_id = ?',
+    [itemType, itemId]
+  );
+
+  const currentGroupIds = new Set(currentPlacements.map((p) => p.group_id));
+  const newGroupIds = new Set(targetGroupIds);
+
+  // 1. Remove placements that are no longer selected
+  for (const cp of currentPlacements) {
+    if (!newGroupIds.has(cp.group_id)) {
+      run('DELETE FROM item_groups WHERE id = ?', [cp.id]);
+    }
+  }
+
+  // 2. Add new placements
+  for (const gid of targetGroupIds) {
+    if (!currentGroupIds.has(gid)) {
+      // Verify group exists
+      const grp = queryOne<any>('SELECT id FROM groups WHERE id = ?', [gid]);
+      if (grp) {
+        run(
+          `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+           VALUES (?, ?, ?, ?, ?, 0, 'approved', ?)`,
+          [crypto.randomUUID(), itemType, itemId, gid, userId, now]
+        );
+      }
+    }
+  }
+
+  // 3. Update visibility override if provided and item is post
+  if (itemType === 'post' && visibilityOverride !== undefined) {
+    const validOverrides = ['public_all', 'hidden', null];
+    if (validOverrides.includes(visibilityOverride)) {
+      run('UPDATE posts SET visibility_override = ? WHERE id = ?', [visibilityOverride, itemId]);
+      if (isAdmin && !isOwner) {
+        run(
+          `INSERT INTO audit_log (id, actor_id, action, target_type, target_id, details, created_at)
+           VALUES (?, ?, 'admin_visibility_override', 'post', ?, ?, ?)`,
+          [
+            crypto.randomUUID(),
+            userId,
+            itemId,
+            `Admin adjusted viewing permissions to override: ${visibilityOverride || 'none'}`,
+            now,
+          ]
+        );
+      }
+    }
+  }
+
+  // Fetch updated placements
+  const updatedPlacements = queryAll<any>(
+    `SELECT ig.id, ig.group_id, g.name as group_name, g.is_everyone
+     FROM item_groups ig
+     JOIN groups g ON ig.group_id = g.id
+     WHERE ig.item_type = ? AND ig.item_id = ?`,
+    [itemType, itemId]
+  );
+
+  res.json({
+    success: true,
+    message: 'Viewing permissions updated successfully',
+    placements: updatedPlacements,
+    visibilityOverride: itemType === 'post' ? visibilityOverride : undefined,
+  });
+});
+

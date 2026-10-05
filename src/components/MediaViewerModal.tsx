@@ -18,11 +18,13 @@ import {
   RotateCcw,
   Crop,
   Plus,
+  Sparkles,
 } from 'lucide-react';
-import { FeedItem } from '../types/index.ts';
+import { FeedItem, Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
+import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 
 interface MediaViewerModalProps {
   item: FeedItem | null;
@@ -36,6 +38,8 @@ interface MediaViewerModalProps {
   onDeleteFile?: (postId: string, fileId: string) => Promise<void> | void;
   onPhotoUpdated?: (postId: string, updatedFile: any) => void;
   onOverrideVisibility?: (postId: string, override: string | null) => void;
+  groups?: Group[];
+  onPermissionsUpdated?: (updatedPlacements?: any[], visibilityOverride?: string | null) => void;
 }
 
 export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
@@ -50,6 +54,8 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   onDeleteFile,
   onPhotoUpdated,
   onOverrideVisibility,
+  groups = [],
+  onPermissionsUpdated,
 }) => {
   const { user, isAdmin } = useAuth();
   const [fileIndex, setFileIndex] = useState(initialIndex);
@@ -60,6 +66,9 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [showOverrideMenu, setShowOverrideMenu] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isAddPhotosModalOpen, setIsAddPhotosModalOpen] = useState(false);
+  const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
+  const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
+  const [captionToast, setCaptionToast] = useState<string | null>(null);
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState(1);
@@ -290,6 +299,33 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
     }
   };
 
+  const handleAutoCaptionPost = async () => {
+    if (!item || item.type !== 'single_post') return;
+    setIsGeneratingCaption(true);
+    try {
+      const res = await apiFetch(`/api/ai/caption-post/${item.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tone: 'warm' }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.caption) {
+          item.caption = data.caption;
+          setCaptionToast('✨ Caption auto-generated and saved!');
+          setTimeout(() => setCaptionToast(null), 3000);
+          if (onPhotoUpdated && currentFile) {
+            onPhotoUpdated(item.id, currentFile);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to auto-caption post:', e);
+    } finally {
+      setIsGeneratingCaption(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-150 select-none">
       {/* Top action bar */}
@@ -382,52 +418,29 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             <Share2 className="w-4 h-4" />
           </button>
 
-          {/* Admin Visibility Override */}
-          {isAdmin && onOverrideVisibility && (
-            <div className="relative">
-              <button
-                onClick={() => setShowOverrideMenu((prev) => !prev)}
-                className="p-2 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 transition"
-                title="Admin Override Visibility"
-              >
-                <Shield className="w-4 h-4" />
-              </button>
+          {/* Adjust Viewing Permissions Button */}
+          {(canDelete || isAdmin || item.owner?.id === user?.id) && (
+            <button
+              onClick={() => setIsPermissionsModalOpen(true)}
+              className="px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+              title="Adjust Viewing Permissions"
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span className="inline">Permissions</span>
+            </button>
+          )}
 
-              {showOverrideMenu && (
-                <div className="absolute right-0 mt-2 w-48 p-2 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-40 text-xs text-white">
-                  <span className="text-[10px] uppercase font-bold text-amber-400 block px-2 py-1">
-                    Admin Visibility Override
-                  </span>
-                  <button
-                    onClick={() => {
-                      onOverrideVisibility(item.id, 'public_all');
-                      setShowOverrideMenu(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-neutral-800"
-                  >
-                    Make Visible to Everyone
-                  </button>
-                  <button
-                    onClick={() => {
-                      onOverrideVisibility(item.id, 'hidden');
-                      setShowOverrideMenu(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-neutral-800 text-rose-400"
-                  >
-                    Hide from all non-admins
-                  </button>
-                  <button
-                    onClick={() => {
-                      onOverrideVisibility(item.id, null);
-                      setShowOverrideMenu(false);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400"
-                  >
-                    Reset to Standard Circles
-                  </button>
-                </div>
-              )}
-            </div>
+          {/* AI Auto-Caption Button */}
+          {(canDelete || isAdmin || item.owner?.id === user?.id) && item.type === 'single_post' && (
+            <button
+              onClick={handleAutoCaptionPost}
+              disabled={isGeneratingCaption}
+              className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs disabled:opacity-50 cursor-pointer"
+              title="Auto-generate or enhance caption with Gemini AI"
+            >
+              <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${isGeneratingCaption ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">{isGeneratingCaption ? 'Captioning...' : 'AI Caption'}</span>
+            </button>
           )}
 
           {/* Delete Buttons */}
@@ -464,6 +477,14 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Caption Toast Notification */}
+      {captionToast && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 px-4 py-2 rounded-xl bg-emerald-500 text-neutral-950 font-bold text-xs shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150 flex items-center gap-1.5 pointer-events-none">
+          <Sparkles className="w-4 h-4 fill-current" />
+          <span>{captionToast}</span>
+        </div>
+      )}
 
       {/* ======================================================== */}
       {/* MODE 1: ALBUM GRID OVERVIEW                              */}
@@ -955,6 +976,19 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           onSuccess={handleAddPhotosSuccess}
         />
       )}
+
+      {/* Viewing Permissions Modal */}
+      <ViewingPermissionsModal
+        item={item}
+        isOpen={isPermissionsModalOpen}
+        onClose={() => setIsPermissionsModalOpen(false)}
+        groups={groups}
+        onPermissionsUpdated={(updatedPlacements, newOverride) => {
+          if (onPermissionsUpdated) {
+            onPermissionsUpdated(updatedPlacements, newOverride);
+          }
+        }}
+      />
     </div>
   );
 };

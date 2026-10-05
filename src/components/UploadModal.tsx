@@ -11,6 +11,7 @@ import {
   Sparkles,
   Clock,
   Crop,
+  Copy,
 } from 'lucide-react';
 import exifr from 'exifr';
 import { Group } from '../types/index.ts';
@@ -228,6 +229,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [editingQueueItemId, setEditingQueueItemId] = useState<string | null>(null);
+  const [detectedDuplicates, setDetectedDuplicates] = useState<
+    Array<{ fileName: string; existingPostId: string; existingCaption: string; existingTakenAt: string; existingThumbUrl: string }>
+  >([]);
+  const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
+  const [captionSuggestions, setCaptionSuggestions] = useState<Array<{ tone: string; text: string }>>([]);
+  const [captionTags, setCaptionTags] = useState<string[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -251,9 +258,95 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setIsProcessing(false);
     setIsDragOver(false);
     setEditingQueueItemId(null);
+    setDetectedDuplicates([]);
+    setIsGeneratingCaption(false);
+    setCaptionSuggestions([]);
+    setCaptionTags([]);
     dragCounterRef.current = 0;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  const handleSkipDuplicates = () => {
+    const duplicateFileNames = new Set(detectedDuplicates.map((d) => d.fileName));
+    setQueue((prev) => prev.filter((item) => !duplicateFileNames.has(item.file.name)));
+    setDetectedDuplicates([]);
+  };
+
+  const checkDuplicates = async (files: File[]) => {
+    try {
+      const payload = await Promise.all(
+        files.map(async (f) => {
+          let checksum = '';
+          try {
+            const slice = f.slice(0, 1024 * 1024 * 4);
+            const buf = await slice.arrayBuffer();
+            const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+            checksum = Array.from(new Uint8Array(hashBuf))
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join('');
+          } catch {}
+          return { name: f.name, size: f.size, checksum };
+        })
+      );
+
+      const res = await apiFetch('/api/posts/check-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ files: payload }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.duplicates && data.duplicates.length > 0) {
+          setDetectedDuplicates(data.duplicates);
+        }
+      }
+    } catch (e) {
+      console.error('Check duplicates error:', e);
+    }
+  };
+
+  const handleAutoGenerateCaption = async () => {
+    const firstImage = queue.find((q) => q.file.type.startsWith('image/'));
+    if (!firstImage) return;
+
+    setIsGeneratingCaption(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64 = (reader.result as string) || '';
+          const res = await apiFetch('/api/ai/generate-caption', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageBase64: base64,
+              tone: 'warm',
+              context: caption || undefined,
+            }),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (data.caption) {
+              setCaption(data.caption);
+              setCaptionSuggestions(data.suggestions || []);
+              setCaptionTags(data.tags || []);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to auto-generate caption:', err);
+        } finally {
+          setIsGeneratingCaption(false);
+        }
+      };
+      reader.onerror = () => setIsGeneratingCaption(false);
+      reader.readAsDataURL(firstImage.file);
+    } catch (err) {
+      console.error('Auto caption error:', err);
+      setIsGeneratingCaption(false);
     }
   };
 
@@ -293,6 +386,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     }));
 
     setQueue((prev) => [...prev, ...newFiles]);
+
+    // Check for duplicate photos in the selected files
+    checkDuplicates(validFiles);
 
     // Inspect files for EXIF DateTimeOriginal / Capture Date
     let detected: string | null = null;
@@ -586,6 +682,28 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </div>
           )}
 
+          {/* Duplicate Detection Warning Banner */}
+          {detectedDuplicates.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-200 text-xs space-y-2 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-amber-300">
+                  <Copy className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{detectedDuplicates.length} Duplicate Photo(s) Detected</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSkipDuplicates}
+                  className="px-3 py-1 rounded-xl bg-amber-500 text-neutral-950 font-bold text-[11px] hover:bg-amber-400 transition shadow-xs cursor-pointer"
+                >
+                  Skip Duplicates
+                </button>
+              </div>
+              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                We detected photos in your upload queue that already exist in your memories. You can skip them with one click or keep both copies.
+              </p>
+            </div>
+          )}
+
           {/* File Picker & Queue */}
           <div>
             <input
@@ -664,6 +782,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         className="w-full h-full object-cover"
                       />
 
+                      {/* Duplicate Badge */}
+                      {detectedDuplicates.some((d) => d.fileName === item.file.name) && (
+                        <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-amber-500 text-neutral-950 font-bold text-[9px] uppercase tracking-wider flex items-center gap-0.5 z-10 shadow-xs">
+                          <Copy className="w-2.5 h-2.5" />
+                          <span>Duplicate</span>
+                        </div>
+                      )}
+
                       {/* Status Badges */}
                       {item.status === 'resizing' && (
                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-[10px]">
@@ -718,16 +844,55 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
           {/* Caption */}
           <div>
-            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-              Caption
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                Caption
+              </label>
+              {queue.length > 0 && queue.some((q) => q.file.type.startsWith('image/')) && (
+                <button
+                  type="button"
+                  onClick={handleAutoGenerateCaption}
+                  disabled={isGeneratingCaption || isProcessing}
+                  className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-[11px] font-semibold shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Auto-generate caption using Gemini AI"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${isGeneratingCaption ? 'animate-spin' : ''}`} />
+                  <span>{isGeneratingCaption ? 'Analyzing photo...' : '✨ Auto-Generate Caption'}</span>
+                </button>
+              )}
+            </div>
+
             <textarea
               rows={2}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              placeholder="What made this moment special? Type @friend to mention..."
+              placeholder="What made this moment special? Type @friend to mention, or click Auto-Generate..."
               className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden focus:ring-2 focus:ring-[var(--ring-focus)] transition"
             />
+
+            {/* Gemini Caption Suggestions Chips */}
+            {captionSuggestions.length > 0 && (
+              <div className="mt-2 space-y-1.5 p-2.5 rounded-xl bg-white/5 border border-white/10 animate-in fade-in duration-150">
+                <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                  ✨ Gemini Caption Ideas (click to apply)
+                </span>
+                <div className="flex flex-col gap-1">
+                  {captionSuggestions.map((s, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCaption(s.text)}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 text-[11px] text-neutral-300 hover:text-white transition text-left flex items-start gap-2 group cursor-pointer"
+                    >
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
+                        {s.tone}
+                      </span>
+                      <span className="line-clamp-1 group-hover:text-amber-200">{s.text}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Date Selector & Basis */}

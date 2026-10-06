@@ -9,6 +9,7 @@ import {
   Quote,
   MessageSquare,
   CheckCircle2,
+  Calendar,
 } from 'lucide-react';
 import { FeedItem } from '../types/index.ts';
 import { apiFetch } from '../context/AuthContext.tsx';
@@ -33,16 +34,19 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
   const [isEditing, setIsEditing] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [temporalSummary, setTemporalSummary] = useState<string | null>(null);
+  const [activeTone, setActiveTone] = useState<string>('nostalgic');
 
-  const fetchSuggestions = async () => {
+  const fetchSuggestions = async (requestedTone?: string) => {
     if (!item) return;
+    const toneToUse = requestedTone || activeTone;
     setLoading(true);
     setToastMessage(null);
     try {
       const res = await apiFetch(`/api/ai/caption-post/${item.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tone: 'warm', updateDatabase: false }),
+        body: JSON.stringify({ tone: toneToUse, updateDatabase: false }),
       });
 
       if (res.ok) {
@@ -50,6 +54,9 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
         const itemCaption = item.type === 'single_post' ? item.caption : (item as any).caption;
         setCurrentCaption(itemCaption || data.currentCaption || '');
         setSuggestions(data.suggestions || []);
+        if (data.temporalSummary) {
+          setTemporalSummary(data.temporalSummary);
+        }
         if (data.suggestions && data.suggestions.length > 0) {
           setSelectedText(data.suggestions[0].text);
         } else if (data.caption) {
@@ -123,7 +130,7 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
 
           <div className="flex items-center gap-1.5">
             <button
-              onClick={fetchSuggestions}
+              onClick={() => fetchSuggestions()}
               disabled={loading}
               className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white transition"
               title="Regenerate suggestions"
@@ -137,6 +144,56 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
               <X className="w-4 h-4" />
             </button>
           </div>
+        </div>
+
+        {/* Time Context Banner */}
+        {temporalSummary && (
+          <div className="mt-3 p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                <Calendar className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <span className="text-[10px] text-amber-400/90 uppercase tracking-wider font-bold block">
+                  Detected Memory Timeline
+                </span>
+                <span className="text-white font-medium text-xs">
+                  {temporalSummary}
+                </span>
+              </div>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-white/10 text-neutral-300 font-mono">
+              Time-Aware
+            </span>
+          </div>
+        )}
+
+        {/* Tone Selector */}
+        <div className="mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider shrink-0 mr-1">
+            Tone:
+          </span>
+          {[
+            { id: 'nostalgic', label: '⏳ Throwback / Nostalgic' },
+            { id: 'warm', label: '💫 Warm & Heartfelt' },
+            { id: 'witty', label: '😄 Fun & Witty' },
+            { id: 'short', label: '📍 Minimal' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => {
+                setActiveTone(t.id);
+                fetchSuggestions(t.id);
+              }}
+              className={`px-2.5 py-1 rounded-xl text-[11px] font-medium transition shrink-0 cursor-pointer ${
+                activeTone === t.id
+                  ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                  : 'bg-white/5 hover:bg-white/10 text-neutral-300'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {/* Current Caption (Preserved) */}
@@ -178,7 +235,7 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
               <Sparkles className="w-6 h-6 mx-auto text-neutral-500" />
               <p className="text-xs">No suggestions generated yet.</p>
               <button
-                onClick={fetchSuggestions}
+                onClick={() => fetchSuggestions()}
                 className="px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition"
               >
                 Generate Suggestions

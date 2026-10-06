@@ -110,7 +110,15 @@ export async function createApp() {
       }
 
       // 1. Try local disk first
-      const targetPath = localStorageAdapter.getFilePath(key);
+      let targetPath = localStorageAdapter.getFilePath(key);
+      if (!fs.existsSync(targetPath) && key.includes('_thumb')) {
+        const altKey = key.replace(/_thumb\.[a-zA-Z0-9]+$/, (ext) => ext.replace('_thumb', ''));
+        const altPath = localStorageAdapter.getFilePath(altKey);
+        if (fs.existsSync(altPath)) {
+          targetPath = altPath;
+        }
+      }
+
       if (fs.existsSync(targetPath)) {
         const ext = path.extname(targetPath).toLowerCase();
         let mimeType = 'image/jpeg';
@@ -150,17 +158,14 @@ export async function createApp() {
         `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
           <defs>
             <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#181824"/>
-              <stop offset="100%" stop-color="#242438"/>
+              <stop offset="0%" stop-color="#1e1e2f"/>
+              <stop offset="100%" stop-color="#2a2a42"/>
             </linearGradient>
           </defs>
           <rect width="100%" height="100%" fill="url(#bg)"/>
-          <circle cx="400" cy="270" r="50" fill="#f43f5e" opacity="0.15"/>
-          <path d="M375 295 L400 245 L425 295 Z" fill="#f43f5e" opacity="0.8"/>
-          <circle cx="430" cy="245" r="10" fill="#f59e0b" opacity="0.8"/>
-          <text x="50%" y="360" dominant-baseline="middle" text-anchor="middle" fill="#94a3b8" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="16" font-weight="500">
-            Memory photo securely stored in cloud
-          </text>
+          <circle cx="400" cy="270" r="45" fill="#f59e0b" opacity="0.2"/>
+          <path d="M370 295 L400 245 L430 295 Z" fill="#f59e0b" opacity="0.8"/>
+          <circle cx="430" cy="245" r="9" fill="#f43f5e" opacity="0.8"/>
         </svg>`
       );
     } catch (err: any) {
@@ -193,13 +198,13 @@ export async function createApp() {
 
 async function startServer() {
   const app = await createApp();
-  const PORT = parseInt(process.env.PORT || '3000', 10);
+  const PORT = 3000;
 
   const distDir = path.resolve(__dirname, 'dist');
   const distIndexHtml = path.join(distDir, 'index.html');
   const hasDist = fs.existsSync(distIndexHtml);
 
-  if (process.env.NODE_ENV === 'production' || hasDist) {
+  if (process.env.NODE_ENV === 'production') {
     console.log('Serving production static build from dist/');
     app.use(express.static(distDir));
     app.get('*', (_req, res) => {

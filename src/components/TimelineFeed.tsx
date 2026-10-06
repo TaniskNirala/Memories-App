@@ -16,6 +16,7 @@ import {
   Share2,
   Grid,
   Images,
+  MapPin,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 
@@ -309,6 +310,12 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   const [reportLoading, setReportLoading] = useState(false);
   const [reportSuccess, setReportSuccess] = useState(false);
 
+  const [convertToEventItem, setConvertToEventItem] = useState<FeedItem | null>(null);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventPlace, setEventPlace] = useState('');
+  const [convertingLoading, setConvertingLoading] = useState(false);
+
   // Dynamic Month & Year Grouping based on actual memory dates
   const groupedSections = useMemo(() => {
     const groupsMap = new Map<string, FeedItem[]>();
@@ -450,6 +457,46 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     }
   };
 
+  const executeConvertToEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!convertToEventItem) return;
+    setConvertingLoading(true);
+    try {
+      if (convertToEventItem.type === 'collection_card') {
+        const res = await apiFetch(`/api/albums/${convertToEventItem.id}/convert-to-event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            eventDate,
+            eventPlace,
+          }),
+        });
+        if (res.ok) {
+          setConvertToEventItem(null);
+          if (onMemoryUpdated) onMemoryUpdated();
+        }
+      } else {
+        const res = await apiFetch(`/api/posts/${convertToEventItem.id}/convert-to-event`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: eventTitle,
+            eventDate,
+            eventPlace,
+          }),
+        });
+        if (res.ok) {
+          setConvertToEventItem(null);
+          if (onMemoryUpdated) onMemoryUpdated();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to convert to event:', err);
+    } finally {
+      setConvertingLoading(false);
+    }
+  };
+
   return (
     <div className="relative pl-6 sm:pl-8 py-2">
       {/* Continuous vertical timeline rail line */}
@@ -568,6 +615,25 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                               >
                                 <Calendar className="w-3.5 h-3.5 text-amber-400" />
                                 <span>Edit Date & Caption</span>
+                              </button>
+                            )}
+
+                            {/* Convert Album or Post to Event */}
+                            {canDelete && (item.type === 'single_post' || (item.type === 'collection_card' && !item.isEvent)) && (
+                              <button
+                                onClick={() => {
+                                  setOpenOptionsMenuId(null);
+                                  const defaultTitle = item.type === 'single_post' ? (item.caption || 'Event Memory') : item.title;
+                                  const rawDate = item.type === 'single_post' ? item.takenAt : (item.eventDate || item.sortDate);
+                                  setEventTitle(defaultTitle);
+                                  setEventDate(rawDate ? new Date(rawDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+                                  setEventPlace(item.type === 'collection_card' ? (item.eventPlace || '') : '');
+                                  setConvertToEventItem(item);
+                                }}
+                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-2 text-amber-300"
+                              >
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{item.type === 'collection_card' ? 'Convert Album to Event' : 'Convert to Event'}</span>
                               </button>
                             )}
 
@@ -952,6 +1018,96 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* --- Convert Memory / Album to Event Modal --- */}
+      {convertToEventItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-100">
+          <div className="w-full max-w-md bg-[#16162a] border border-[#2b2b52] rounded-3xl p-5 shadow-2xl space-y-4 text-white">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>
+                  {convertToEventItem.type === 'collection_card' ? 'Convert Album to Event' : 'Convert Memory to Event'}
+                </span>
+              </div>
+              <button
+                onClick={() => setConvertToEventItem(null)}
+                className="text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Transform this {convertToEventItem.type === 'collection_card' ? 'album' : 'memory'} into an official Event with guest attendance check-ins and shared guest memory notes.
+            </p>
+
+            <form onSubmit={executeConvertToEvent} className="space-y-3 text-xs">
+              {convertToEventItem.type === 'single_post' && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
+                    Event Title
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={eventTitle}
+                    onChange={(e) => setEventTitle(e.target.value)}
+                    placeholder="e.g. Summer Family Picnic, Birthday Celebration"
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 text-amber-400" /> Event Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-rose-400" /> Location / Place
+                  </label>
+                  <input
+                    type="text"
+                    value={eventPlace}
+                    onChange={(e) => setEventPlace(e.target.value)}
+                    placeholder="e.g. Central Park"
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white placeholder-neutral-500 focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setConvertToEventItem(null)}
+                  className="px-3 py-1.5 rounded-lg text-xs text-neutral-400 hover:text-white transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={convertingLoading}
+                  className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white text-xs font-semibold hover:opacity-95 disabled:opacity-40 transition shadow-md flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{convertingLoading ? 'Converting...' : 'Convert to Event'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

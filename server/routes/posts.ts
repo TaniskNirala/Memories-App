@@ -765,6 +765,67 @@ postsRouter.post('/:id/caption', async (req: AuthenticatedRequest, res) => {
   res.json({ success: true, caption });
 });
 
+// Convert a post (or multi-photo album post) into an Event collection
+postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res) => {
+  const postId = req.params.id;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+  const { title, eventDate, eventPlace, description } = req.body;
+
+  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (!isAdmin && post.owner_id !== userId) {
+    return res.status(403).json({ error: 'Only the author or an admin can convert this memory' });
+  }
+
+  const now = new Date().toISOString();
+  const albumId = crypto.randomUUID();
+  const albumTitle = title?.trim() || post.caption?.trim() || 'Event Memory';
+  const dateToUse = eventDate || (post.taken_at ? post.taken_at.slice(0, 10) : now.slice(0, 10));
+  const placeToUse = eventPlace ? eventPlace.trim() : null;
+
+  // Create album as an event
+  run(
+    `INSERT INTO albums (id, title, description, creator_id, is_event, event_date, event_place, status, created_at)
+     VALUES (?, ?, ?, ?, 1, ?, ?, 'approved', ?)`,
+    [albumId, albumTitle, description?.trim() || post.caption || null, userId, dateToUse, placeToUse, now]
+  );
+
+  // Link post into album_items
+  run(
+    `INSERT INTO album_items (album_id, post_id, position, added_at)
+     VALUES (?, ?, 0, ?)`,
+    [albumId, postId, now]
+  );
+
+  // Copy placements from item_groups
+  const postPlacements = queryAll<any>('SELECT group_id FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
+  for (const pl of postPlacements) {
+    const plId = crypto.randomUUID();
+    run(
+      `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+       VALUES (?, 'album', ?, ?, ?, 0, 'approved', ?)`,
+      [plId, albumId, pl.group_id, userId, now]
+    );
+  }
+
+  // Also auto-attend creator
+  run(
+    `INSERT OR IGNORE INTO event_attendance (event_id, user_id, status, joined_at)
+     VALUES (?, ?, 'attending', ?)`,
+    [albumId, userId, now]
+  );
+
+  res.status(201).json({
+    success: true,
+    message: 'Memory converted to Event successfully',
+    albumId,
+    title: albumTitle,
+    eventDate: dateToUse,
+    eventPlace: placeToUse,
+  });
+});
+
 // Check if files to be uploaded are duplicates of existing photos
 postsRouter.post('/check-duplicates', async (req: AuthenticatedRequest, res) => {
   const { files } = req.body;
@@ -861,10 +922,10 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
        FROM post_files pf
        JOIN posts p ON pf.post_id = p.id
        JOIN users u ON p.owner_id = u.id
-       WHERE pf.file_size = ? AND pf.width = ? AND pf.height = ? AND p.deleted_at IS NULL
+       WHERE pf.file_size = ? AND (pf.width = ? OR (pf.width IS NULL AND ? IS NULL)) AND (pf.height = ? OR (pf.height IS NULL AND ? IS NULL)) AND p.deleted_at IS NULL
        ${isAdmin ? '' : 'AND p.owner_id = ?'}
        ORDER BY p.taken_at ASC`,
-      isAdmin ? [set.file_size, set.width, set.height] : [set.file_size, set.width, set.height, userId]
+      isAdmin ? [set.file_size, set.width, set.width, set.height, set.height] : [set.file_size, set.width, set.width, set.height, set.height, userId]
     );
 
     if (rawFiles.length > 1) {

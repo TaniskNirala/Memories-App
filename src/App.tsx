@@ -690,6 +690,7 @@ const MainContent: React.FC = () => {
           setDragUploadFiles([]);
         }}
         groups={groups}
+        selectedGroupId={selectedGroupId}
         initialFiles={dragUploadFiles}
         onUploadSuccess={() => fetchFeed(true)}
       />

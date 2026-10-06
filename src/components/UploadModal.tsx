@@ -12,6 +12,8 @@ import {
   Clock,
   Crop,
   Copy,
+  Layers,
+  Images,
 } from 'lucide-react';
 import exifr from 'exifr';
 import { Group } from '../types/index.ts';
@@ -22,6 +24,7 @@ interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   groups: Group[];
+  selectedGroupId?: string;
   onUploadSuccess: () => void;
   initialFiles?: File[];
 }
@@ -216,6 +219,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
   onClose,
   groups,
+  selectedGroupId,
   onUploadSuccess,
   initialFiles,
 }) => {
@@ -224,7 +228,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [takenAt, setTakenAt] = useState<string>(() => new Date().toISOString().slice(0, 10));
   const [metadataSource, setMetadataSource] = useState<string | null>(null);
   const [dateBasis, setDateBasis] = useState<'taken_at' | 'uploaded_at'>('taken_at');
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(() => {
+    if (selectedGroupId) return [selectedGroupId];
+    const ev = groups.find((g) => g.isEveryone);
+    return ev ? [ev.id] : [];
+  });
+  const [uploadStructure, setUploadStructure] = useState<'grouped' | 'separate'>('grouped');
   const [isProcessing, setIsProcessing] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -236,6 +245,19 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [captionSuggestions, setCaptionSuggestions] = useState<Array<{ tone: string; text: string }>>([]);
   const [captionTags, setCaptionTags] = useState<string[]>([]);
   const [userTypedCaption, setUserTypedCaption] = useState<string | null>(null);
+  const [captionTemporalSummary, setCaptionTemporalSummary] = useState<string | null>(null);
+
+  // Sync default group selection whenever modal opens or groups change
+  useEffect(() => {
+    if (isOpen) {
+      if (selectedGroupId) {
+        setSelectedGroupIds([selectedGroupId]);
+      } else if (groups.length > 0) {
+        const ev = groups.find((g) => g.isEveryone);
+        setSelectedGroupIds(ev ? [ev.id] : [groups[0].id]);
+      }
+    }
+  }, [isOpen, selectedGroupId, groups]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -254,7 +276,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setTakenAt(new Date().toISOString().slice(0, 10));
     setMetadataSource(null);
     setDateBasis('taken_at');
-    setSelectedGroupIds([]);
+    const ev = groups.find((g) => g.isEveryone);
+    setSelectedGroupIds(selectedGroupId ? [selectedGroupId] : ev ? [ev.id] : []);
+    setUploadStructure('grouped');
     setGlobalError(null);
     setIsProcessing(false);
     setIsDragOver(false);
@@ -264,6 +288,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setCaptionSuggestions([]);
     setCaptionTags([]);
     setUserTypedCaption(null);
+    setCaptionTemporalSummary(null);
     dragCounterRef.current = 0;
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -320,6 +345,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       reader.onload = async () => {
         try {
           const base64 = (reader.result as string) || '';
+          const targetGroup = groups.find((g) => selectedGroupIds.includes(g.id));
           const res = await apiFetch('/api/ai/generate-caption', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -327,6 +353,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               imageBase64: base64,
               tone: 'warm',
               context: caption || undefined,
+              takenAt: takenAt || undefined,
+              groupName: targetGroup?.name || undefined,
             }),
           });
 
@@ -342,6 +370,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               }
               setCaptionSuggestions(data.suggestions || []);
               setCaptionTags(data.tags || []);
+              if (data.temporalSummary) {
+                setCaptionTemporalSummary(data.temporalSummary);
+              }
             }
           }
         } catch (err) {
@@ -601,25 +632,54 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       // Sort files by position
       completedFiles.sort((a, b) => a.position - b.position);
 
-      // 3. Create post record with placements
-      const postPayload = {
-        caption,
-        takenAt: new Date(takenAt).toISOString(),
-        uploadedAt: new Date().toISOString(),
-        dateBasis,
-        groupIds: selectedGroupIds,
-        files: completedFiles,
-      };
+      // 3. Create post record(s) with placements
+      if (uploadStructure === 'separate' && completedFiles.length > 1) {
+        for (let i = 0; i < completedFiles.length; i++) {
+          const fileItem = completedFiles[i];
+          const queueItem = processedQueue[i];
+          const fileDate = queueItem?.detectedDate ? new Date(queueItem.detectedDate).toISOString() : new Date(takenAt).toISOString();
+          const fileCaption = caption ? `${caption} (${i + 1}/${completedFiles.length})` : '';
 
-      const postRes = await apiFetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(postPayload),
-      });
+          const postPayload = {
+            caption: fileCaption || null,
+            takenAt: fileDate,
+            uploadedAt: new Date().toISOString(),
+            dateBasis,
+            groupIds: selectedGroupIds,
+            files: [{ ...fileItem, position: 0 }],
+          };
 
-      if (!postRes.ok) {
-        const pErr = await postRes.json().catch(() => ({}));
-        throw new Error(pErr.error || 'Failed to create post record');
+          const postRes = await apiFetch('/api/posts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(postPayload),
+          });
+
+          if (!postRes.ok) {
+            const pErr = await postRes.json().catch(() => ({}));
+            throw new Error(pErr.error || 'Failed to create post record');
+          }
+        }
+      } else {
+        const postPayload = {
+          caption,
+          takenAt: new Date(takenAt).toISOString(),
+          uploadedAt: new Date().toISOString(),
+          dateBasis,
+          groupIds: selectedGroupIds,
+          files: completedFiles,
+        };
+
+        const postRes = await apiFetch('/api/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(postPayload),
+        });
+
+        if (!postRes.ok) {
+          const pErr = await postRes.json().catch(() => ({}));
+          throw new Error(pErr.error || 'Failed to create post record');
+        }
       }
 
       resetForm();
@@ -698,13 +758,23 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   <Copy className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>{detectedDuplicates.length} Duplicate Photo(s) Detected</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSkipDuplicates}
-                  className="px-3 py-1 rounded-xl bg-amber-500 text-neutral-950 font-bold text-[11px] hover:bg-amber-400 transition shadow-xs cursor-pointer"
-                >
-                  Skip Duplicates
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDetectedDuplicates([])}
+                    className="px-2.5 py-1 rounded-xl bg-white/10 text-white font-bold text-[11px] hover:bg-white/20 transition cursor-pointer"
+                    title="Keep all photos in the upload queue and upload anyway"
+                  >
+                    Keep Both
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSkipDuplicates}
+                    className="px-2.5 py-1 rounded-xl bg-amber-500 text-neutral-950 font-bold text-[11px] hover:bg-amber-400 transition shadow-xs cursor-pointer"
+                  >
+                    Skip Duplicates
+                  </button>
+                </div>
               </div>
               <p className="text-[11px] text-amber-200/90 leading-relaxed">
                 We detected photos in your upload queue that already exist in your memories. You can skip them with one click or keep both copies.
@@ -846,6 +916,55 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     </div>
                   ))}
                 </div>
+
+                {/* Upload Structure Choice (Grouped Album vs Individual Posts) */}
+                {queue.length > 1 && (
+                  <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] space-y-2 mt-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-semibold text-[var(--text-secondary)]">
+                        Upload Format ({queue.length} photos)
+                      </label>
+                      <span className="text-[10px] text-amber-400 font-medium">Choose display style</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setUploadStructure('grouped')}
+                        className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 cursor-pointer ${
+                          uploadStructure === 'grouped'
+                            ? 'bg-amber-500/15 border-amber-500/50 text-[var(--text-primary)] ring-1 ring-amber-500/30'
+                            : 'border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-white/20'
+                        }`}
+                      >
+                        <span className="text-xs font-bold flex items-center gap-1.5 text-white">
+                          <Layers className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Grouped Album</span>
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] leading-tight">
+                          1 memory with collage & full album grid
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setUploadStructure('separate')}
+                        className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 cursor-pointer ${
+                          uploadStructure === 'separate'
+                            ? 'bg-amber-500/15 border-amber-500/50 text-[var(--text-primary)] ring-1 ring-amber-500/30'
+                            : 'border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-white/20'
+                        }`}
+                      >
+                        <span className="text-xs font-bold flex items-center gap-1.5 text-white">
+                          <Images className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Separate Posts</span>
+                        </span>
+                        <span className="text-[10px] text-[var(--text-muted)] leading-tight">
+                          {queue.length} separate posts with individual dates
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -881,10 +1000,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             {/* Gemini Caption Suggestions Chips */}
             {captionSuggestions.length > 0 && (
               <div className="mt-2 space-y-1.5 p-2.5 rounded-xl bg-white/5 border border-white/10 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
-                    ✨ Gemini Caption Suggestions (click to apply)
-                  </span>
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                      ✨ Time-Aware Suggestions
+                    </span>
+                    {captionTemporalSummary && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium">
+                        🕒 {captionTemporalSummary}
+                      </span>
+                    )}
+                  </div>
                   {userTypedCaption && caption !== userTypedCaption && (
                     <button
                       type="button"

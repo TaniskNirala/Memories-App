@@ -324,9 +324,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
       if (res.ok) {
         setCaptionToast('✨ Converted into an Event collection!');
         setShowConvertPostToEvent(false);
+        if (onPermissionsUpdated) {
+          onPermissionsUpdated();
+        }
         setTimeout(() => {
           onClose();
-        }, 1200);
+        }, 1000);
       }
     } catch (err) {
       console.error('Failed to convert post to event:', err);
@@ -641,6 +644,22 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                {(canDelete || isAdmin || item.owner?.id === user?.id) && (
+                  <button
+                    onClick={() => {
+                      setPostEventTitle(item.caption ? item.caption.slice(0, 50) : 'Event Memory');
+                      setPostEventDate(item.takenAt ? new Date(item.takenAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+                      setPostEventPlace('');
+                      setShowConvertPostToEvent(true);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition shadow-xs cursor-pointer"
+                    title="Convert this photo album into an event collection"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Convert to Event</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => onOpenComments(item)}
                   className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center gap-1.5 transition"

@@ -43,18 +43,6 @@ export async function syncUploadedPhotosToDatabase(): Promise<void> {
       if (existingFile) {
         // Ensure post is not marked as deleted
         run('UPDATE posts SET deleted_at = NULL WHERE id = ?', [existingFile.post_id]);
-        // Ensure placement in Everyone group
-        const existingPlacement = queryOne<any>(
-          'SELECT id FROM item_groups WHERE item_type = "post" AND item_id = ? AND group_id = ?',
-          [existingFile.post_id, groupId]
-        );
-        if (!existingPlacement) {
-          run(
-            `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
-             VALUES (?, 'post', ?, ?, ?, 0, 'approved', ?)`,
-            [crypto.randomUUID(), existingFile.post_id, groupId, userId, now]
-          );
-        }
         continue;
       }
 

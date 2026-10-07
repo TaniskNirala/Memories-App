@@ -18,8 +18,10 @@ import {
   Images,
   MapPin,
   ShieldAlert,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 
 interface TimelineFeedProps {
   items: FeedItem[];
@@ -316,6 +318,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   const [eventDate, setEventDate] = useState('');
   const [eventPlace, setEventPlace] = useState('');
   const [convertingLoading, setConvertingLoading] = useState(false);
+  const [permissionsItem, setPermissionsItem] = useState<FeedItem | null>(null);
 
   // Delete protection capability
   const [isDeleteProtected, setIsDeleteProtected] = useState(true);
@@ -461,10 +464,19 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
 
   const handleRemoveFromCircle = async (item: FeedItem, groupId: string) => {
     const placement = item.placements?.find((p) => p.groupId === groupId);
-    if (!placement || !placement.id) return;
     try {
-      const res = await apiFetch(`/api/placements/${placement.id}`, { method: 'DELETE' });
-      if (res.ok && onMemoryUpdated) {
+      let res;
+      if (placement && placement.id) {
+        res = await apiFetch(`/api/placements/${placement.id}`, { method: 'DELETE' });
+      } else {
+        const itemType = item.type === 'single_post' ? 'post' : 'album';
+        res = await apiFetch('/api/placements/remove-by-item', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ itemId: item.id, itemType, groupId }),
+        });
+      }
+      if (res && res.ok && onMemoryUpdated) {
         onMemoryUpdated();
       }
     } catch (e) {
@@ -576,7 +588,10 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
               const canDelete = isOwner || isAdmin;
 
               // Resolve group name for header tag
-              const placementNames = item.placements?.map((p) => p.groupName).join(', ') || 'Everyone';
+              const hasPlacements = item.placements && item.placements.length > 0;
+              const placementNames = hasPlacements
+                ? item.placements.map((p) => p.groupName).join(', ')
+                : 'Personal (Only You)';
 
               return (
                 <div key={item.id} className="relative group">
@@ -595,7 +610,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                         <span>{formatTimelineDate(dateStr)}</span>
                         <span className="font-semibold text-[var(--text-secondary)]">{authorName}</span>
                         <span>in</span>
-                        <span className="text-[var(--accent-cyan)] font-semibold truncate max-w-[150px] sm:max-w-[220px]">
+                        <span className={hasPlacements ? "text-[var(--accent-cyan)] font-semibold truncate max-w-[150px] sm:max-w-[220px]" : "text-neutral-400 font-medium truncate max-w-[150px] sm:max-w-[220px]"}>
                           {placementNames}
                         </span>
                       </div>
@@ -653,18 +668,41 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                               </button>
                             )}
 
-                            {/* Remove from this circle (if viewing circle) */}
-                            {selectedGroupId && (
+                            {/* Circles & Permissions Management */}
+                            {canDelete && (
                               <button
                                 onClick={() => {
                                   setOpenOptionsMenuId(null);
-                                  handleRemoveFromCircle(item, selectedGroupId);
+                                  setPermissionsItem(item);
                                 }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-2 text-rose-400"
+                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-2 text-[var(--text-primary)]"
                               >
-                                <X className="w-3.5 h-3.5" />
-                                <span>Remove from circle</span>
+                                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Circles & Permissions</span>
                               </button>
+                            )}
+
+                            {/* Direct Remove from Circle options */}
+                            {canDelete && item.placements && item.placements.length > 0 && (
+                              <div className="pt-1 mt-1 border-t border-[var(--border-color)] space-y-0.5">
+                                <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] px-2 py-0.5 block tracking-wider">
+                                  Remove from Circle:
+                                </span>
+                                {item.placements.map((pl) => (
+                                  <button
+                                    key={pl.id || pl.groupId}
+                                    onClick={() => {
+                                      setOpenOptionsMenuId(null);
+                                      handleRemoveFromCircle(item, pl.groupId);
+                                    }}
+                                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/15 text-rose-400 transition flex items-center justify-between text-xs"
+                                    title={`Remove memory from ${pl.groupName}`}
+                                  >
+                                    <span className="truncate">Remove from {pl.groupName}</span>
+                                    <X className="w-3.5 h-3.5 shrink-0 ml-1.5 opacity-80" />
+                                  </button>
+                                ))}
+                              </div>
                             )}
 
                             {/* Deletion: Protected in preview; active on Render */}
@@ -765,8 +803,8 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                               ))
                             ) : (
                               <div className="col-span-2 flex items-center justify-center text-xs text-[var(--text-muted)]">
-                                <Layers className="w-6 h-6 mr-1" />
-                                <span>Collection Preview</span>
+                                <Calendar className="w-6 h-6 mr-1" />
+                                <span>Event Preview</span>
                               </div>
                             )}
                           </div>
@@ -1136,6 +1174,19 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Viewing Permissions Modal (Circles Management) */}
+      {permissionsItem && (
+        <ViewingPermissionsModal
+          item={permissionsItem}
+          isOpen={Boolean(permissionsItem)}
+          onClose={() => setPermissionsItem(null)}
+          groups={groups}
+          onPermissionsUpdated={() => {
+            if (onMemoryUpdated) onMemoryUpdated();
+          }}
+        />
       )}
     </div>
   );

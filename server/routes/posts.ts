@@ -282,18 +282,14 @@ postsRouter.post('/', async (req: AuthenticatedRequest, res) => {
     ]);
   }
 
-  // Share into selected groups (placements)
-  const targetGroups = Array.isArray(groupIds) && groupIds.length > 0 ? [...groupIds] : [];
-  // Always include Everyone circle so memories are never orphaned from feeds
-  const everyoneGroup = queryOne<any>('SELECT id FROM groups WHERE is_everyone = 1');
-  if (everyoneGroup && !targetGroups.includes(everyoneGroup.id)) {
-    targetGroups.push(everyoneGroup.id);
-  }
+  // Share into user-selected groups (placements)
+  const targetGroups = Array.isArray(groupIds) ? [...groupIds] : [];
 
   for (const gId of targetGroups) {
     // Verify user is in group or admin
     const member = queryOne('SELECT user_id FROM group_members WHERE group_id = ? AND user_id = ?', [gId, userId]);
-    if (member || req.user!.role === 'admin' || (everyoneGroup && gId === everyoneGroup.id)) {
+    const grp = queryOne<any>('SELECT id, is_everyone FROM groups WHERE id = ?', [gId]);
+    if (member || req.user!.role === 'admin' || grp?.is_everyone === 1) {
       const placementId = crypto.randomUUID();
       run(
         `INSERT OR IGNORE INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
@@ -795,17 +791,6 @@ postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res)
       `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
        VALUES (?, 'album', ?, ?, ?, 0, 'approved', ?)`,
       [plId, albumId, pl.group_id, userId, now]
-    );
-  }
-
-  // Ensure placement in Everyone group if no existing placements
-  if (postPlacements.length === 0) {
-    const everyoneGroup = queryOne<any>('SELECT id FROM groups WHERE is_everyone = 1');
-    const gId = everyoneGroup?.id || '56896808-0e5c-4303-b413-98b0eb3ad540';
-    run(
-      `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
-       VALUES (?, 'album', ?, ?, ?, 0, 'approved', ?)`,
-      [crypto.randomUUID(), albumId, gId, userId, now]
     );
   }
 

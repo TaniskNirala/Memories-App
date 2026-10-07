@@ -67,7 +67,7 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
         <div className="p-4">
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <span className="text-xs font-semibold text-[var(--accent-coral)]">
-              {item.isEvent ? 'Event Collection' : 'Photo Album'}
+              {item.isEvent ? 'Event' : 'Event'}
             </span>
             <span className="text-xs text-[var(--text-muted)] font-mono">
               {item.itemCount} {item.itemCount === 1 ? 'item' : 'items'}

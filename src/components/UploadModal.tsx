@@ -230,8 +230,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [dateBasis, setDateBasis] = useState<'taken_at' | 'uploaded_at'>('taken_at');
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(() => {
     if (selectedGroupId) return [selectedGroupId];
-    const ev = groups.find((g) => g.isEveryone);
-    return ev ? [ev.id] : [];
+    return [];
   });
   const [uploadStructure, setUploadStructure] = useState<'grouped' | 'separate'>('grouped');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -247,17 +246,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [userTypedCaption, setUserTypedCaption] = useState<string | null>(null);
   const [captionTemporalSummary, setCaptionTemporalSummary] = useState<string | null>(null);
 
-  // Sync default group selection whenever modal opens or groups change
+  // Sync group selection: keep specific selected circle if provided, otherwise default to empty
   useEffect(() => {
     if (isOpen) {
       if (selectedGroupId) {
         setSelectedGroupIds([selectedGroupId]);
-      } else if (groups.length > 0) {
-        const ev = groups.find((g) => g.isEveryone);
-        setSelectedGroupIds(ev ? [ev.id] : [groups[0].id]);
+      } else {
+        setSelectedGroupIds([]);
       }
     }
-  }, [isOpen, selectedGroupId, groups]);
+  }, [isOpen, selectedGroupId]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounterRef = useRef(0);
@@ -276,8 +274,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setTakenAt(new Date().toISOString().slice(0, 10));
     setMetadataSource(null);
     setDateBasis('taken_at');
-    const ev = groups.find((g) => g.isEveryone);
-    setSelectedGroupIds(selectedGroupId ? [selectedGroupId] : ev ? [ev.id] : []);
+    setSelectedGroupIds(selectedGroupId ? [selectedGroupId] : []);
     setUploadStructure('grouped');
     setGlobalError(null);
     setIsProcessing(false);
@@ -1084,11 +1081,20 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
           {/* Circle Placements */}
           <div>
-            <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" /> Share to Circles
-            </label>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <label className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1">
+                <Users className="w-3.5 h-3.5 text-amber-500" /> Share to Circles
+              </label>
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                selectedGroupIds.length === 0
+                  ? 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              }`}>
+                {selectedGroupIds.length === 0 ? 'Personal (Only You & Admins)' : `Sharing to ${selectedGroupIds.length} circle(s)`}
+              </span>
+            </div>
             <p className="text-[11px] text-[var(--text-muted)] mb-2">
-              Select which friend circles can see this memory. Leave unselected for standalone personal memory.
+              Select which friend circles can see this memory. Leave unselected to keep as a private memory only you can see.
             </p>
             <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
               {groups.map((g) => {
@@ -1100,7 +1106,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     onClick={() => toggleGroupSelection(g.id)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-1.5 ${
                       selected
-                        ? 'bg-[var(--accent-coral)] text-white shadow-xs'
+                        ? 'bg-[var(--accent-coral)] text-white shadow-xs font-semibold'
                         : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)]'
                     }`}
                   >

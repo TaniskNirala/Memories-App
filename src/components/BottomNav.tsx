@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Layers, PlusCircle, Users, Shield, Trash2 } from 'lucide-react';
+import { Home, Calendar, PlusCircle, Users, Shield, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 
 interface BottomNavProps {
@@ -29,7 +29,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, o
           <span className="text-[10px] tracking-tight mt-0.5">Stream</span>
         </button>
 
-        {/* Tab 2: Collections */}
+        {/* Tab 2: Events */}
         <button
           onClick={() => onSelectTab('collections')}
           className={`flex flex-col items-center justify-center w-full h-full transition ${
@@ -38,8 +38,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, o
               : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          <Layers className="w-5 h-5" />
-          <span className="text-[10px] tracking-tight mt-0.5">Albums</span>
+          <Calendar className="w-5 h-5" />
+          <span className="text-[10px] tracking-tight mt-0.5">Events</span>
         </button>
 
         {/* Center: Upload Button */}

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { queryOne, queryAll, run } from '../db.ts';
+import { queryOne, queryAll, run, saveDb } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { canUserViewPost } from './posts.ts';
 
@@ -99,9 +99,77 @@ placementsRouter.post('/bunch', async (req: AuthenticatedRequest, res) => {
   });
 });
 
-// Remove item from a specific group: Deletion is permanently disabled in this preview to protect placements
-placementsRouter.delete('/:id', (_req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your placements and data.' });
+// Remove item placement from a specific group/circle
+placementsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
+  const placementId = req.params.id;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const placement = queryOne<any>('SELECT * FROM item_groups WHERE id = ?', [placementId]);
+  if (!placement) {
+    return res.status(404).json({ error: 'Placement not found' });
+  }
+
+  // Check authorization: owner of the item, person who added the placement, or admin
+  let isOwner = false;
+  if (placement.item_type === 'post') {
+    const post = queryOne<any>('SELECT owner_id FROM posts WHERE id = ?', [placement.item_id]);
+    if (post && post.owner_id === userId) isOwner = true;
+  } else if (placement.item_type === 'album') {
+    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [placement.item_id]);
+    if (album && album.creator_id === userId) isOwner = true;
+  }
+
+  const isAdder = placement.added_by === userId;
+
+  if (!isOwner && !isAdder && !isAdmin) {
+    return res.status(403).json({ error: 'You do not have permission to remove this from the circle' });
+  }
+
+  run('DELETE FROM item_groups WHERE id = ?', [placementId]);
+  saveDb();
+
+  return res.json({ success: true, message: 'Removed from circle successfully' });
+});
+
+// Remove placement by itemId and groupId
+placementsRouter.post('/remove-by-item', (req: AuthenticatedRequest, res) => {
+  const { itemId, itemType = 'post', groupId } = req.body;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  if (!itemId || !groupId) {
+    return res.status(400).json({ error: 'itemId and groupId required' });
+  }
+
+  const placement = queryOne<any>(
+    'SELECT * FROM item_groups WHERE item_type = ? AND item_id = ? AND group_id = ?',
+    [itemType, itemId, groupId]
+  );
+
+  if (!placement) {
+    return res.status(404).json({ error: 'Placement not found in this circle' });
+  }
+
+  let isOwner = false;
+  if (itemType === 'post') {
+    const post = queryOne<any>('SELECT owner_id FROM posts WHERE id = ?', [itemId]);
+    if (post && post.owner_id === userId) isOwner = true;
+  } else {
+    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
+    if (album && album.creator_id === userId) isOwner = true;
+  }
+
+  const isAdder = placement.added_by === userId;
+
+  if (!isOwner && !isAdder && !isAdmin) {
+    return res.status(403).json({ error: 'You do not have permission to remove this from the circle' });
+  }
+
+  run('DELETE FROM item_groups WHERE id = ?', [placement.id]);
+  saveDb();
+
+  return res.json({ success: true, message: 'Removed from circle successfully' });
 });
 
 // List pending references for the current user (where current user is the owner)
@@ -298,6 +366,7 @@ placementsRouter.post('/adjust-permissions', async (req: AuthenticatedRequest, r
   }
 
   // Fetch updated placements
+  saveDb();
   const updatedPlacements = queryAll<any>(
     `SELECT ig.id, ig.group_id, g.name as group_name, g.is_everyone
      FROM item_groups ig

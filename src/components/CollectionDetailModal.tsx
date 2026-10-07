@@ -227,7 +227,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xs font-semibold text-[var(--accent-coral)] uppercase tracking-wider">
-                {collection?.isEvent ? 'Event Memory' : 'Photo Album'}
+                Event
               </span>
               <span className="text-xs text-[var(--text-muted)] font-mono">
                 {collection?.itemCount || 0} photos

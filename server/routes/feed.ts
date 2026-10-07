@@ -169,7 +169,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
       // Placements & comments count
       const placements = queryAll<any>(
-        isAdmin
+        isAdmin || isOwner
           ? `SELECT ig.id, ig.group_id as groupId, g.name as groupName, ig.is_reference as isReference, ig.reference_status as referenceStatus
              FROM item_groups ig
              JOIN groups g ON ig.group_id = g.id
@@ -179,7 +179,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
              JOIN groups g ON ig.group_id = g.id
              JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
              WHERE ig.item_type = 'post' AND ig.item_id = ?`,
-        isAdmin ? [p.id] : [userId, p.id]
+        isAdmin || isOwner ? [p.id] : [userId, p.id]
       );
 
       // Target group for comments/reactions
@@ -264,7 +264,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
       // Group placement
       const placements = queryAll<any>(
-        `SELECT ig.group_id, g.name as group_name
+        `SELECT ig.id, ig.group_id as groupId, g.name as groupName
          FROM item_groups ig
          JOIN groups g ON ig.group_id = g.id
          WHERE ig.item_type = 'album' AND ig.item_id = ?`,

@@ -583,19 +583,19 @@ const MainContent: React.FC = () => {
             </div>
           )}
 
-          {/* TAB: COLLECTIONS & EVENTS */}
+          {/* TAB: EVENTS */}
           {currentTab === 'collections' && (
             <div className="space-y-4 max-w-2xl">
               <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
                 <div>
-                  <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">Collections & Events</h2>
-                  <span className="text-xs text-[var(--text-muted)]">Trips, albums, and gatherings</span>
+                  <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">Events</h2>
+                  <span className="text-xs text-[var(--text-muted)]">Trips, gatherings, and celebrations</span>
                 </div>
                 <button
                   onClick={() => setIsProposeModalOpen(true)}
-                  className="px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition"
+                  className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 text-white text-xs font-semibold hover:opacity-95 shadow-sm transition"
                 >
-                  + Propose Album
+                  + New Event
                 </button>
               </div>
 

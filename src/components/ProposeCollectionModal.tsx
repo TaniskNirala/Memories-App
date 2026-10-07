@@ -77,9 +77,9 @@ export const ProposeCollectionModal: React.FC<ProposeCollectionModalProps> = ({
       <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl p-5 playful-card">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-[var(--accent-coral)]" />
+            <Calendar className="w-4 h-4 text-[var(--accent-coral)]" />
             <h4 className="font-display font-bold text-sm text-[var(--text-primary)]">
-              {isAdmin ? 'Create Collection / Event' : 'Propose Collection / Event'}
+              {isAdmin ? 'Create Event' : 'Propose Event'}
             </h4>
           </div>
           <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
@@ -210,7 +210,7 @@ export const ProposeCollectionModal: React.FC<ProposeCollectionModalProps> = ({
               disabled={loading}
               className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white shadow-sm playful-btn"
             >
-              {loading ? 'Submitting...' : isAdmin ? 'Create Collection' : 'Submit Proposal'}
+              {loading ? 'Submitting...' : isAdmin ? 'Create Event' : 'Propose Event'}
             </button>
           </div>
         </form>

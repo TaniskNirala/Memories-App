@@ -488,31 +488,8 @@ albumsRouter.post('/:id/convert-to-event', (req: AuthenticatedRequest, res) => {
   });
 });
 
-// Delete album / collection
-albumsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
-  const albumId = req.params.id;
-  const userId = req.user!.id;
-  const isAdmin = req.user!.role === 'admin';
-  const { permanent } = req.body || {};
-
-  const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
-  if (!album) return res.status(404).json({ error: 'Album not found' });
-  if (!isAdmin && album.creator_id !== userId) {
-    return res.status(403).json({ error: 'Only the creator or an admin can delete this album' });
-  }
-
-  if (permanent || album.deleted_at) {
-    run('DELETE FROM item_groups WHERE item_type = "album" AND item_id = ?', [albumId]);
-    run('DELETE FROM comments WHERE target_type = "album" AND target_id = ?', [albumId]);
-    run('DELETE FROM reactions WHERE target_type = "album" AND target_id = ?', [albumId]);
-    run('DELETE FROM event_attendance WHERE event_id = ?', [albumId]);
-    run('DELETE FROM event_notes WHERE event_id = ?', [albumId]);
-    run('DELETE FROM album_items WHERE album_id = ?', [albumId]);
-    run('DELETE FROM albums WHERE id = ?', [albumId]);
-    return res.json({ success: true, message: 'Album permanently deleted' });
-  } else {
-    run('UPDATE albums SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), albumId]);
-    return res.json({ success: true, message: 'Album moved to trash' });
-  }
+// Delete album / collection: Deletion is permanently disabled in this preview to protect memories
+albumsRouter.delete('/:id', (_req: AuthenticatedRequest, res) => {
+  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and albums.' });
 });
 

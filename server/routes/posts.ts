@@ -282,14 +282,20 @@ postsRouter.post('/', async (req: AuthenticatedRequest, res) => {
   }
 
   // Share into selected groups (placements)
-  const targetGroups = Array.isArray(groupIds) ? groupIds : [];
+  const targetGroups = Array.isArray(groupIds) && groupIds.length > 0 ? [...groupIds] : [];
+  // Always include Everyone circle so memories are never orphaned from feeds
+  const everyoneGroup = queryOne<any>('SELECT id FROM groups WHERE is_everyone = 1');
+  if (everyoneGroup && !targetGroups.includes(everyoneGroup.id)) {
+    targetGroups.push(everyoneGroup.id);
+  }
+
   for (const gId of targetGroups) {
     // Verify user is in group or admin
     const member = queryOne('SELECT user_id FROM group_members WHERE group_id = ? AND user_id = ?', [gId, userId]);
-    if (member || req.user!.role === 'admin') {
+    if (member || req.user!.role === 'admin' || (everyoneGroup && gId === everyoneGroup.id)) {
       const placementId = crypto.randomUUID();
       run(
-        `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+        `INSERT OR IGNORE INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
          VALUES (?, 'post', ?, ?, ?, 0, 'approved', ?)`,
         [placementId, postId, gId, userId, now]
       );
@@ -404,50 +410,9 @@ postsRouter.patch('/:id', (req: AuthenticatedRequest, res) => {
   res.json({ success: true });
 });
 
-// Delete post: "The owner chooses each time between 'Move to trash' (recoverable for 30 days) and 'Delete forever'."
-postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
-  const postId = req.params.id;
-  const userId = req.user!.id;
-  const isAdmin = req.user!.role === 'admin';
-  const { permanent } = req.body || {};
-
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
-  if (!post) return res.status(404).json({ error: 'Post not found' });
-  if (!isAdmin && post.owner_id !== userId) {
-    return res.status(403).json({ error: 'Only the owner or an admin can delete this post' });
-  }
-
-  if (permanent || post.deleted_at) {
-    // Delete forever: remove files from storage adapter and delete DB records
-    const files = queryAll<any>('SELECT storage_key, thumb_key FROM post_files WHERE post_id = ?', [postId]);
-    const storage = getStorageAdapter();
-    for (const f of files) {
-      await storage.deleteObject(f.storage_key).catch(() => {});
-      if (f.thumb_key !== f.storage_key) {
-        await storage.deleteObject(f.thumb_key).catch(() => {});
-      }
-    }
-
-    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
-    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [postId]);
-    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [postId]);
-    run('DELETE FROM album_items WHERE post_id = ?', [postId]);
-    run('DELETE FROM post_files WHERE post_id = ?', [postId]);
-    run('DELETE FROM posts WHERE id = ?', [postId]);
-
-    if (isAdmin && post.owner_id !== userId) {
-      run(
-        'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [crypto.randomUUID(), userId, 'content_deleted', 'post', postId, 'Permanently deleted by admin', new Date().toISOString()]
-      );
-    }
-
-    return res.json({ success: true, message: 'Post permanently deleted' });
-  } else {
-    // Move to trash (30 day soft delete)
-    run('UPDATE posts SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), postId]);
-    return res.json({ success: true, message: 'Moved to trash' });
-  }
+// Delete post: Deletion is permanently disabled in this preview to protect memories
+postsRouter.delete('/:id', async (_req: AuthenticatedRequest, res) => {
+  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and data.' });
 });
 
 // Update edited photo/file (crop/rotate)
@@ -614,58 +579,9 @@ postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// Delete single photo/file from a multi-photo post
-postsRouter.delete('/:id/files/:fileId', async (req: AuthenticatedRequest, res) => {
-  const postId = req.params.id;
-  const fileId = req.params.fileId;
-  const userId = req.user!.id;
-  const isAdmin = req.user!.role === 'admin';
-
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
-  if (!post) return res.status(404).json({ error: 'Post not found' });
-  if (!isAdmin && post.owner_id !== userId) {
-    return res.status(403).json({ error: 'Only the owner or an admin can delete photos from this post' });
-  }
-
-  const files = queryAll<any>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [postId]);
-  const targetFile = files.find((f) => f.id === fileId);
-  if (!targetFile) {
-    return res.status(404).json({ error: 'Photo not found in this post' });
-  }
-
-  // Delete from storage adapter
-  const storage = getStorageAdapter();
-  await storage.deleteObject(targetFile.storage_key).catch(() => {});
-  if (targetFile.thumb_key && targetFile.thumb_key !== targetFile.storage_key) {
-    await storage.deleteObject(targetFile.thumb_key).catch(() => {});
-  }
-
-  // Delete from post_files table
-  run('DELETE FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
-
-  const remainingFiles = files.filter((f) => f.id !== fileId);
-
-  // If no files remain, delete the post completely
-  if (remainingFiles.length === 0) {
-    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
-    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [postId]);
-    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [postId]);
-    run('DELETE FROM album_items WHERE post_id = ?', [postId]);
-    run('DELETE FROM posts WHERE id = ?', [postId]);
-    return res.json({ success: true, postDeleted: true, message: 'Last photo deleted, entire memory removed' });
-  }
-
-  // Re-index remaining files position (0, 1, 2, ...)
-  remainingFiles.forEach((file, index) => {
-    run('UPDATE post_files SET position = ? WHERE id = ?', [index, file.id]);
-  });
-
-  return res.json({
-    success: true,
-    postDeleted: false,
-    remainingCount: remainingFiles.length,
-    message: 'Photo deleted from memory successfully',
-  });
+// Delete single photo/file from a multi-photo post: Deletion is permanently disabled in this preview
+postsRouter.delete('/:id/files/:fileId', async (_req: AuthenticatedRequest, res) => {
+  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and data.' });
 });
 
 // Restore post from trash
@@ -1047,79 +963,8 @@ postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res)
   });
 });
 
-// Resolve duplicate photos by keeping selected one and cleaning up duplicates
-postsRouter.post('/duplicates/resolve', async (req: AuthenticatedRequest, res) => {
-  const { keepFileId, removeFileIds, mergePlacements = true } = req.body;
-  const userId = req.user!.id;
-  const isAdmin = req.user!.role === 'admin';
-
-  if (!keepFileId || !Array.isArray(removeFileIds) || removeFileIds.length === 0) {
-    return res.status(400).json({ error: 'keepFileId and removeFileIds array required' });
-  }
-
-  const keepFile = queryOne<any>(
-    `SELECT pf.*, p.id as post_id, p.owner_id
-     FROM post_files pf
-     JOIN posts p ON pf.post_id = p.id
-     WHERE pf.id = ?`,
-    [keepFileId]
-  );
-
-  if (!keepFile) return res.status(404).json({ error: 'Kept file not found' });
-
-  let removedCount = 0;
-  let freedBytes = 0;
-
-  for (const removeId of removeFileIds) {
-    const toRemove = queryOne<any>(
-      `SELECT pf.*, p.id as post_id, p.owner_id
-       FROM post_files pf
-       JOIN posts p ON pf.post_id = p.id
-       WHERE pf.id = ?`,
-      [removeId]
-    );
-
-    if (!toRemove) continue;
-    if (!isAdmin && toRemove.owner_id !== userId) continue;
-
-    // Merge group placements so no friends lose access to this memory
-    if (mergePlacements && toRemove.post_id !== keepFile.post_id) {
-      const sourcePlacements = queryAll<any>(
-        'SELECT group_id FROM item_groups WHERE item_type = "post" AND item_id = ?',
-        [toRemove.post_id]
-      );
-      for (const sp of sourcePlacements) {
-        const existsInKeep = queryOne(
-          'SELECT id FROM item_groups WHERE item_type = "post" AND item_id = ? AND group_id = ?',
-          [keepFile.post_id, sp.group_id]
-        );
-        if (!existsInKeep) {
-          run(
-            `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
-             VALUES (?, 'post', ?, ?, ?, 0, 'approved', ?)`,
-            [crypto.randomUUID(), keepFile.post_id, sp.group_id, userId, new Date().toISOString()]
-          );
-        }
-      }
-    }
-
-    // Delete or soft-delete post if it only contains this file
-    const postFiles = queryAll<any>('SELECT id FROM post_files WHERE post_id = ?', [toRemove.post_id]);
-    if (postFiles.length <= 1) {
-      run('UPDATE posts SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), toRemove.post_id]);
-    } else {
-      run('DELETE FROM post_files WHERE id = ?', [removeId]);
-    }
-
-    freedBytes += toRemove.file_size || 0;
-    removedCount++;
-  }
-
-  res.json({
-    success: true,
-    removedCount,
-    freedBytes,
-    message: `Cleaned ${removedCount} duplicate photo(s), freeing ${(freedBytes / (1024 * 1024)).toFixed(1)} MB.`,
-  });
+// Resolve duplicate photos: Deletion is permanently disabled in this preview to protect memories
+postsRouter.post('/duplicates/resolve', async (_req: AuthenticatedRequest, res) => {
+  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and data.' });
 });
 

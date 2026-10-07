@@ -60,6 +60,10 @@ export const TrashView: React.FC = () => {
         </span>
       </div>
 
+      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center gap-2">
+        <span>🔒 <strong>Protected Preview:</strong> Deletion and purging are disabled so no memories can be lost. You can restore any item anytime.</span>
+      </div>
+
       {loading ? (
         <div className="text-center py-12 text-xs text-[var(--text-muted)]">Loading trash...</div>
       ) : trashItems.length === 0 ? (
@@ -93,12 +97,6 @@ export const TrashView: React.FC = () => {
                   className="px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-400 font-semibold hover:bg-emerald-600/30 transition flex items-center gap-1"
                 >
                   <RotateCcw className="w-3.5 h-3.5" /> Restore
-                </button>
-                <button
-                  onClick={() => handleDeleteForever(item.id)}
-                  className="px-3 py-1.5 rounded-xl bg-rose-600/20 text-rose-400 font-semibold hover:bg-rose-600/30 transition flex items-center gap-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Purge
                 </button>
               </div>
             </div>

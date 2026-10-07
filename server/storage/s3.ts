@@ -158,15 +158,7 @@ export class S3StorageAdapter implements StorageAdapter {
   }
 
   async deleteObject(storageKey: string): Promise<void> {
-    const key = this.cleanKey(storageKey);
-    try {
-      const command = new DeleteObjectCommand({
-        Bucket: this.config.bucket,
-        Key: key,
-      });
-      await this.client.send(command);
-    } catch (err: any) {
-      console.error(`⚠️ S3 deleteObject warning for ${key}:`, err.message || err);
-    }
+    // Protected from deletion: preserve all objects in preview
+    console.log(`[Storage Protection] S3 file deletion blocked for: ${storageKey}`);
   }
 }

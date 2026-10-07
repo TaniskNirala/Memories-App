@@ -63,7 +63,6 @@ async function pullFromTurso(db: Database): Promise<void> {
         try {
           const res = await client.execute(`SELECT * FROM ${table}`);
           if (res.rows && res.rows.length > 0) {
-            db.run(`DELETE FROM ${table}`);
             for (const row of res.rows) {
               const keys = Object.keys(row);
               const placeholders = keys.map(() => '?').join(', ');

@@ -77,10 +77,8 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
   }
 
   async deleteObject(storageKey: string): Promise<void> {
-    const filePath = this.getFilePath(storageKey);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
+    // Protected from deletion: files are preserved in this preview to prevent data loss
+    console.log(`[Storage Protection] File deletion blocked for: ${storageKey}`);
   }
 
   async putObject(storageKey: string, data: Buffer, _contentType: string): Promise<void> {

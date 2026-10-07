@@ -178,22 +178,9 @@ commentsRouter.patch('/:id', (req: AuthenticatedRequest, res) => {
   res.json({ success: true });
 });
 
-// Soft-delete comment
-// "threaded, edit and soft-delete own, admin can delete any"
-commentsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
-  const commentId = req.params.id;
-  const userId = req.user!.id;
-  const userRole = req.user!.role;
-
-  const comment = queryOne<any>('SELECT * FROM comments WHERE id = ?', [commentId]);
-  if (!comment) return res.status(404).json({ error: 'Comment not found' });
-
-  if (comment.author_id !== userId && userRole !== 'admin') {
-    return res.status(403).json({ error: 'Permission denied to delete comment' });
-  }
-
-  run('UPDATE comments SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), commentId]);
-  res.json({ success: true });
+// Soft-delete comment: Deletion is permanently disabled in this preview
+commentsRouter.delete('/:id', (_req: AuthenticatedRequest, res) => {
+  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect discussions.' });
 });
 
 // Get members of a group for @mention auto-complete

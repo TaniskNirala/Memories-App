@@ -123,7 +123,7 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
   // -------------------------------------------------------------
   const mainFile = item.files[0];
   const isOwner = user?.id === item.owner.id;
-  const canDelete = isOwner || isAdmin;
+  const canDelete = false; // Deletion is permanently disabled in this preview to protect memories
   const activeGroupId = item.activeGroupId || item.placements[0]?.groupId;
 
   return (

@@ -651,20 +651,13 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                               </button>
                             )}
 
-                            {/* Delete Memory (Author or Admin) */}
-                            {canDelete ? (
-                              <button
-                                onClick={() => {
-                                  setOpenOptionsMenuId(null);
-                                  setDeleteConfirmItem(item);
-                                }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/10 text-rose-400 transition flex items-center gap-2 font-medium"
-                              >
-                                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                                <span>Delete memory...</span>
-                              </button>
-                            ) : (
-                              /* Report memory (for other circle members) */
+                            {/* Deletion permanently disabled in preview to protect memories */}
+                            <div className="px-2.5 py-1 text-[10px] text-amber-500/80 font-medium">
+                              🔒 Deletion locked (preview protection)
+                            </div>
+
+                            {/* Report memory (for other circle members) */}
+                            {!isOwner && (
                               <button
                                 onClick={() => {
                                   setOpenOptionsMenuId(null);

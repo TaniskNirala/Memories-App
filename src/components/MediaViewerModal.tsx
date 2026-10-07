@@ -232,7 +232,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const files = item.files || [];
   const currentFile = files[fileIndex] || files[0];
   const isOwner = user?.id === item.owner.id;
-  const canDelete = isOwner || isAdmin;
+  const canDelete = false; // Deletion is permanently disabled in this preview to protect memories
   const hasMultiplePhotos = files.length > 1;
 
   // Double click to toggle zoom (1x <-> 2.5x)

@@ -99,36 +99,9 @@ placementsRouter.post('/bunch', async (req: AuthenticatedRequest, res) => {
   });
 });
 
-// Remove item from a specific group
-// "An owner can remove a post from one group without deleting it elsewhere."
-placementsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
-  const placementId = req.params.id;
-  const userId = req.user!.id;
-  const userRole = req.user!.role;
-
-  const placement = queryOne<any>(
-    `SELECT ig.*, p.owner_id as post_owner, a.creator_id as album_owner, g.creator_id as group_creator
-     FROM item_groups ig
-     LEFT JOIN posts p ON ig.item_type = 'post' AND ig.item_id = p.id
-     LEFT JOIN albums a ON ig.item_type = 'album' AND ig.item_id = a.id
-     JOIN groups g ON ig.group_id = g.id
-     WHERE ig.id = ?`,
-    [placementId]
-  );
-
-  if (!placement) return res.status(404).json({ error: 'Placement not found' });
-
-  const isOwner = placement.post_owner === userId || placement.album_owner === userId;
-  const isAdder = placement.added_by === userId;
-  const isGroupCreator = placement.group_creator === userId;
-  const isAdmin = userRole === 'admin';
-
-  if (!isOwner && !isAdder && !isGroupCreator && !isAdmin) {
-    return res.status(403).json({ error: 'Permission denied to remove placement' });
-  }
-
-  run('DELETE FROM item_groups WHERE id = ?', [placementId]);
-  res.json({ success: true, message: 'Removed from group' });
+// Remove item from a specific group: Deletion is permanently disabled in this preview to protect placements
+placementsRouter.delete('/:id', (_req: AuthenticatedRequest, res) => {
+  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your placements and data.' });
 });
 
 // List pending references for the current user (where current user is the owner)

@@ -39,10 +39,10 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
   const postParams: any[] = [userId];
 
   if (groupId) {
-    postSql += ` AND (ig.group_id = ? OR (SELECT is_everyone FROM groups WHERE id = ?) = 1)`;
-    postParams.push(groupId, groupId);
+    postSql += ` AND ig.group_id = ?`;
+    postParams.push(groupId);
   } else if (!isAdmin) {
-    postSql += ` AND (p.owner_id = ? OR gm.user_id = ? OR p.visibility_override = 'public_all' OR (SELECT is_everyone FROM groups WHERE id = ig.group_id) = 1)`;
+    postSql += ` AND (p.owner_id = ? OR gm.user_id = ? OR p.visibility_override = 'public_all')`;
     postParams.push(userId, userId);
   }
 
@@ -68,10 +68,10 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
   const albumParams: any[] = [userId];
 
   if (groupId) {
-    albumSql += ` AND (ig.group_id = ? OR (SELECT is_everyone FROM groups WHERE id = ?) = 1)`;
-    albumParams.push(groupId, groupId);
+    albumSql += ` AND ig.group_id = ?`;
+    albumParams.push(groupId);
   } else if (!isAdmin) {
-    albumSql += ` AND (a.creator_id = ? OR gm.user_id = ? OR (SELECT is_everyone FROM groups WHERE id = ig.group_id) = 1)`;
+    albumSql += ` AND (a.creator_id = ? OR gm.user_id = ?)`;
     albumParams.push(userId, userId);
   }
 

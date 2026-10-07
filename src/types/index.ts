@@ -34,6 +34,7 @@ export interface PostFile {
   fileType: 'photo' | 'video' | 'audio';
   position: number;
   storageKey?: string;
+  thumbKey?: string;
   thumbUrl: string;
   viewUrl: string;
   fileSize?: number;

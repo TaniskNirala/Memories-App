@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Trash2, Edit2, CornerDownRight, Check, Smile } from 'lucide-react';
 import { FeedItem, CommentItem, GroupMember } from '../types/index.ts';
-import { useAuth } from '../context/AuthContext.tsx';
+import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 
 interface CommentsDrawerProps {
   isOpen: boolean;
@@ -41,7 +41,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
     if (!item || !activeGroupId) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/comments?targetType=${item.type === 'single_post' ? 'post' : 'album'}&targetId=${item.id}&groupId=${activeGroupId}`);
+      const res = await apiFetch(`/api/comments?targetType=${item.type === 'single_post' ? 'post' : 'album'}&targetId=${item.id}&groupId=${activeGroupId}`);
       if (res.ok) {
         const data = await res.json();
         setComments(data.comments || []);
@@ -56,7 +56,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
   const fetchGroupMembers = async () => {
     if (!activeGroupId) return;
     try {
-      const res = await fetch(`/api/comments/group-members/${activeGroupId}`);
+      const res = await apiFetch(`/api/comments/group-members/${activeGroupId}`);
       if (res.ok) {
         const data = await res.json();
         setGroupMembers(data.members || []);
@@ -120,7 +120,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
     if (!text.trim()) return;
 
     try {
-      const res = await fetch('/api/comments', {
+      const res = await apiFetch('/api/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,7 +145,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
   const handleEditSubmit = async (commentId: string) => {
     if (!editText.trim()) return;
     try {
-      const res = await fetch(`/api/comments/${commentId}`, {
+      const res = await apiFetch(`/api/comments/${commentId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: editText.trim() }),
@@ -159,7 +159,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
 
   const handleDeleteComment = async (commentId: string) => {
     try {
-      const res = await fetch(`/api/comments/${commentId}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/comments/${commentId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchComments();
       }

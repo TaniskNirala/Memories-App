@@ -116,7 +116,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
-          <span>2 Photos • Open Album</span>
+          <span>2 Photos</span>
         </button>
       </div>
     );
@@ -176,7 +176,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
-          <span>3 Photos • Open Album</span>
+          <span>3 Photos</span>
         </button>
       </div>
     );
@@ -215,7 +215,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
-          <span>4 Photos • Open Album</span>
+          <span>4 Photos</span>
         </button>
       </div>
     );
@@ -258,7 +258,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
                   </span>
                   <span className="text-[10px] sm:text-xs text-neutral-200 flex items-center gap-1 font-medium mt-0.5">
                     <Grid className="w-3.5 h-3.5 text-amber-400" />
-                    <span>View Album</span>
+                    <span>View Photos</span>
                   </span>
                 </div>
               )}
@@ -275,7 +275,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
         className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
       >
         <Images className="w-3.5 h-3.5 text-amber-400" />
-        <span>{count} Photos • Open Album</span>
+        <span>{count} Photos</span>
       </button>
     </div>
   );
@@ -664,7 +664,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                                 className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-2 text-amber-300"
                               >
                                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                <span>{item.type === 'collection_card' ? 'Convert Album to Event' : 'Convert to Event'}</span>
+                                <span>Convert to Event</span>
                               </button>
                             )}
 
@@ -683,25 +683,40 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                             )}
 
                             {/* Direct Remove from Circle options */}
-                            {canDelete && item.placements && item.placements.length > 0 && (
+                            {canDelete && (
                               <div className="pt-1 mt-1 border-t border-[var(--border-color)] space-y-0.5">
-                                <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] px-2 py-0.5 block tracking-wider">
-                                  Remove from Circle:
-                                </span>
-                                {item.placements.map((pl) => (
+                                {item.placements && item.placements.length > 0 ? (
+                                  <>
+                                    <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] px-2 py-0.5 block tracking-wider">
+                                      Remove from Circle:
+                                    </span>
+                                    {item.placements.map((pl) => (
+                                      <button
+                                        key={pl.id || pl.groupId}
+                                        onClick={() => {
+                                          setOpenOptionsMenuId(null);
+                                          handleRemoveFromCircle(item, pl.groupId);
+                                        }}
+                                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/15 text-rose-400 transition flex items-center justify-between text-xs"
+                                        title={`Remove memory from ${pl.groupName}`}
+                                      >
+                                        <span className="truncate">Remove from {pl.groupName}</span>
+                                        <X className="w-3.5 h-3.5 shrink-0 ml-1.5 opacity-80" />
+                                      </button>
+                                    ))}
+                                  </>
+                                ) : selectedGroupId ? (
                                   <button
-                                    key={pl.id || pl.groupId}
                                     onClick={() => {
                                       setOpenOptionsMenuId(null);
-                                      handleRemoveFromCircle(item, pl.groupId);
+                                      handleRemoveFromCircle(item, selectedGroupId);
                                     }}
                                     className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/15 text-rose-400 transition flex items-center justify-between text-xs"
-                                    title={`Remove memory from ${pl.groupName}`}
                                   >
-                                    <span className="truncate">Remove from {pl.groupName}</span>
+                                    <span className="truncate">Remove from this Circle</span>
                                     <X className="w-3.5 h-3.5 shrink-0 ml-1.5 opacity-80" />
                                   </button>
-                                ))}
+                                ) : null}
                               </div>
                             )}
 
@@ -797,6 +812,16 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                                     src={mUrl}
                                     alt={`Preview ${idx}`}
                                     referrerPolicy="no-referrer"
+                                    onError={(e) => {
+                                      const target = e.currentTarget;
+                                      if (!target.dataset.triedFallback && mUrl.includes('key=')) {
+                                        target.dataset.triedFallback = 'true';
+                                        try {
+                                          const keyParam = new URL(mUrl, window.location.origin).searchParams.get('key');
+                                          if (keyParam) target.src = `/api/storage/view?key=${encodeURIComponent(keyParam)}`;
+                                        } catch {}
+                                      }
+                                    }}
                                     className="w-full h-full object-cover hover:scale-105 transition-transform"
                                   />
                                 </div>

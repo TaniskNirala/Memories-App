@@ -240,6 +240,8 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
       fileType: item.file_type,
       width: item.width,
       height: item.height,
+      storageKey: item.storage_key,
+      thumbKey: item.thumb_key || item.storage_key,
       thumbUrl: await storage.getSignedViewUrl(item.thumb_key || item.storage_key),
       viewUrl: await storage.getSignedViewUrl(item.storage_key),
     }))

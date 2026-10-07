@@ -994,6 +994,14 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         src={f.viewUrl || f.thumbUrl}
                         alt={`Thumb ${idx + 1}`}
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          if (!target.dataset.triedFallback && (f.storageKey || f.thumbKey)) {
+                            target.dataset.triedFallback = 'true';
+                            const fallbackKey = f.thumbKey || f.storageKey || '';
+                            target.src = `/api/storage/view?key=${encodeURIComponent(fallbackKey)}`;
+                          }
+                        }}
                         className="w-full h-full object-cover"
                       />
                     </button>

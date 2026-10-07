@@ -102,21 +102,120 @@ export async function createApp() {
     }
   });
 
+  // Mount uploads directory statically for direct access with full CORS headers
+  app.use(
+    '/uploads',
+    express.static(path.resolve(process.cwd(), 'uploads'), {
+      setHeaders: (res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+      },
+    })
+  );
+
   // Universal media view endpoint (streams from local disk or cloud S3/Backblaze B2)
   app.get('/api/storage/view', async (req, res) => {
     try {
-      const { key, token, expires } = req.query as { key?: string; token?: string; expires?: string };
-      if (!key) {
+      const rawKey = req.query.key as string;
+      if (!rawKey) {
         return res.status(400).json({ error: 'Missing key parameter' });
       }
 
-      // 1. Try local disk first
-      let targetPath = localStorageAdapter.getFilePath(key);
-      if (!fs.existsSync(targetPath) && key.includes('_thumb')) {
-        const altKey = key.replace(/_thumb\.[a-zA-Z0-9]+$/, (ext) => ext.replace('_thumb', ''));
-        const altPath = localStorageAdapter.getFilePath(altKey);
-        if (fs.existsSync(altPath)) {
-          targetPath = altPath;
+      // Allow cross-origin and canvas image access unconditionally
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+
+      // Normalize key (resolve encoded slashes and strip redundant uploads prefix)
+      let cleanKey = rawKey.trim();
+      while (cleanKey.includes('%')) {
+        try {
+          const decoded = decodeURIComponent(cleanKey);
+          if (decoded === cleanKey) break;
+          cleanKey = decoded;
+        } catch {
+          break;
+        }
+      }
+      cleanKey = cleanKey.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
+
+      // 1. Try local disk paths
+      let targetPath = localStorageAdapter.getFilePath(cleanKey);
+      
+      // If requested file does not exist, check fallback variants (thumb <-> full res)
+      if (!fs.existsSync(targetPath)) {
+        if (cleanKey.includes('_thumb')) {
+          const altKey = cleanKey.replace(/_thumb\.[a-zA-Z0-9]+$/, (ext) => ext.replace('_thumb', ''));
+          const altPath = localStorageAdapter.getFilePath(altKey);
+          if (fs.existsSync(altPath)) {
+            targetPath = altPath;
+          }
+        } else {
+          // Full resolution requested but maybe only thumb exists
+          const ext = path.extname(cleanKey);
+          const base = cleanKey.slice(0, cleanKey.length - ext.length);
+          const thumbKey = `${base}_thumb${ext}`;
+          const thumbPath = localStorageAdapter.getFilePath(thumbKey);
+          if (fs.existsSync(thumbPath)) {
+            targetPath = thumbPath;
+          }
+        }
+      }
+
+      // If still not found on disk, attempt fuzzy match in user directory or across all user folders
+      if (!fs.existsSync(targetPath)) {
+        const parts = cleanKey.split('/');
+        const fileName = parts.slice(parts.length - 1)[0] || '';
+        const basePrefix = fileName.split('_')[0] || '';
+        const cleanBaseName = fileName.replace(/_thumb\.[^.]+$/, '');
+
+        // Check in requested user dir first
+        if (parts.length >= 3 && parts[0] === 'posts') {
+          const userId = parts[1];
+          const userDir = path.resolve(process.cwd(), 'uploads', 'posts', userId);
+          if (fs.existsSync(userDir)) {
+            const files = fs.readdirSync(userDir);
+            const matched = files.find(
+              (f) =>
+                f === fileName ||
+                (basePrefix && f.startsWith(basePrefix)) ||
+                f.includes(cleanBaseName)
+            );
+            if (matched) {
+              const matchedPath = path.join(userDir, matched);
+              if (fs.existsSync(matchedPath)) {
+                targetPath = matchedPath;
+              }
+            }
+          }
+        }
+
+        // If still not found, search across ANY user folder in uploads/posts
+        if (!fs.existsSync(targetPath)) {
+          const uploadsPostsDir = path.resolve(process.cwd(), 'uploads', 'posts');
+          if (fs.existsSync(uploadsPostsDir)) {
+            const allUsers = fs.readdirSync(uploadsPostsDir);
+            for (const u of allUsers) {
+              const uDir = path.join(uploadsPostsDir, u);
+              if (fs.statSync(uDir).isDirectory()) {
+                const uFiles = fs.readdirSync(uDir);
+                const matched = uFiles.find(
+                  (f) =>
+                    f === fileName ||
+                    (basePrefix && f.startsWith(basePrefix)) ||
+                    f.includes(cleanBaseName)
+                );
+                if (matched) {
+                  const candidate = path.join(uDir, matched);
+                  if (fs.existsSync(candidate)) {
+                    targetPath = candidate;
+                    break;
+                  }
+                }
+              }
+            }
+          }
         }
       }
 
@@ -129,7 +228,9 @@ export async function createApp() {
         else if (ext === '.mp4') mimeType = 'video/mp4';
         else if (ext === '.mp3') mimeType = 'audio/mpeg';
 
+        const stat = fs.statSync(targetPath);
         res.setHeader('Content-Type', mimeType);
+        res.setHeader('Content-Length', stat.size);
         res.setHeader('Cache-Control', 'public, max-age=86400');
         return fs.createReadStream(targetPath).pipe(res);
       }
@@ -137,9 +238,8 @@ export async function createApp() {
       // 2. Try S3 / Backblaze B2 storage adapter if configured
       const storage = getStorageAdapter();
       if (storage.getObject) {
-        const obj = await storage.getObject(key);
+        const obj = await storage.getObject(cleanKey);
         if (obj && obj.data) {
-          // Cache locally to prevent redundant cloud bandwidth
           try {
             const dir = path.dirname(targetPath);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -147,6 +247,7 @@ export async function createApp() {
           } catch {}
 
           res.setHeader('Content-Type', obj.contentType || 'image/jpeg');
+          res.setHeader('Content-Length', obj.data.length);
           res.setHeader('Cache-Control', 'public, max-age=86400');
           return res.send(obj.data);
         }

@@ -47,7 +47,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   const fetchCollection = async () => {
     if (!collectionId) return;
     try {
-      const res = await fetch(`/api/albums/${collectionId}`);
+      const res = await apiFetch(`/api/albums/${collectionId}`);
       if (res.ok) {
         const data = await res.json();
         setCollection(data.album);
@@ -70,16 +70,16 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
     setLoading(true);
     try {
       // 60 at a time per requirement
-      const res = await fetch(`/api/albums/${collectionId}/items?limit=60&offset=${currentOffset}`);
+      const res = await apiFetch(`/api/albums/${collectionId}/items?limit=60&offset=${currentOffset}`);
       if (res.ok) {
         const data = await res.json();
         if (resetOffset) {
-          setItems(data.items);
+          setItems(data.items || []);
         } else {
-          setItems((prev) => [...prev, ...data.items]);
+          setItems((prev) => [...prev, ...(data.items || [])]);
         }
-        setOffset(currentOffset + data.items.length);
-        setHasMore(data.hasMore);
+        setOffset(currentOffset + (data.items?.length || 0));
+        setHasMore(Boolean(data.hasMore));
       }
     } catch (e) {
     } finally {
@@ -90,7 +90,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   const fetchAttendance = async () => {
     if (!collectionId) return;
     try {
-      const res = await fetch(`/api/albums/${collectionId}/attendance`);
+      const res = await apiFetch(`/api/albums/${collectionId}/attendance`);
       if (res.ok) {
         const data = await res.json();
         setAttendees(data.attendees || []);
@@ -101,7 +101,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   const fetchNotes = async () => {
     if (!collectionId) return;
     try {
-      const res = await fetch(`/api/albums/${collectionId}/notes`);
+      const res = await apiFetch(`/api/albums/${collectionId}/notes`);
       if (res.ok) {
         const data = await res.json();
         setNotes(data.notes || []);
@@ -111,7 +111,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
 
   const fetchAvailableUsers = async () => {
     try {
-      const res = await fetch('/api/groups/available-users');
+      const res = await apiFetch('/api/groups/available-users');
       if (res.ok) {
         const data = await res.json();
         setAvailableUsers(data.users || []);
@@ -133,7 +133,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
 
   const handleMarkPresent = async (targetUserId?: string) => {
     try {
-      const res = await fetch(`/api/albums/${collectionId}/attendance`, {
+      const res = await apiFetch(`/api/albums/${collectionId}/attendance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ targetUserId }),
@@ -147,7 +147,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
 
   const handleRemoveAttendance = async (userId: string) => {
     try {
-      const res = await fetch(`/api/albums/${collectionId}/attendance/${userId}`, {
+      const res = await apiFetch(`/api/albums/${collectionId}/attendance/${userId}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -161,7 +161,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
     if (!noteText.trim()) return;
 
     try {
-      const res = await fetch(`/api/albums/${collectionId}/notes`, {
+      const res = await apiFetch(`/api/albums/${collectionId}/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -475,8 +475,15 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                 >
                   <img
                     src={item.thumbUrl || item.viewUrl}
-                    alt={item.caption || 'Album photo'}
+                    alt={item.caption || 'Event photo'}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.dataset.triedFallback && (item.thumbKey || item.storageKey)) {
+                        target.dataset.triedFallback = 'true';
+                        target.src = `/api/storage/view?key=${encodeURIComponent(item.thumbKey || item.storageKey)}`;
+                      }
+                    }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   />
                   {item.caption && (

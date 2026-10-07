@@ -630,11 +630,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       completedFiles.sort((a, b) => a.position - b.position);
 
       // 3. Create post record(s) with placements
+      const defaultDate = (takenAt && !isNaN(new Date(takenAt).getTime())) ? new Date(takenAt).toISOString() : new Date().toISOString();
+
       if (uploadStructure === 'separate' && completedFiles.length > 1) {
         for (let i = 0; i < completedFiles.length; i++) {
           const fileItem = completedFiles[i];
           const queueItem = processedQueue[i];
-          const fileDate = queueItem?.detectedDate ? new Date(queueItem.detectedDate).toISOString() : new Date(takenAt).toISOString();
+          const fileDate = queueItem?.detectedDate && !isNaN(new Date(queueItem.detectedDate).getTime())
+            ? new Date(queueItem.detectedDate).toISOString()
+            : defaultDate;
           const fileCaption = caption ? `${caption} (${i + 1}/${completedFiles.length})` : '';
 
           const postPayload = {
@@ -660,7 +664,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       } else {
         const postPayload = {
           caption,
-          takenAt: new Date(takenAt).toISOString(),
+          takenAt: defaultDate,
           uploadedAt: new Date().toISOString(),
           dateBasis,
           groupIds: selectedGroupIds,

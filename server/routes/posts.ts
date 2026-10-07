@@ -25,8 +25,11 @@ const diskStorage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const ext = path.extname(file.originalname) || '.jpg';
-    const unique = `${Date.now()}_${crypto.randomUUID()}${ext}`;
-    cb(null, unique);
+    if (file.fieldname === 'thumb') {
+      cb(null, `${Date.now()}_${crypto.randomUUID()}_thumb${ext}`);
+    } else {
+      cb(null, `${Date.now()}_${crypto.randomUUID()}${ext}`);
+    }
   },
 });
 
@@ -183,7 +186,7 @@ postsRouter.post(
 );
 
 // Generate signed upload URLs for browser direct upload
-postsRouter.post('/signed-upload-urls', async (req: AuthenticatedRequest, res) => {
+const handleSignedUploadUrls = async (req: AuthenticatedRequest, res: any) => {
   const { files } = req.body;
   if (!Array.isArray(files) || files.length === 0) {
     return res.status(400).json({ error: 'Files array required' });
@@ -194,16 +197,16 @@ postsRouter.post('/signed-upload-urls', async (req: AuthenticatedRequest, res) =
   const results: any[] = [];
 
   for (const f of files) {
-    const ext = (f.fileName || 'file').split('.').pop() || 'bin';
+    const ext = (f.fileName || f.filename || 'file').split('.').pop() || 'bin';
     const uuid = crypto.randomUUID();
     const mainStorageKey = `posts/${userId}/${Date.now()}_${uuid}.${ext}`;
     const thumbStorageKey = `posts/${userId}/${Date.now()}_${uuid}_thumb.jpg`;
 
-    const mainUpload = await storage.getSignedUploadUrl(mainStorageKey, f.mimeType || 'application/octet-stream');
-    const thumbUpload = await storage.getSignedUploadUrl(thumbStorageKey, 'image/jpeg');
+    const mainUpload = await storage.getSignedUploadUrl(mainStorageKey, f.mimeType || f.contentType || 'application/octet-stream');
+    const thumbUpload = await storage.getSignedUploadUrl(thumbStorageKey, f.thumbContentType || 'image/jpeg');
 
     results.push({
-      fileName: f.fileName,
+      fileName: f.fileName || f.filename,
       mainUploadUrl: mainUpload.uploadUrl,
       mainStorageKey,
       mainMethod: mainUpload.method,
@@ -216,7 +219,10 @@ postsRouter.post('/signed-upload-urls', async (req: AuthenticatedRequest, res) =
   }
 
   res.json({ uploads: results });
-});
+};
+
+postsRouter.post('/signed-upload-urls', handleSignedUploadUrls);
+postsRouter.post('/presign-upload', handleSignedUploadUrls);
 
 // Create post after files have been uploaded directly to storage
 postsRouter.post('/', async (req: AuthenticatedRequest, res) => {

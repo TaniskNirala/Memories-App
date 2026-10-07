@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Trash2, RotateCcw, AlertTriangle, Image as ImageIcon, ShieldAlert } from 'lucide-react';
+import { apiFetch } from '../context/AuthContext.tsx';
 
 export const TrashView: React.FC = () => {
   const [trashItems, setTrashItems] = useState<any[]>([]);
@@ -7,7 +8,7 @@ export const TrashView: React.FC = () => {
   const [isDeleteProtected, setIsDeleteProtected] = useState(true);
 
   useEffect(() => {
-    fetch('/api/config')
+    apiFetch('/api/config')
       .then((r) => r.json())
       .then((cfg) => {
         if (typeof cfg.isDeleteProtected === 'boolean') {
@@ -20,7 +21,7 @@ export const TrashView: React.FC = () => {
   const fetchTrash = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/posts/trash/list');
+      const res = await apiFetch('/api/posts/trash/list');
       if (res.ok) {
         const data = await res.json();
         setTrashItems(data.trash || []);
@@ -37,7 +38,7 @@ export const TrashView: React.FC = () => {
 
   const handleRestore = async (postId: string) => {
     try {
-      const res = await fetch(`/api/posts/${postId}/restore`, { method: 'POST' });
+      const res = await apiFetch(`/api/posts/${postId}/restore`, { method: 'POST' });
       if (res.ok) {
         fetchTrash();
       }
@@ -47,7 +48,7 @@ export const TrashView: React.FC = () => {
   const handleDeleteForever = async (postId: string) => {
     if (!confirm('Permanently delete this photo forever? This cannot be undone.')) return;
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
+      const res = await apiFetch(`/api/posts/${postId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permanent: true }),

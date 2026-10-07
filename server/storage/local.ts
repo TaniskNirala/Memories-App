@@ -34,8 +34,11 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
   }
 
   public getFilePath(storageKey: string): string {
-    // Sanitize key to prevent path traversal
-    const safeKey = storageKey.replace(/\.\./g, '').replace(/^[/\\]+/, '');
+    // Sanitize key to prevent path traversal and strip redundant prefixes
+    const safeKey = storageKey
+      .replace(/\.\./g, '')
+      .replace(/^[/\\]+/, '')
+      .replace(/^uploads[/\\]+/, '');
     const fullPath = path.resolve(this.baseDir, safeKey);
     // Ensure parent directory exists
     const dir = path.dirname(fullPath);

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Share2, Users, Check, AlertCircle } from 'lucide-react';
 import { FeedItem, Group } from '../types/index.ts';
+import { apiFetch } from '../context/AuthContext.tsx';
 
 interface SharePlacementModalProps {
   item: FeedItem | null;
@@ -35,7 +36,7 @@ export const SharePlacementModal: React.FC<SharePlacementModalProps> = ({
     setMessage(null);
 
     try {
-      const res = await fetch('/api/placements/bunch', {
+      const res = await apiFetch('/api/placements/bunch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

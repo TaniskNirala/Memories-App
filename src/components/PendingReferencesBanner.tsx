@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, Check, X } from 'lucide-react';
+import { apiFetch } from '../context/AuthContext.tsx';
 
 interface PendingRef {
   placement_id: string;
@@ -17,7 +18,7 @@ export const PendingReferencesBanner: React.FC<{ onUpdated: () => void }> = ({ o
 
   const fetchRequests = async () => {
     try {
-      const res = await fetch('/api/placements/pending-references');
+      const res = await apiFetch('/api/placements/pending-references');
       if (res.ok) {
         const data = await res.json();
         setRequests(data.requests || []);
@@ -31,7 +32,7 @@ export const PendingReferencesBanner: React.FC<{ onUpdated: () => void }> = ({ o
 
   const handleDecision = async (placementId: string, decision: 'approved' | 'rejected') => {
     try {
-      const res = await fetch(`/api/placements/pending-references/${placementId}/decide`, {
+      const res = await apiFetch(`/api/placements/pending-references/${placementId}/decide`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),

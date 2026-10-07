@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Layers, Calendar, MapPin, Check } from 'lucide-react';
 import { Group } from '../types/index.ts';
-import { useAuth } from '../context/AuthContext.tsx';
+import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 
 interface ProposeCollectionModalProps {
   isOpen: boolean;
@@ -42,7 +42,7 @@ export const ProposeCollectionModal: React.FC<ProposeCollectionModalProps> = ({
     setMsg(null);
 
     try {
-      const res = await fetch('/api/albums', {
+      const res = await apiFetch('/api/albums', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -77,7 +77,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
   const fetchLibraryPosts = async () => {
     setLoadingLibrary(true);
     try {
-      const res = await apiFetch('/api/posts/feed?limit=50');
+      const res = await apiFetch('/api/feed?limit=50&filter=single');
       if (res.ok) {
         const data = await res.json();
         const posts = (data.items || []).filter((item: any) => item.type === 'single_post');
@@ -279,70 +279,40 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
         setUploadProgress(10 + Math.round(((i + 1) / queue.length) * 20));
       }
 
-      // 2. Request presigned upload URLs from server
-      const presignPayload = {
-        files: preparedList.map((p) => ({
-          filename: p.file.name,
-          contentType: p.file.type || 'image/jpeg',
-          fileSize: p.mainBlob.size,
-          thumbContentType: 'image/jpeg',
-          thumbSize: p.thumbBlob.size,
-        })),
-      };
-
-      const presignRes = await apiFetch('/api/posts/presign-upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(presignPayload),
-      });
-
-      if (!presignRes.ok) {
-        const err = await presignRes.json();
-        throw new Error(err.error || 'Failed to initialize upload session');
-      }
-
-      const { uploads } = await presignRes.json();
-      setUploadProgress(40);
-
-      // 3. Upload blobs to storage
+      // 2. Upload blobs via direct multipart upload
       const uploadedFilesInfo = [];
       for (let i = 0; i < preparedList.length; i++) {
         const item = preparedList[i];
-        const u = uploads[i];
-
-        // Main blob
-        const mainHeaders: Record<string, string> = { ...(u.mainHeaders || {}) };
-        if (item.mainBlob instanceof Blob && !mainHeaders['Content-Type']) {
-          mainHeaders['Content-Type'] = item.file.type || 'image/jpeg';
+        const formData = new FormData();
+        formData.append('file', item.mainBlob || item.file, item.file.name);
+        if (item.thumbBlob) {
+          formData.append('thumb', item.thumbBlob, `thumb_${item.file.name}`);
         }
-        await fetch(u.mainUploadUrl, {
-          method: u.mainMethod || 'PUT',
-          headers: mainHeaders,
-          body: item.mainBlob,
+        formData.append('width', String(item.width || 1200));
+        formData.append('height', String(item.height || 800));
+
+        const res = await apiFetch('/api/posts/upload-file', {
+          method: 'POST',
+          body: formData,
         });
 
-        // Thumb blob
-        const thumbHeaders: Record<string, string> = { ...(u.thumbHeaders || {}) };
-        if (!thumbHeaders['Content-Type']) {
-          thumbHeaders['Content-Type'] = 'image/jpeg';
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || `Failed to upload photo #${i + 1}`);
         }
-        await fetch(u.thumbUploadUrl, {
-          method: u.thumbMethod || 'PUT',
-          headers: thumbHeaders,
-          body: item.thumbBlob,
-        });
 
+        const data = await res.json();
         uploadedFilesInfo.push({
-          storageKey: u.mainStorageKey,
-          thumbKey: u.thumbStorageKey,
-          fileType: item.file.type.startsWith('video/') ? 'video' : 'photo',
-          fileSize: item.mainBlob.size,
-          mimeType: item.file.type || 'image/jpeg',
-          width: item.width,
-          height: item.height,
+          storageKey: data.storageKey,
+          thumbKey: data.thumbKey || data.storageKey,
+          fileType: data.fileType || (item.file.type.startsWith('video/') ? 'video' : 'photo'),
+          fileSize: data.fileSize || item.mainBlob.size,
+          mimeType: data.mimeType || item.file.type || 'image/jpeg',
+          width: data.width || item.width,
+          height: data.height || item.height,
         });
 
-        setUploadProgress(40 + Math.round(((i + 1) / preparedList.length) * 45));
+        setUploadProgress(20 + Math.round(((i + 1) / preparedList.length) * 65));
       }
 
       // 4. Register to target

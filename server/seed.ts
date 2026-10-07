@@ -41,8 +41,6 @@ export async function syncUploadedPhotosToDatabase(): Promise<void> {
       // Check if file is already in post_files
       const existingFile = queryOne<any>('SELECT id, post_id FROM post_files WHERE storage_key = ?', [storageKey]);
       if (existingFile) {
-        // Ensure post is not marked as deleted
-        run('UPDATE posts SET deleted_at = NULL WHERE id = ?', [existingFile.post_id]);
         continue;
       }
 
@@ -71,13 +69,8 @@ export async function syncUploadedPhotosToDatabase(): Promise<void> {
         [fileId, postId, storageKey, thumbKey, stat.size]
       );
 
-      run(
-        `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
-         VALUES (?, 'post', ?, ?, ?, 0, 'approved', ?)`,
-        [crypto.randomUUID(), postId, groupId, userId, now]
-      );
-
-      console.log(`📸 Recovered uploaded photo into feed: ${storageKey}`);
+      // Note: Recovered photos remain personal/standalone by default so nothing is automatically forced into Everyone
+      console.log(`📸 Recovered uploaded photo into personal library: ${storageKey}`);
     }
   }
 

@@ -752,6 +752,7 @@ const MainContent: React.FC = () => {
         collectionId={activeCollectionId}
         isOpen={Boolean(activeCollectionId)}
         onClose={() => setActiveCollectionId(null)}
+        onUpdated={() => fetchFeed(true)}
         onSelectPhoto={(postId) => {
           const found = feedItems.find((i) => i.id === postId);
           if (found) {

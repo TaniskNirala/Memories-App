@@ -20,6 +20,7 @@ import {
   Plus,
   Sparkles,
   MapPin,
+  ShieldAlert,
 } from 'lucide-react';
 import { FeedItem, Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
@@ -232,7 +233,20 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const files = item.files || [];
   const currentFile = files[fileIndex] || files[0];
   const isOwner = user?.id === item.owner.id;
-  const canDelete = false; // Deletion is permanently disabled in this preview to protect memories
+  const [isDeleteProtected, setIsDeleteProtected] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/api/config')
+      .then((r) => r.json())
+      .then((cfg) => {
+        if (typeof cfg.isDeleteProtected === 'boolean') {
+          setIsDeleteProtected(cfg.isDeleteProtected);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const canDelete = (isOwner || isAdmin) && !isDeleteProtected;
   const hasMultiplePhotos = files.length > 1;
 
   // Double click to toggle zoom (1x <-> 2.5x)
@@ -469,6 +483,17 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">To Event</span>
             </button>
+          )}
+
+          {/* Preview delete lock badge */}
+          {(isOwner || isAdmin) && isDeleteProtected && (
+            <div
+              className="px-2.5 py-1 text-[11px] text-amber-400 font-medium flex items-center gap-1.5 bg-amber-500/10 rounded-full border border-amber-500/20"
+              title="Deletion is locked in AI Studio preview to safeguard your uploaded photos. Delete is fully available on Render."
+            >
+              <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              <span className="hidden sm:inline">Delete locked in preview</span>
+            </div>
           )}
 
           {/* Delete Buttons */}

@@ -9,6 +9,7 @@ interface CollectionDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectPhoto: (postId: string) => void;
+  onUpdated?: () => void;
 }
 
 export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
@@ -16,6 +17,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   isOpen,
   onClose,
   onSelectPhoto,
+  onUpdated,
 }) => {
   const { user, isAdmin } = useAuth();
   const [collection, setCollection] = useState<any>(null);
@@ -37,6 +39,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
 
   // Convert to event state
   const [showConvertToEvent, setShowConvertToEvent] = useState(false);
+  const [eventTitleInput, setEventTitleInput] = useState('');
   const [eventDateInput, setEventDateInput] = useState(() => new Date().toISOString().slice(0, 10));
   const [eventPlaceInput, setEventPlaceInput] = useState('');
   const [isConverting, setIsConverting] = useState(false);
@@ -48,6 +51,15 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
       if (res.ok) {
         const data = await res.json();
         setCollection(data.album);
+        if (data.album?.title) {
+          setEventTitleInput(data.album.title);
+        }
+        if (data.album?.eventDate) {
+          setEventDateInput(data.album.eventDate);
+        }
+        if (data.album?.eventPlace) {
+          setEventPlaceInput(data.album.eventPlace);
+        }
       }
     } catch (e) {}
   };
@@ -176,6 +188,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          title: eventTitleInput.trim() || collection?.title,
           eventDate: eventDateInput,
           eventPlace: eventPlaceInput,
         }),
@@ -184,6 +197,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         const data = await res.json();
         setCollection((prev: any) => ({
           ...prev,
+          title: data.title || prev.title,
           isEvent: true,
           eventDate: data.eventDate,
           eventPlace: data.eventPlace,
@@ -191,6 +205,9 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         setShowConvertToEvent(false);
         fetchAttendance();
         fetchNotes();
+        if (onUpdated) {
+          onUpdated();
+        }
       }
     } catch (err) {
       console.error('Failed to convert album to event:', err);
@@ -282,6 +299,18 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
               <p className="text-[11px] text-neutral-300 leading-relaxed">
                 Transform this album into an event to unlock guest attendee tagging and a shared board for guest notes and memories.
               </p>
+              <div>
+                <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Event Title
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Grandma's 80th Birthday, Summer Camping Trip"
+                  value={eventTitleInput}
+                  onChange={(e) => setEventTitleInput(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-neutral-500 focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">

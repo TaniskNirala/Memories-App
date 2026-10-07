@@ -9,6 +9,7 @@ import { seedDatabase } from './server/seed.ts';
 import { authMiddleware } from './server/middleware/auth.ts';
 import { LocalDiskStorageAdapter } from './server/storage/local.ts';
 import { getStorageAdapter } from './server/storage/index.ts';
+import { isDeleteProtected } from './server/config.ts';
 
 // Routers
 import { authRouter } from './server/routes/auth.ts';
@@ -187,6 +188,14 @@ export async function createApp() {
   app.use('/api/reports', reportsRouter);
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/ai', aiRouter);
+
+  // App configuration & environment capability flags
+  app.get('/api/config', (_req, res) => {
+    res.json({
+      isDeleteProtected: isDeleteProtected(),
+      isRender: Boolean(process.env.RENDER),
+    });
+  });
 
   // Health check
   app.get('/api/health', (_req, res) => {

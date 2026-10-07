@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { FeedItem, SinglePostFeedItem, Group } from '../types/index.ts';
 import {
   Lock,
@@ -17,6 +17,7 @@ import {
   Grid,
   Images,
   MapPin,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 
@@ -316,6 +317,20 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   const [eventPlace, setEventPlace] = useState('');
   const [convertingLoading, setConvertingLoading] = useState(false);
 
+  // Delete protection capability
+  const [isDeleteProtected, setIsDeleteProtected] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/api/config')
+      .then((r) => r.json())
+      .then((cfg) => {
+        if (typeof cfg.isDeleteProtected === 'boolean') {
+          setIsDeleteProtected(cfg.isDeleteProtected);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Dynamic Month & Year Grouping based on actual memory dates
   const groupedSections = useMemo(() => {
     const groupsMap = new Map<string, FeedItem[]>();
@@ -467,6 +482,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            title: eventTitle.trim() || convertToEventItem.title,
             eventDate,
             eventPlace,
           }),
@@ -651,10 +667,29 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                               </button>
                             )}
 
-                            {/* Deletion permanently disabled in preview to protect memories */}
-                            <div className="px-2.5 py-1 text-[10px] text-amber-500/80 font-medium">
-                              🔒 Deletion locked (preview protection)
-                            </div>
+                            {/* Deletion: Protected in preview; active on Render */}
+                            {canDelete && (
+                              isDeleteProtected ? (
+                                <div
+                                  className="px-2.5 py-1.5 text-[10px] text-amber-400 font-medium flex items-center gap-1.5 bg-amber-500/10 rounded-lg border border-amber-500/20"
+                                  title="Deletion is locked in AI Studio preview to safeguard your uploaded photos. Delete is fully operational on Render."
+                                >
+                                  <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                                  <span>Delete locked in preview</span>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setOpenOptionsMenuId(null);
+                                    setDeleteConfirmItem(item);
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-400 transition flex items-center gap-2 cursor-pointer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>{item.type === 'collection_card' ? 'Delete Album' : 'Delete Memory'}</span>
+                                </button>
+                              )
+                            )}
 
                             {/* Report memory (for other circle members) */}
                             {!isOwner && (
@@ -1039,21 +1074,19 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
             </p>
 
             <form onSubmit={executeConvertToEvent} className="space-y-3 text-xs">
-              {convertToEventItem.type === 'single_post' && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
-                    Event Title
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={eventTitle}
-                    onChange={(e) => setEventTitle(e.target.value)}
-                    placeholder="e.g. Summer Family Picnic, Birthday Celebration"
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
-                  />
-                </div>
-              )}
+              <div>
+                <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
+                  Event Title
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={eventTitle}
+                  onChange={(e) => setEventTitle(e.target.value)}
+                  placeholder="e.g. Summer Family Picnic, Birthday Celebration"
+                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>

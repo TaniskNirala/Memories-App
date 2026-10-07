@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { isDeleteProtected } from '../config.ts';
 
 export const albumsRouter = Router();
 albumsRouter.use(requireApproved);
@@ -462,7 +463,7 @@ albumsRouter.post('/:id/convert-to-event', (req: AuthenticatedRequest, res) => {
   const albumId = req.params.id;
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
-  const { eventDate, eventPlace } = req.body;
+  const { eventDate, eventPlace, title } = req.body;
 
   const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
   if (!album) return res.status(404).json({ error: 'Album not found' });
@@ -472,24 +473,57 @@ albumsRouter.post('/:id/convert-to-event', (req: AuthenticatedRequest, res) => {
 
   const dateToUse = eventDate || album.event_date || new Date().toISOString().slice(0, 10);
   const placeToUse = eventPlace !== undefined ? (eventPlace ? eventPlace.trim() : null) : album.event_place;
+  const titleToUse = title !== undefined && title.trim() ? title.trim() : album.title;
 
   run(
-    'UPDATE albums SET is_event = 1, event_date = ?, event_place = ? WHERE id = ?',
-    [dateToUse, placeToUse, albumId]
+    'UPDATE albums SET is_event = 1, event_date = ?, event_place = ?, title = ? WHERE id = ?',
+    [dateToUse, placeToUse, titleToUse, albumId]
+  );
+
+  // Automatically mark the host/creator as attending the event
+  const now = new Date().toISOString();
+  run(
+    'INSERT OR IGNORE INTO event_attendance (event_id, user_id, tagged_by, created_at) VALUES (?, ?, NULL, ?)',
+    [albumId, album.creator_id, now]
   );
 
   res.json({
     success: true,
     message: 'Album converted into Event successfully',
     albumId,
+    title: titleToUse,
     isEvent: true,
     eventDate: dateToUse,
     eventPlace: placeToUse,
   });
 });
 
-// Delete album / collection: Deletion is permanently disabled in this preview to protect memories
-albumsRouter.delete('/:id', (_req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and albums.' });
+// Delete album / collection: Protected in preview; active on Render
+albumsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
+  if (isDeleteProtected()) {
+    return res.status(403).json({
+      error: 'Deletion is protected in this AI Studio preview to safeguard live memories and albums. Delete is fully available on your Render deployment.',
+    });
+  }
+
+  const albumId = req.params.id;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
+  if (!album) return res.status(404).json({ error: 'Album not found' });
+  if (!isAdmin && album.creator_id !== userId) {
+    return res.status(403).json({ error: 'Only the creator or admin can delete this album' });
+  }
+
+  run('DELETE FROM item_groups WHERE item_type = "album" AND item_id = ?', [albumId]);
+  run('DELETE FROM event_attendance WHERE event_id = ?', [albumId]);
+  run('DELETE FROM event_notes WHERE event_id = ?', [albumId]);
+  run('DELETE FROM album_items WHERE album_id = ?', [albumId]);
+  run('DELETE FROM comments WHERE target_type = "album" AND target_id = ?', [albumId]);
+  run('DELETE FROM reactions WHERE target_type = "album" AND target_id = ?', [albumId]);
+  run('DELETE FROM albums WHERE id = ?', [albumId]);
+
+  res.json({ success: true, message: 'Album deleted successfully' });
 });
 

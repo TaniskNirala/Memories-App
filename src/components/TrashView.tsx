@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, RotateCcw, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { Trash2, RotateCcw, AlertTriangle, Image as ImageIcon, ShieldAlert } from 'lucide-react';
 
 export const TrashView: React.FC = () => {
   const [trashItems, setTrashItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDeleteProtected, setIsDeleteProtected] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((cfg) => {
+        if (typeof cfg.isDeleteProtected === 'boolean') {
+          setIsDeleteProtected(cfg.isDeleteProtected);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchTrash = async () => {
     setLoading(true);
@@ -60,9 +72,12 @@ export const TrashView: React.FC = () => {
         </span>
       </div>
 
-      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center gap-2">
-        <span>🔒 <strong>Protected Preview:</strong> Deletion and purging are disabled so no memories can be lost. You can restore any item anytime.</span>
-      </div>
+      {isDeleteProtected && (
+        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
+          <span><strong>Protected Preview:</strong> Permanent purging is locked in this preview to safeguard live memories. Delete is fully operational on Render.</span>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-12 text-xs text-[var(--text-muted)]">Loading trash...</div>

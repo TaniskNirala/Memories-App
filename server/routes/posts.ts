@@ -6,6 +6,7 @@ import multer from 'multer';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved, requireAdmin } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { isDeleteProtected } from '../config.ts';
 
 // Multer disk storage setup for reliable multipart file uploads
 const uploadsBaseDir = path.resolve(process.cwd(), 'uploads');
@@ -410,9 +411,47 @@ postsRouter.patch('/:id', (req: AuthenticatedRequest, res) => {
   res.json({ success: true });
 });
 
-// Delete post: Deletion is permanently disabled in this preview to protect memories
-postsRouter.delete('/:id', async (_req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and data.' });
+// Delete post: Protected in preview to preserve live memories; active on Render
+postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
+  if (isDeleteProtected()) {
+    return res.status(403).json({
+      error: 'Deletion is protected in this AI Studio preview to safeguard live memories. Delete is fully available on your Render deployment.',
+    });
+  }
+
+  const postId = req.params.id;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (!isAdmin && post.owner_id !== userId) {
+    return res.status(403).json({ error: 'Only the author or an admin can delete this post' });
+  }
+
+  const permanent = req.query.permanent === 'true' || req.body?.permanent === true;
+  if (permanent) {
+    const files = queryAll<any>('SELECT * FROM post_files WHERE post_id = ?', [postId]);
+    const storage = getStorageAdapter();
+    for (const f of files) {
+      try {
+        await storage.deleteObject(f.storage_key);
+        if (f.thumb_key && f.thumb_key !== f.storage_key) {
+          await storage.deleteObject(f.thumb_key);
+        }
+      } catch {}
+    }
+    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
+    run('DELETE FROM album_items WHERE post_id = ?', [postId]);
+    run('DELETE FROM post_files WHERE post_id = ?', [postId]);
+    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [postId]);
+    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [postId]);
+    run('DELETE FROM posts WHERE id = ?', [postId]);
+  } else {
+    run('UPDATE posts SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), postId]);
+  }
+
+  res.json({ success: true, message: permanent ? 'Post permanently deleted' : 'Moved to trash' });
 });
 
 // Update edited photo/file (crop/rotate)
@@ -579,9 +618,43 @@ postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// Delete single photo/file from a multi-photo post: Deletion is permanently disabled in this preview
-postsRouter.delete('/:id/files/:fileId', async (_req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and data.' });
+// Delete single photo/file from a multi-photo post: Protected in preview; active on Render
+postsRouter.delete('/:id/files/:fileId', async (req: AuthenticatedRequest, res) => {
+  if (isDeleteProtected()) {
+    return res.status(403).json({
+      error: 'Deletion is protected in this AI Studio preview to safeguard live memories. Delete is fully available on your Render deployment.',
+    });
+  }
+
+  const postId = req.params.id;
+  const fileId = req.params.fileId;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  if (!post) return res.status(404).json({ error: 'Post not found' });
+  if (!isAdmin && post.owner_id !== userId) {
+    return res.status(403).json({ error: 'Permission denied' });
+  }
+
+  const fileRecord = queryOne<any>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
+  if (!fileRecord) return res.status(404).json({ error: 'Photo not found in this post' });
+
+  const totalFiles = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM post_files WHERE post_id = ?', [postId]);
+  if ((totalFiles?.count || 0) <= 1) {
+    return res.status(400).json({ error: 'Cannot delete the only photo from a post; delete the whole post instead' });
+  }
+
+  const storage = getStorageAdapter();
+  try {
+    await storage.deleteObject(fileRecord.storage_key);
+    if (fileRecord.thumb_key && fileRecord.thumb_key !== fileRecord.storage_key) {
+      await storage.deleteObject(fileRecord.thumb_key);
+    }
+  } catch {}
+
+  run('DELETE FROM post_files WHERE id = ?', [fileId]);
+  res.json({ success: true, message: 'Photo deleted' });
 });
 
 // Restore post from trash
@@ -725,10 +798,21 @@ postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res)
     );
   }
 
-  // Also auto-attend creator
+  // Ensure placement in Everyone group if no existing placements
+  if (postPlacements.length === 0) {
+    const everyoneGroup = queryOne<any>('SELECT id FROM groups WHERE is_everyone = 1');
+    const gId = everyoneGroup?.id || '56896808-0e5c-4303-b413-98b0eb3ad540';
+    run(
+      `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+       VALUES (?, 'album', ?, ?, ?, 0, 'approved', ?)`,
+      [crypto.randomUUID(), albumId, gId, userId, now]
+    );
+  }
+
+  // Also auto-attend creator (event_attendance schema: event_id, user_id, tagged_by, created_at)
   run(
-    `INSERT OR IGNORE INTO event_attendance (event_id, user_id, status, joined_at)
-     VALUES (?, ?, 'attending', ?)`,
+    `INSERT OR IGNORE INTO event_attendance (event_id, user_id, tagged_by, created_at)
+     VALUES (?, ?, NULL, ?)`,
     [albumId, userId, now]
   );
 
@@ -908,63 +992,46 @@ postsRouter.post('/duplicates/keep-both', async (req: AuthenticatedRequest, res)
   });
 });
 
-// Convert a memory/album post into an Event collection
-postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res) => {
-  const { id } = req.params;
-  const { title, description, eventDate, eventPlace } = req.body;
+// Resolve duplicate photos: Protected in preview; active on Render
+postsRouter.post('/duplicates/resolve', async (req: AuthenticatedRequest, res) => {
+  if (isDeleteProtected()) {
+    return res.status(403).json({
+      error: 'Deletion is protected in this AI Studio preview to safeguard live memories. Delete is fully available on your Render deployment.',
+    });
+  }
+
+  const { fileId, postId } = req.body;
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [id]);
+  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
-    return res.status(403).json({ error: 'Only the memory owner or an admin can convert this' });
+    return res.status(403).json({ error: 'Permission denied' });
   }
 
-  const files = queryAll<any>('SELECT id FROM post_files WHERE post_id = ? ORDER BY position ASC', [id]);
-  const albumId = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const eventTitle = title?.trim() || post.caption?.trim() || 'Event Memories';
-  const dateToUse = eventDate || post.taken_at || now.slice(0, 10);
+  const fileRecord = queryOne<any>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
+  if (!fileRecord) return res.status(404).json({ error: 'Photo not found' });
 
-  // Create event album
-  run(
-    `INSERT INTO albums (id, title, description, creator_id, is_event, event_date, event_place, status, created_at)
-     VALUES (?, ?, ?, ?, 1, ?, ?, 'approved', ?)`,
-    [albumId, eventTitle, description?.trim() || post.caption || '', userId, dateToUse, eventPlace?.trim() || null, now]
-  );
+  const totalFiles = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM post_files WHERE post_id = ?', [postId]);
+  const storage = getStorageAdapter();
 
-  // Link photos to this event album
-  for (let i = 0; i < files.length; i++) {
-    run(
-      `INSERT INTO album_items (id, album_id, post_id, added_by, position, added_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [crypto.randomUUID(), albumId, id, userId, i, now]
-    );
+  try {
+    await storage.deleteObject(fileRecord.storage_key);
+    if (fileRecord.thumb_key && fileRecord.thumb_key !== fileRecord.storage_key) {
+      await storage.deleteObject(fileRecord.thumb_key);
+    }
+  } catch {}
+
+  if ((totalFiles?.count || 0) <= 1) {
+    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
+    run('DELETE FROM album_items WHERE post_id = ?', [postId]);
+    run('DELETE FROM post_files WHERE post_id = ?', [postId]);
+    run('DELETE FROM posts WHERE id = ?', [postId]);
+  } else {
+    run('DELETE FROM post_files WHERE id = ?', [fileId]);
   }
 
-  // Copy post group placements to album item_groups
-  const postPlacements = queryAll<any>(
-    'SELECT group_id FROM item_groups WHERE item_type = "post" AND item_id = ?',
-    [id]
-  );
-  for (const p of postPlacements) {
-    run(
-      `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
-       VALUES (?, 'album', ?, ?, ?, 0, 'approved', ?)`,
-      [crypto.randomUUID(), albumId, p.group_id, userId, now]
-    );
-  }
-
-  res.json({
-    success: true,
-    message: 'Memory converted into Event collection',
-    albumId,
-  });
-});
-
-// Resolve duplicate photos: Deletion is permanently disabled in this preview to protect memories
-postsRouter.post('/duplicates/resolve', async (_req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your memories and data.' });
+  res.json({ success: true, message: 'Duplicate photo resolved' });
 });
 

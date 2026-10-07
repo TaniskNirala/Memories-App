@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { StorageAdapter, SignedUploadUrlResult } from './types.ts';
+import { isPreviewEnvironment } from '../config.ts';
 
 const SIGNING_SECRET = process.env.STORAGE_SIGNING_SECRET || 'kinfolk-local-secret-key-32chars!!';
 
@@ -77,8 +78,14 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
   }
 
   async deleteObject(storageKey: string): Promise<void> {
-    // Protected from deletion: files are preserved in this preview to prevent data loss
-    console.log(`[Storage Protection] File deletion blocked for: ${storageKey}`);
+    if (isPreviewEnvironment()) {
+      console.log(`[Storage Protection] File deletion blocked in preview for: ${storageKey}`);
+      return;
+    }
+    const filePath = this.getFilePath(storageKey);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
   }
 
   async putObject(storageKey: string, data: Buffer, _contentType: string): Promise<void> {

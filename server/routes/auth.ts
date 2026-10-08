@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts } from '../middleware/auth.ts';
+import { getStorageAdapter } from '../storage/index.ts';
 
 export const authRouter = Router();
 
@@ -223,6 +224,79 @@ authRouter.post('/logout', (req: AuthenticatedRequest, res) => {
   }
   res.clearCookie('kinfolk_session', { path: '/' });
   res.json({ success: true });
+});
+
+// Delete own account
+authRouter.delete('/account', async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  const userId = req.user.id;
+  // If user is admin, check if they are the only admin
+  if (req.user.role === 'admin') {
+    const adminCount = queryOne<{ count: number }>(
+      'SELECT COUNT(*) as count FROM users WHERE role = "admin" AND id != ? AND status = "active"',
+      [userId]
+    );
+    if (!adminCount || adminCount.count === 0) {
+      return res.status(400).json({ error: 'Cannot delete the only administrator account.' });
+    }
+  }
+
+  // Delete user media files and records
+  const userPosts = queryAll<any>('SELECT id FROM posts WHERE owner_id = ?', [userId]);
+  const storage = getStorageAdapter();
+  for (const p of userPosts) {
+    const files = queryAll<any>('SELECT storage_key, thumb_key FROM post_files WHERE post_id = ?', [p.id]);
+    for (const f of files) {
+      try {
+        await storage.deleteObject(f.storage_key);
+        if (f.thumb_key && f.thumb_key !== f.storage_key) {
+          await storage.deleteObject(f.thumb_key);
+        }
+      } catch {}
+    }
+    run('DELETE FROM post_files WHERE post_id = ?', [p.id]);
+    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [p.id]);
+    run('DELETE FROM album_items WHERE post_id = ?', [p.id]);
+    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [p.id]);
+    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [p.id]);
+  }
+  run('DELETE FROM posts WHERE owner_id = ?', [userId]);
+
+  const userAlbums = queryAll<any>('SELECT id FROM albums WHERE creator_id = ?', [userId]);
+  for (const a of userAlbums) {
+    run('DELETE FROM album_items WHERE album_id = ?', [a.id]);
+    run('DELETE FROM item_groups WHERE item_type = "album" AND item_id = ?', [a.id]);
+    run('DELETE FROM event_attendance WHERE event_id = ?', [a.id]);
+    run('DELETE FROM event_notes WHERE event_id = ?', [a.id]);
+    run('DELETE FROM comments WHERE target_type = "album" AND target_id = ?', [a.id]);
+  }
+  run('DELETE FROM albums WHERE creator_id = ?', [userId]);
+
+  const userGroups = queryAll<any>('SELECT id FROM groups WHERE creator_id = ? AND is_everyone = 0', [userId]);
+  for (const g of userGroups) {
+    run('DELETE FROM group_members WHERE group_id = ?', [g.id]);
+    run('DELETE FROM item_groups WHERE group_id = ?', [g.id]);
+    run('DELETE FROM comments WHERE group_id = ?', [g.id]);
+    run('DELETE FROM reactions WHERE group_id = ?', [g.id]);
+    run('DELETE FROM groups WHERE id = ?', [g.id]);
+  }
+
+  run('DELETE FROM group_members WHERE user_id = ?', [userId]);
+  run('DELETE FROM event_attendance WHERE user_id = ?', [userId]);
+  run('DELETE FROM event_notes WHERE author_id = ?', [userId]);
+  run('DELETE FROM comments WHERE author_id = ?', [userId]);
+  run('DELETE FROM reactions WHERE user_id = ?', [userId]);
+  run('DELETE FROM notifications WHERE user_id = ?', [userId]);
+  run('DELETE FROM sessions WHERE user_id = ?', [userId]);
+  run('DELETE FROM password_resets WHERE user_id = ?', [userId]);
+  run('DELETE FROM login_attempts WHERE username = ?', [req.user.username]);
+  run('DELETE FROM users WHERE id = ?', [userId]);
+
+  res.clearCookie('kinfolk_session', { path: '/' });
+  return res.json({ success: true, message: 'Your account has been deleted' });
 });
 
 // Current user

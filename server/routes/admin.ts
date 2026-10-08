@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
+import { getStorageAdapter } from '../storage/index.ts';
 
 export const adminRouter = Router();
 
@@ -170,6 +171,91 @@ adminRouter.post('/toggle-suspend/:id', (req: AuthenticatedRequest, res) => {
   );
 
   res.json({ success: true, status: newStatus });
+});
+
+// Permanently delete user account and associated data
+adminRouter.delete('/users/:id', async (req: AuthenticatedRequest, res) => {
+  const targetId = req.params.id;
+  const adminId = req.user!.id;
+
+  if (targetId === adminId) {
+    return res.status(400).json({ error: 'Cannot delete your own admin account' });
+  }
+
+  const target = queryOne<any>('SELECT * FROM users WHERE id = ?', [targetId]);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+
+  // 1. Delete user's media files from disk/storage
+  const userPosts = queryAll<any>('SELECT id FROM posts WHERE owner_id = ?', [targetId]);
+  const storage = getStorageAdapter();
+  for (const p of userPosts) {
+    const files = queryAll<any>('SELECT storage_key, thumb_key FROM post_files WHERE post_id = ?', [p.id]);
+    for (const f of files) {
+      try {
+        await storage.deleteObject(f.storage_key);
+        if (f.thumb_key && f.thumb_key !== f.storage_key) {
+          await storage.deleteObject(f.thumb_key);
+        }
+      } catch {}
+    }
+    run('DELETE FROM post_files WHERE post_id = ?', [p.id]);
+    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [p.id]);
+    run('DELETE FROM album_items WHERE post_id = ?', [p.id]);
+    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [p.id]);
+    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [p.id]);
+  }
+  run('DELETE FROM posts WHERE owner_id = ?', [targetId]);
+
+  // 2. Delete albums/events created by this user
+  const userAlbums = queryAll<any>('SELECT id FROM albums WHERE creator_id = ?', [targetId]);
+  for (const a of userAlbums) {
+    run('DELETE FROM album_items WHERE album_id = ?', [a.id]);
+    run('DELETE FROM item_groups WHERE item_type = "album" AND item_id = ?', [a.id]);
+    run('DELETE FROM event_attendance WHERE event_id = ?', [a.id]);
+    run('DELETE FROM event_notes WHERE event_id = ?', [a.id]);
+    run('DELETE FROM comments WHERE target_type = "album" AND target_id = ?', [a.id]);
+  }
+  run('DELETE FROM albums WHERE creator_id = ?', [targetId]);
+
+  // 3. Delete custom circles created by this user
+  const userGroups = queryAll<any>('SELECT id FROM groups WHERE creator_id = ? AND is_everyone = 0', [targetId]);
+  for (const g of userGroups) {
+    run('DELETE FROM group_members WHERE group_id = ?', [g.id]);
+    run('DELETE FROM item_groups WHERE group_id = ?', [g.id]);
+    run('DELETE FROM comments WHERE group_id = ?', [g.id]);
+    run('DELETE FROM reactions WHERE group_id = ?', [g.id]);
+    run('DELETE FROM groups WHERE id = ?', [g.id]);
+  }
+
+  // 4. Remove user from memberships, event attendance, notes, comments, sessions
+  run('DELETE FROM group_members WHERE user_id = ?', [targetId]);
+  run('DELETE FROM event_attendance WHERE user_id = ?', [targetId]);
+  run('DELETE FROM event_notes WHERE author_id = ?', [targetId]);
+  run('DELETE FROM comments WHERE author_id = ?', [targetId]);
+  run('DELETE FROM reactions WHERE user_id = ?', [targetId]);
+  run('DELETE FROM notifications WHERE user_id = ?', [targetId]);
+  run('DELETE FROM sessions WHERE user_id = ?', [targetId]);
+  run('DELETE FROM password_resets WHERE user_id = ?', [targetId]);
+  run('DELETE FROM login_attempts WHERE username = ?', [target.username]);
+
+  // 5. Delete user record
+  run('DELETE FROM users WHERE id = ?', [targetId]);
+
+  // 6. Audit log
+  run(
+    'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, details, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [
+      crypto.randomUUID(),
+      adminId,
+      'user_deleted',
+      'user',
+      targetId,
+      `Permanently deleted user @${target.username} (${target.display_name})`,
+      new Date().toISOString(),
+    ]
+  );
+
+  res.json({ success: true, message: `User @${target.username} deleted permanently` });
 });
 
 // 3. Generate one-time password reset link

@@ -13,13 +13,16 @@ import {
   CheckCheck,
   Sparkles,
   CheckCircle2,
+  Trash2,
+  Users,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
 
 export const AdminPanel: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'signups' | 'users' | 'proposals' | 'reports' | 'audit'>('signups');
+  const [activeTab, setActiveTab] = useState<'signups' | 'users' | 'circles' | 'proposals' | 'reports' | 'audit'>('signups');
 
   // If user is not an admin, do not render or fetch anything
   if (!isAdmin || user?.role !== 'admin') {
@@ -28,11 +31,19 @@ export const AdminPanel: React.FC = () => {
 
   const [pendingSignups, setPendingSignups] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [circles, setCircles] = useState<any[]>([]);
   const [proposals, setProposals] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionToast, setActionToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // In-app deletion states
+  const [userToDelete, setUserToDelete] = useState<{ id: string; username: string; display_name: string } | null>(null);
+  const [deleteUserLoading, setDeleteUserLoading] = useState(false);
+
+  const [circleToDelete, setCircleToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deleteCircleLoading, setDeleteCircleLoading] = useState(false);
 
   // Generated reset link modal
   const [generatedLink, setGeneratedLink] = useState<{ username: string; link: string } | null>(null);
@@ -61,6 +72,16 @@ export const AdminPanel: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
+      }
+    } catch (e) {}
+  };
+
+  const fetchCircles = async () => {
+    try {
+      const res = await apiFetch('/api/groups');
+      if (res.ok) {
+        const data = await res.json();
+        setCircles(data.groups || []);
       }
     } catch (e) {}
   };
@@ -98,10 +119,52 @@ export const AdminPanel: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'signups') fetchSignups();
     if (activeTab === 'users') fetchUsers();
+    if (activeTab === 'circles') fetchCircles();
     if (activeTab === 'proposals') fetchProposals();
     if (activeTab === 'reports') fetchReports();
     if (activeTab === 'audit') fetchAuditLogs();
   }, [activeTab]);
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setDeleteUserLoading(true);
+    try {
+      const res = await apiFetch(`/api/admin/users/${userToDelete.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setActionToast({ message: `User @${userToDelete.username} deleted permanently`, type: 'success' });
+        setUserToDelete(null);
+        fetchUsers();
+        fetchSignups();
+      } else {
+        setActionToast({ message: data.error || 'Failed to delete user', type: 'error' });
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Failed to delete user', type: 'error' });
+    } finally {
+      setDeleteUserLoading(false);
+    }
+  };
+
+  const handleDeleteCircle = async () => {
+    if (!circleToDelete) return;
+    setDeleteCircleLoading(true);
+    try {
+      const res = await apiFetch(`/api/groups/${circleToDelete.id}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setActionToast({ message: `Circle "${circleToDelete.name}" deleted permanently`, type: 'success' });
+        setCircleToDelete(null);
+        fetchCircles();
+      } else {
+        setActionToast({ message: data.error || 'Failed to delete circle', type: 'error' });
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Failed to delete circle', type: 'error' });
+    } finally {
+      setDeleteCircleLoading(false);
+    }
+  };
 
   const handleApproveUser = async (userId: string, username?: string) => {
     try {
@@ -254,7 +317,18 @@ export const AdminPanel: React.FC = () => {
               : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
           }`}
         >
-          User Directory
+          User Directory ({users.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('circles')}
+          className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
+            activeTab === 'circles'
+              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+          }`}
+        >
+          Circles ({circles.length})
         </button>
 
         <button
@@ -465,9 +539,73 @@ export const AdminPanel: React.FC = () => {
                     )}
                   </button>
                 )}
+
+                {/* Delete User Button (Any user other than yourself) */}
+                {u.id !== user?.id && (
+                  <button
+                    onClick={() => setUserToDelete(u)}
+                    title={`Permanently delete user @${u.username}`}
+                    className="px-2.5 py-1 text-xs rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-400 hover:text-white transition flex items-center gap-1 font-semibold"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Delete</span>
+                  </button>
+                )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Tab: Circles Management */}
+      {activeTab === 'circles' && (
+        <div className="space-y-3">
+          {circles.length === 0 ? (
+            <div className="p-8 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)]">
+              No circles found.
+            </div>
+          ) : (
+            circles.map((c) => (
+              <div
+                key={c.id}
+                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs playful-card"
+              >
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-[var(--text-primary)] text-sm">{c.name}</span>
+                    {c.isEveryone ? (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold font-mono">
+                        Everyone (Default)
+                      </span>
+                    ) : (
+                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold font-mono">
+                        Custom Circle
+                      </span>
+                    )}
+                  </div>
+                  {c.description && (
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{c.description}</p>
+                  )}
+                  <span className="text-[10px] text-[var(--text-muted)] mt-1 block">
+                    {c.memberCount || c.members?.length || 0} members
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {!c.isEveryone && (
+                    <button
+                      onClick={() => setCircleToDelete(c)}
+                      title={`Permanently delete circle "${c.name}"`}
+                      className="px-3 py-1.5 text-xs rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-400 hover:text-white transition flex items-center gap-1.5 font-semibold"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Circle</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       )}
 
@@ -569,6 +707,98 @@ export const AdminPanel: React.FC = () => {
                 className="px-4 py-2 text-xs text-[var(--text-secondary)]"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteUserLoading) setUserToDelete(null);
+          }}
+        >
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+            <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Delete User Account</span>
+            </div>
+
+            <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+              <p>
+                Are you sure you want to permanently delete user <strong>@{userToDelete.username}</strong> ({userToDelete.display_name})?
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                This will completely remove this user's account, their uploaded memories, posts, memberships, and active sessions. This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteUserLoading}
+                onClick={() => setUserToDelete(null)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteUserLoading}
+                onClick={handleDeleteUser}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+              >
+                {deleteUserLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{deleteUserLoading ? 'Deleting...' : 'Yes, Delete User'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Circle Confirmation Modal */}
+      {circleToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteCircleLoading) setCircleToDelete(null);
+          }}
+        >
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+            <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Delete Circle</span>
+            </div>
+
+            <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+              <p>
+                Are you sure you want to permanently delete circle <strong>"{circleToDelete.name}"</strong>?
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                Shared memories will remain safe with their owners. Only this circle channel and its membership will be removed.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteCircleLoading}
+                onClick={() => setCircleToDelete(null)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteCircleLoading}
+                onClick={handleDeleteCircle}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+              >
+                {deleteCircleLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{deleteCircleLoading ? 'Deleting...' : 'Yes, Delete Circle'}</span>
               </button>
             </div>
           </div>

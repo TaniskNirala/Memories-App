@@ -31,7 +31,6 @@ const __dirname = path.dirname(__filename);
 
 export async function createApp() {
   await getDb();
-  await seedDatabase(false);
 
   const app = express();
 

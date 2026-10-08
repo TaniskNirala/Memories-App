@@ -284,7 +284,32 @@ groupsRouter.delete('/:id/members/:targetUserId', (req: AuthenticatedRequest, re
   res.json({ success: true });
 });
 
-// Delete group: Deletion is permanently disabled in this preview to protect circles
-groupsRouter.delete('/:id', (_req: AuthenticatedRequest, res) => {
-  return res.status(403).json({ error: 'Deletion is disabled in this preview to protect your circles and data.' });
+// Delete circle (creator or admin, cannot delete Everyone)
+groupsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
+  const groupId = req.params.id;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+
+  const group = queryOne<{ id: string; creator_id: string; is_everyone: number; name: string }>(
+    'SELECT * FROM groups WHERE id = ?',
+    [groupId]
+  );
+
+  if (!group) return res.status(404).json({ error: 'Circle not found' });
+  if (group.is_everyone) return res.status(400).json({ error: 'The Everyone circle cannot be deleted' });
+  if (!isAdmin && group.creator_id !== userId) {
+    return res.status(403).json({ error: 'Only the circle creator or an admin can delete this circle' });
+  }
+
+  // Remove placements for this circle (memories themselves remain safe with their owners)
+  run('DELETE FROM item_groups WHERE group_id = ?', [groupId]);
+  // Remove circle members
+  run('DELETE FROM group_members WHERE group_id = ?', [groupId]);
+  // Remove comments & reactions scoped to this circle
+  run('DELETE FROM comments WHERE group_id = ?', [groupId]);
+  run('DELETE FROM reactions WHERE group_id = ?', [groupId]);
+  // Delete the group record
+  run('DELETE FROM groups WHERE id = ?', [groupId]);
+
+  return res.json({ success: true, message: `Circle "${group.name}" deleted successfully` });
 });

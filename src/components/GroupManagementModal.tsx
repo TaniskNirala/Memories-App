@@ -288,9 +288,27 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                 >
                   <div className="flex items-center justify-between">
                     <span className="truncate">{g.name}</span>
-                    {g.isEveryone && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-500 font-mono px-1 rounded">ALL</span>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {g.isEveryone ? (
+                        <span className="text-[9px] bg-amber-500/20 text-amber-500 font-mono px-1 rounded">ALL</span>
+                      ) : (
+                        (isAdmin || g.canManage || g.creatorId === user?.id) && (
+                          <span
+                            role="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedGroup(g);
+                              setDeleteError(null);
+                              setShowDeleteModal(true);
+                            }}
+                            title={`Delete ${g.name}`}
+                            className="p-1 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/15 rounded transition"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </span>
+                        )
+                      )}
+                    </div>
                   </div>
                   <span className="text-[10px] text-[var(--text-muted)] mt-0.5">
                     {g.members?.length || g.memberCount} members
@@ -390,10 +408,11 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                           setDeleteError(null);
                           setShowDeleteModal(true);
                         }}
-                        className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/15 transition"
+                        className="px-2.5 py-1 text-xs rounded-xl text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-600 transition flex items-center gap-1 font-semibold"
                         title="Delete Circle"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Circle</span>
                       </button>
                     )}
 

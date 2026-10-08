@@ -81,13 +81,13 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
   }
 
   async deleteObject(storageKey: string): Promise<void> {
-    if (isPreviewEnvironment()) {
-      console.log(`[Storage Protection] File deletion blocked in preview for: ${storageKey}`);
-      return;
-    }
     const filePath = this.getFilePath(storageKey);
     if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.warn(`Failed to unlink file ${filePath}:`, err);
+      }
     }
   }
 

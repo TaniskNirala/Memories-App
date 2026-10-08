@@ -22,13 +22,17 @@ import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DuplicateCleanerModal } from './components/DuplicateCleanerModal.tsx';
 import { FeedItem, Group, NotificationItem } from './types/index.ts';
-import { RefreshCw, Upload } from 'lucide-react';
+import { RefreshCw, Upload, Trash2, AlertTriangle, Users } from 'lucide-react';
 
 const MainContent: React.FC = () => {
   const { user, loading, isPending, isAdmin } = useAuth();
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash'>('feed');
+
+  // Circle deletion modal state
+  const [circleToDelete, setCircleToDelete] = useState<Group | null>(null);
+  const [deleteCircleLoading, setDeleteCircleLoading] = useState(false);
 
   // Guard against non-admin users ever accessing or lingering on admin tab
   useEffect(() => {
@@ -268,6 +272,26 @@ const MainContent: React.FC = () => {
       window.removeEventListener('drop', handleWindowDrop);
     };
   }, [user, isPending]);
+
+  const handleDeleteCircle = async () => {
+    if (!circleToDelete) return;
+    setDeleteCircleLoading(true);
+    try {
+      const res = await apiFetch(`/api/groups/${circleToDelete.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        if (selectedGroupId === circleToDelete.id) {
+          setSelectedGroupId(undefined);
+        }
+        setCircleToDelete(null);
+        fetchGroups();
+        fetchFeed(true);
+      }
+    } catch (e) {
+      console.error('Failed to delete circle', e);
+    } finally {
+      setDeleteCircleLoading(false);
+    }
+  };
 
   const selectedGroup = groups.find((g) => g.id === selectedGroupId);
 
@@ -632,29 +656,73 @@ const MainContent: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {groups.map((g) => (
-                  <div
-                    key={g.id}
-                    onClick={() => {
-                      setSelectedGroupId(g.id);
-                      setCurrentTab('feed');
-                    }}
-                    className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] cursor-pointer hover:border-amber-500 transition"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className="font-display font-bold text-sm text-[var(--text-primary)]">{g.name}</h3>
-                      {g.isEveryone && (
-                        <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-mono px-1 rounded">ALL</span>
-                      )}
+                {groups.map((g) => {
+                  const canDelete = !g.isEveryone && (isAdmin || g.canManage || g.creatorId === user?.id);
+                  return (
+                    <div
+                      key={g.id}
+                      className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-amber-500/40 transition flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <h3
+                            onClick={() => {
+                              setSelectedGroupId(g.id);
+                              setCurrentTab('feed');
+                            }}
+                            className="font-display font-bold text-sm text-[var(--text-primary)] hover:underline cursor-pointer"
+                          >
+                            {g.name}
+                          </h3>
+                          <div className="flex items-center gap-1.5">
+                            {g.isEveryone ? (
+                              <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-mono px-1 rounded">ALL</span>
+                            ) : (
+                              canDelete && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCircleToDelete(g);
+                                  }}
+                                  title={`Delete circle "${g.name}"`}
+                                  className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/15 transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </div>
+                        {g.description && (
+                          <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-2">{g.description}</p>
+                        )}
+                        <span className="text-[11px] text-[var(--text-muted)]">
+                          {g.members?.length || g.memberCount} approved members
+                        </span>
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedGroupId(g.id);
+                            setCurrentTab('feed');
+                          }}
+                          className="text-xs text-amber-500 hover:underline font-semibold"
+                        >
+                          View Feed →
+                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => setCircleToDelete(g)}
+                            className="text-xs text-rose-400 hover:underline flex items-center gap-1 font-medium"
+                          >
+                            <Trash2 className="w-3 h-3" /> Delete Circle
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {g.description && (
-                      <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-2">{g.description}</p>
-                    )}
-                    <span className="text-[11px] text-[var(--text-muted)]">
-                      {g.members?.length || g.memberCount} approved members
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -816,6 +884,52 @@ const MainContent: React.FC = () => {
         onClose={() => setIsDuplicatesModalOpen(false)}
         onDuplicatesResolved={() => fetchFeed(true)}
       />
+
+      {/* Circle Deletion Modal */}
+      {circleToDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteCircleLoading) setCircleToDelete(null);
+          }}
+        >
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+            <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Delete Circle</span>
+            </div>
+
+            <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+              <p>
+                Are you sure you want to permanently delete circle <strong>"{circleToDelete.name}"</strong>?
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                Shared photos and memories will remain safely with their respective owners. Only this circle and its membership channel will be removed.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteCircleLoading}
+                onClick={() => setCircleToDelete(null)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteCircleLoading}
+                onClick={handleDeleteCircle}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+              >
+                {deleteCircleLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{deleteCircleLoading ? 'Deleting...' : 'Yes, Delete Circle'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <OfflineIndicator />
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Bell, LogOut, CheckCircle2, Copy } from 'lucide-react';
+import { Moon, Sun, Bell, LogOut, CheckCircle2, Copy, Trash2, AlertTriangle, RefreshCw, ChevronDown } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
@@ -20,6 +20,28 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteOwnAccount = async () => {
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const res = await apiFetch('/api/auth/account', { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        window.location.reload();
+      } else {
+        setDeleteError(data.error || 'Failed to delete account');
+      }
+    } catch (e: any) {
+      setDeleteError(e.message || 'Failed to delete account');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const fetchNotifications = async () => {
     if (!user || isPending) return;
@@ -83,20 +105,57 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
 
         {/* Right Controls: User Badge & Light/Dark mode */}
         <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* Current User Badge */}
+          {/* Current User Badge & Menu */}
           {user && !isPending && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)] text-xs">
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase shrink-0"
-                style={{ backgroundColor: user.avatarColor || '#f59e0b' }}
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu((prev) => !prev)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-xs transition cursor-pointer select-none"
               >
-                {user.displayName?.charAt(0) || user.username?.charAt(0)}
-              </div>
-              <span className="font-semibold text-[var(--text-primary)]">{user.displayName || user.username}</span>
-              {user.role === 'admin' && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 font-bold uppercase tracking-wider">
-                  Admin
-                </span>
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase shrink-0"
+                  style={{ backgroundColor: user.avatarColor || '#f59e0b' }}
+                >
+                  {user.displayName?.charAt(0) || user.username?.charAt(0)}
+                </div>
+                <span className="font-semibold text-[var(--text-primary)]">{user.displayName || user.username}</span>
+                {user.role === 'admin' && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 font-bold uppercase tracking-wider">
+                    Admin
+                  </span>
+                )}
+                <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" />
+              </button>
+
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 p-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl z-50 text-xs animate-in fade-in duration-100">
+                  <div className="px-3 py-2 border-b border-[var(--border-subtle)] mb-1">
+                    <p className="font-bold text-[var(--text-primary)] truncate">{user.displayName}</p>
+                    <p className="text-[10px] text-[var(--text-muted)] font-mono truncate">@{user.username}</p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      setShowDeleteModal(true);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 font-medium transition cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete My Account</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      logout();
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] flex items-center gap-2 font-medium transition cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -217,6 +276,58 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
           <PWAInstallButton />
         </div>
       </div>
+
+      {/* Delete Own Account Modal */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleteLoading) setShowDeleteModal(false);
+          }}
+        >
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+            <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Delete My Account</span>
+            </div>
+
+            <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+              <p>
+                Are you sure you want to permanently delete your account (<strong>@{user?.username}</strong>)?
+              </p>
+              <p className="text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
+                All your uploaded memories, albums, comments, and circle memberships will be completely removed. This action cannot be undone.
+              </p>
+            </div>
+
+            {deleteError && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-xl font-medium">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleteLoading}
+                onClick={() => setShowDeleteModal(false)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleteLoading}
+                onClick={handleDeleteOwnAccount}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+              >
+                {deleteLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{deleteLoading ? 'Deleting...' : 'Yes, Delete My Account'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

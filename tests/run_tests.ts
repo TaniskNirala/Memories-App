@@ -1,6 +1,9 @@
 import { createApp } from '../server.ts';
 import { queryOne, run } from '../server/db.ts';
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import bcrypt from 'bcryptjs';
 
 interface TestResult {
   name: string;
@@ -27,6 +30,12 @@ async function runTests() {
   process.env.NODE_ENV = 'test';
   console.log('--- Starting Kinfolk Memories Automated Tests ---');
 
+  const dbFile = path.resolve(process.cwd(), 'data/kinfolk.sqlite');
+  const backupFile = path.resolve(process.cwd(), 'data/kinfolk.sqlite.test_backup');
+  if (fs.existsSync(dbFile)) {
+    fs.copyFileSync(dbFile, backupFile);
+  }
+
   const app = await createApp();
   const server = http.createServer(app);
 
@@ -39,6 +48,80 @@ async function runTests() {
   console.log(`Test server running at ${baseUrl}`);
 
   try {
+    // Seed isolated test fixtures in test runner
+    const now = new Date().toISOString();
+    const secretHash = await bcrypt.hash('secret123', 10);
+    const adminHash = await bcrypt.hash('admin123', 10);
+
+    const testUsers = [
+      { id: 'u-elena', username: 'elena', pass: secretHash, name: 'Elena Rostova', role: 'pending', color: '#10b981' },
+      { id: 'u-maya', username: 'maya', pass: secretHash, name: 'Maya Lin', role: 'member', color: '#3b82f6' },
+      { id: 'u-leo', username: 'leo', pass: secretHash, name: 'Leo Torres', role: 'member', color: '#8b5cf6' },
+      { id: 'u-sam', username: 'sam', pass: secretHash, name: 'Sam Rivera', role: 'member', color: '#ec4899' },
+      { id: 'u-admin', username: 'admin', pass: adminHash, name: 'Jordan Admin', role: 'admin', color: '#f59e0b' },
+    ];
+
+    for (const u of testUsers) {
+      run(
+        `INSERT OR REPLACE INTO users (id, username, password_hash, display_name, role, status, avatar_color, created_at)
+         VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`,
+        [u.id, u.username, u.pass, u.name, u.role, u.color, now]
+      );
+    }
+
+    const gHikersId = 'g-weekend-hikers';
+    const gRecipeId = 'g-recipe-club';
+
+    run(
+      `INSERT OR REPLACE INTO groups (id, name, description, creator_id, is_everyone, created_at)
+       VALUES (?, 'Weekend Hikers', 'Hiking trails and summits', 'u-maya', 0, ?)`,
+      [gHikersId, now]
+    );
+    run(
+      `INSERT OR REPLACE INTO groups (id, name, description, creator_id, is_everyone, created_at)
+       VALUES (?, 'Recipe Club', 'Cooking experiments and favorites', 'u-sam', 0, ?)`,
+      [gRecipeId, now]
+    );
+
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-maya', ?)`, [gHikersId, now]);
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-leo', ?)`, [gHikersId, now]);
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-sam', ?)`, [gRecipeId, now]);
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-leo', ?)`, [gRecipeId, now]);
+
+    const samPostId = 'p-sam-private';
+    run(
+      `INSERT OR REPLACE INTO posts (id, owner_id, caption, taken_at, uploaded_at, date_basis, is_standalone, deleted_at, created_at)
+       VALUES (?, 'u-sam', 'Sam Private Post', ?, ?, 'taken_at', 1, NULL, ?)`,
+      [samPostId, now, now, now]
+    );
+    run(`DELETE FROM item_groups WHERE item_id = ?`, [samPostId]);
+
+    const mayaPostId = 'p-maya-hike';
+    run(
+      `INSERT OR REPLACE INTO posts (id, owner_id, caption, taken_at, uploaded_at, date_basis, is_standalone, deleted_at, created_at)
+       VALUES (?, 'u-maya', 'Trail Summit Hike', ?, ?, 'taken_at', 1, NULL, ?)`,
+      [mayaPostId, now, now, now]
+    );
+    run(
+      `INSERT OR REPLACE INTO post_files (id, post_id, storage_key, file_type, position, thumb_key, file_size, mime_type, width, height)
+       VALUES ('pf-maya-1', ?, 'posts/u-maya/trail.jpg', 'photo', 0, 'posts/u-maya/trail.jpg', 12345, 'image/jpeg', 1200, 800)`,
+      [mayaPostId]
+    );
+    run(
+      `INSERT OR REPLACE INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+       VALUES ('ig-hike-wknd', 'post', ?, ?, 'u-maya', 0, 'approved', ?)`,
+      [mayaPostId, gHikersId, now]
+    );
+    run(
+      `INSERT OR REPLACE INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
+       VALUES ('ig-hike-ref-recipe', 'post', ?, ?, 'u-leo', 1, 'pending_owner_approval', ?)`,
+      [mayaPostId, gRecipeId, now]
+    );
+    run(
+      `INSERT OR REPLACE INTO comments (id, target_type, target_id, group_id, author_id, text, created_at)
+       VALUES ('c-hiker-1', 'post', ?, ?, 'u-leo', 'Great hike on the trail!', ?)`,
+      [mayaPostId, gHikersId, now]
+    );
     // -------------------------------------------------------------
     // Test Case 1: Pending users see nothing
     // -------------------------------------------------------------
@@ -257,9 +340,20 @@ async function runTests() {
 
     server.closeAllConnections?.();
     server.close();
+
+    // Always restore the user's database from backup so NO test data ever remains!
+    if (fs.existsSync(backupFile)) {
+      fs.copyFileSync(backupFile, dbFile);
+      fs.unlinkSync(backupFile);
+    }
+
     process.exit(allPassed ? 0 : 1);
   } catch (err) {
     console.error('Fatal test error:', err);
+    if (fs.existsSync(backupFile)) {
+      fs.copyFileSync(backupFile, dbFile);
+      fs.unlinkSync(backupFile);
+    }
     server.close();
     process.exit(1);
   }

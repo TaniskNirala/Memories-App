@@ -1,85 +1,10 @@
 import initSqlJs, { Database, SqlValue } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
-import { createClient, type Client } from '@libsql/client';
 
 let dbInstance: Database | null = null;
-let tursoClient: Client | null = null;
 const DB_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'kinfolk.sqlite');
-
-const TURSO_TABLES = [
-  'users',
-  'sessions',
-  'password_resets',
-  'login_attempts',
-  'groups',
-  'group_members',
-  'posts',
-  'post_files',
-  'albums',
-  'album_items',
-  'item_groups',
-  'event_attendance',
-  'event_notes',
-  'comments',
-  'reactions',
-  'mentions',
-  'notifications',
-  'reports',
-  'audit_log',
-];
-
-export function getTursoClient(): Client | null {
-  if (tursoClient) return tursoClient;
-  const url = process.env.TURSO_DATABASE_URL;
-  const authToken = process.env.TURSO_AUTH_TOKEN;
-  if (url && authToken) {
-    tursoClient = createClient({ url, authToken });
-  }
-  return tursoClient;
-}
-
-export async function syncToTurso(sql: string, params: SqlValue[] = []): Promise<void> {
-  const client = getTursoClient();
-  if (!client) return;
-  try {
-    await client.execute({ sql, args: params as any });
-  } catch (err: any) {
-    console.error('Turso cloud sync warning:', err.message);
-  }
-}
-
-async function pullFromTurso(db: Database): Promise<void> {
-  const client = getTursoClient();
-  if (!client) return;
-  try {
-    console.log('🔄 Checking Turso cloud database for existing records...');
-    const check = await client.execute('SELECT count(*) as count FROM users');
-    const count = Number(check.rows[0]?.count || 0);
-    if (count > 0) {
-      console.log(`📥 Restoring from Turso cloud (${count} users found)...`);
-      for (const table of TURSO_TABLES) {
-        try {
-          const res = await client.execute(`SELECT * FROM ${table}`);
-          if (res.rows && res.rows.length > 0) {
-            for (const row of res.rows) {
-              const keys = Object.keys(row);
-              const placeholders = keys.map(() => '?').join(', ');
-              const values = keys.map((k) => row[k]);
-              db.run(`INSERT OR REPLACE INTO ${table} (${keys.join(', ')}) VALUES (${placeholders})`, values as SqlValue[]);
-            }
-          }
-        } catch {
-          // Table might be empty or uncreated yet
-        }
-      }
-      console.log('✅ Local cache fully synced from Turso cloud database!');
-    }
-  } catch (err: any) {
-    console.log('Turso cloud sync status:', err.message);
-  }
-}
 
 export async function getDb(): Promise<Database> {
   if (dbInstance) return dbInstance;
@@ -105,10 +30,6 @@ export async function getDb(): Promise<Database> {
 
   dbInstance = currentDb;
   initSchema(currentDb);
-
-  if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-    await pullFromTurso(currentDb);
-  }
 
   saveDb();
   return currentDb;
@@ -146,7 +67,6 @@ export function run(sql: string, params: SqlValue[] = []): void {
   if (!dbInstance) throw new Error('Database not initialized');
   dbInstance.run(sql, params);
   saveDb();
-  syncToTurso(sql, params);
 }
 
 function initSchema(db: Database) {

@@ -11,7 +11,6 @@
     "lint": "tsc --noEmit",
     "test": "tsx tests/run_tests.ts",
     "seed": "tsx scripts/seed.ts",
-    "turso:push": "tsx scripts/turso-push.ts",
     "start": "tsx server.ts"
   },
   "dependencies": {

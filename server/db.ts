@@ -1,76 +1,99 @@
-import initSqlJs, { Database, SqlValue } from 'sql.js';
+import Database from 'libsql';
 import fs from 'fs';
 import path from 'path';
 
-let dbInstance: Database | null = null;
-const DB_DIR = path.resolve(process.cwd(), 'data');
-const DB_FILE = path.join(DB_DIR, 'kinfolk.sqlite');
+let dbInstance: any = null;
+const DB_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
+const DB_FILE = process.env.DB_PATH || path.join(DB_DIR, 'kinfolk.sqlite');
+let isTursoSynced = false;
 
-export async function getDb(): Promise<Database> {
+export async function getDb(): Promise<any> {
   if (dbInstance) return dbInstance;
 
-  if (!fs.existsSync(DB_DIR)) {
-    fs.mkdirSync(DB_DIR, { recursive: true });
+  const targetDir = path.dirname(DB_FILE);
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  const SQL = await (initSqlJs as unknown as () => Promise<any>)();
+  const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
+  const tursoToken = process.env.TURSO_AUTH_TOKEN?.trim();
 
-  let currentDb: Database;
-  if (fs.existsSync(DB_FILE)) {
+  if (tursoUrl && tursoToken) {
+    console.log(`🔌 Connecting to Turso Database at ${tursoUrl}...`);
     try {
-      const fileBuffer = fs.readFileSync(DB_FILE);
-      currentDb = new SQL.Database(fileBuffer);
-    } catch (e) {
-      console.error('Failed to read existing DB file, creating fresh one', e);
-      currentDb = new SQL.Database();
+      dbInstance = new Database(DB_FILE, {
+        syncUrl: tursoUrl,
+        authToken: tursoToken,
+        readYourWrites: true,
+      });
+      isTursoSynced = true;
+      try {
+        dbInstance.sync();
+        console.log('✅ Successfully connected and synced with Turso cloud!');
+      } catch (syncErr: any) {
+        console.warn('⚠️ Initial Turso sync notice:', syncErr.message || syncErr);
+      }
+    } catch (err: any) {
+      console.error('❌ Failed to connect to Turso with syncUrl, falling back to local SQLite:', err.message || err);
+      dbInstance = new Database(DB_FILE);
+      isTursoSynced = false;
     }
   } else {
-    currentDb = new SQL.Database();
+    console.log(`📂 Using local SQLite database at ${DB_FILE}`);
+    dbInstance = new Database(DB_FILE);
+    isTursoSynced = false;
   }
 
-  dbInstance = currentDb;
-  initSchema(currentDb);
-
-  saveDb();
-  return currentDb;
+  initSchema(dbInstance);
+  return dbInstance;
 }
 
 export function saveDb(): void {
-  if (!dbInstance) return;
-  try {
-    const data = dbInstance.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(DB_FILE, buffer);
-  } catch (err) {
-    console.error('Failed to persist SQLite DB to disk:', err);
+  if (dbInstance && isTursoSynced) {
+    try {
+      dbInstance.sync();
+    } catch {
+      // Periodic sync will catch up
+    }
   }
 }
 
-export function queryAll<T = any>(sql: string, params: SqlValue[] = []): T[] {
+function cleanRow<T = any>(row: any): T {
+  if (!row || typeof row !== 'object') return row;
+  if ('_metadata' in row) {
+    const { _metadata, ...clean } = row;
+    return clean as T;
+  }
+  return row as T;
+}
+
+export function queryAll<T = any>(sql: string, params: any[] = []): T[] {
   if (!dbInstance) throw new Error('Database not initialized');
   const stmt = dbInstance.prepare(sql);
-  stmt.bind(params);
-  const rows: T[] = [];
-  while (stmt.step()) {
-    rows.push(stmt.getAsObject() as unknown as T);
-  }
-  stmt.free();
-  return rows;
+  const rows = params.length > 0 ? stmt.all(...params) : stmt.all();
+  return rows.map((r: any) => cleanRow<T>(r));
 }
 
-export function queryOne<T = any>(sql: string, params: SqlValue[] = []): T | null {
-  const rows = queryAll<T>(sql, params);
-  return rows.length > 0 ? rows[0] : null;
-}
-
-export function run(sql: string, params: SqlValue[] = []): void {
+export function queryOne<T = any>(sql: string, params: any[] = []): T | null {
   if (!dbInstance) throw new Error('Database not initialized');
-  dbInstance.run(sql, params);
+  const stmt = dbInstance.prepare(sql);
+  const row = params.length > 0 ? stmt.get(...params) : stmt.get();
+  return row ? cleanRow<T>(row) : null;
+}
+
+export function run(sql: string, params: any[] = []): void {
+  if (!dbInstance) throw new Error('Database not initialized');
+  const stmt = dbInstance.prepare(sql);
+  if (params.length > 0) {
+    stmt.run(...params);
+  } else {
+    stmt.run();
+  }
   saveDb();
 }
 
-function initSchema(db: Database) {
-  db.run(`
+function initSchema(db: any) {
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
@@ -296,6 +319,6 @@ function initSchema(db: Database) {
   `);
 
   try {
-    db.run('ALTER TABLE post_files ADD COLUMN checksum TEXT');
+    db.exec('ALTER TABLE post_files ADD COLUMN checksum TEXT');
   } catch {}
 }

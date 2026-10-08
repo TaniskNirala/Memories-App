@@ -159,7 +159,20 @@ export class S3StorageAdapter implements StorageAdapter {
   }
 
   async deleteObject(storageKey: string): Promise<void> {
-    // Protected from deletion: preserve all objects in preview
-    console.log(`[Storage Protection] S3 file deletion blocked for: ${storageKey}`);
+    if (isPreviewEnvironment()) {
+      console.log(`[Storage Protection] S3 file deletion blocked for: ${storageKey}`);
+      return;
+    }
+    const key = this.cleanKey(storageKey);
+    try {
+      const command = new DeleteObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+      });
+      await this.client.send(command);
+      console.log(`✅ Deleted S3/Backblaze B2 object: ${key}`);
+    } catch (err: any) {
+      console.error(`⚠️ Failed to delete S3/Backblaze object ${key}:`, err.message || err);
+    }
   }
 }

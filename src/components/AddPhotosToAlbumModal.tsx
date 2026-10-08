@@ -414,7 +414,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
             </div>
             <div>
               <h3 className="font-display font-bold text-sm sm:text-base text-[var(--text-primary)]">
-                Add Photos to Album
+                Add Photos to Event
               </h3>
               <p className="text-[11px] text-[var(--text-muted)] line-clamp-1">
                 Adding to: <span className="font-semibold text-[var(--accent-coral)]">{targetTitle}</span>
@@ -506,7 +506,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
                     {isDragOver ? 'Drop photos to add!' : 'Drag & drop photos here, or click to browse'}
                   </p>
                   <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                    Ultra-HD 4K quality preserved • Direct addition to this album
+                    Ultra-HD 4K quality preserved • Direct addition to this event
                   </p>
                 </div>
               </div>
@@ -564,7 +564,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
               {isProcessing && (
                 <div className="space-y-1.5 pt-2">
                   <div className="flex justify-between text-[11px] text-[var(--text-muted)] font-mono">
-                    <span>Optimizing and uploading to album...</span>
+                    <span>Optimizing and uploading to event...</span>
                     <span>{uploadProgress}%</span>
                   </div>
                   <div className="w-full h-2 rounded-full bg-[var(--bg-surface-elevated)] overflow-hidden">
@@ -654,12 +654,12 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
               {isProcessing ? (
                 <>
                   <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  <span>Uploading to Album...</span>
+                  <span>Uploading to Event...</span>
                 </>
               ) : (
                 <>
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add {queue.length > 0 ? `${queue.length} Photos` : 'to Album'}</span>
+                  <span>Add {queue.length > 0 ? `${queue.length} Photos` : 'to Event'}</span>
                 </>
               )}
             </button>

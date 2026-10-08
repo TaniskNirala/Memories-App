@@ -122,6 +122,10 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
     }
   };
 
+  const handleClearAllCircles = () => {
+    setSelectedGroupIds([]);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setToast(null);
@@ -248,37 +252,53 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
             <span className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider block mb-1.5">
               Quick Audience Presets
             </span>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-3 gap-2 text-xs">
               <button
                 type="button"
                 onClick={handleSelectEveryone}
-                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition ${
+                className={`p-2 rounded-xl border text-left flex flex-col justify-between transition ${
                   isEveryoneSelected
                     ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 font-semibold'
                     : 'bg-[#1e1e38] border-[#2b2b52] text-neutral-300 hover:border-neutral-500'
                 }`}
               >
-                <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
-                <div>
-                  <span className="block font-semibold">Everyone Circle</span>
-                  <span className="text-[10px] text-neutral-400 block">All close friends</span>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="font-semibold text-[11px]">Everyone</span>
                 </div>
+                <span className="text-[10px] text-neutral-400 block">Close family & friends</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleSelectAllCircles}
-                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition ${
+                className={`p-2 rounded-xl border text-left flex flex-col justify-between transition ${
                   selectedGroupIds.length === availableGroups.length && availableGroups.length > 0
                     ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-semibold'
                     : 'bg-[#1e1e38] border-[#2b2b52] text-neutral-300 hover:border-neutral-500'
                 }`}
               >
-                <Users className="w-4 h-4 text-amber-400 shrink-0" />
-                <div>
-                  <span className="block font-semibold">All Circles</span>
-                  <span className="text-[10px] text-neutral-400 block">Select all groups</span>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="font-semibold text-[11px]">All Circles</span>
                 </div>
+                <span className="text-[10px] text-neutral-400 block">Select all circles</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearAllCircles}
+                className={`p-2 rounded-xl border text-left flex flex-col justify-between transition ${
+                  selectedGroupIds.length === 0
+                    ? 'bg-sky-500/20 border-sky-400 text-sky-300 font-semibold shadow-xs'
+                    : 'bg-[#1e1e38] border-[#2b2b52] text-neutral-300 hover:border-neutral-500'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Lock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                  <span className="font-semibold text-[11px]">Personal Only</span>
+                </div>
+                <span className="text-[10px] text-neutral-400 block">Remove from circles</span>
               </button>
             </div>
           </div>
@@ -326,8 +346,8 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs font-semibold">{g.name}</span>
                             {g.isEveryone ? (
-                              <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 font-bold">
-                                Auto
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-medium">
+                                Family Circle
                               </span>
                             ) : null}
                           </div>

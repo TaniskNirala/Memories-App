@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, MapPin, Users, Plus, Check, Trash2, Eye, EyeOff, Sparkles } from 'lucide-react';
-import { EventAttendee, EventNote } from '../types/index.ts';
+import { X, Calendar, MapPin, Users, Plus, Check, Trash2, Eye, EyeOff, Sparkles, Shield, AlertTriangle } from 'lucide-react';
+import { EventAttendee, EventNote, Group, FeedItem } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
+import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 
 interface CollectionDetailModalProps {
   collectionId: string | null;
@@ -10,6 +11,8 @@ interface CollectionDetailModalProps {
   onClose: () => void;
   onSelectPhoto: (postId: string) => void;
   onUpdated?: () => void;
+  groups?: Group[];
+  onDeleteAlbum?: (albumId: string, permanent?: boolean) => Promise<void>;
 }
 
 export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
@@ -18,6 +21,8 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   onClose,
   onSelectPhoto,
   onUpdated,
+  groups = [],
+  onDeleteAlbum,
 }) => {
   const { user, isAdmin } = useAuth();
   const [collection, setCollection] = useState<any>(null);
@@ -26,6 +31,9 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isAddPhotosOpen, setIsAddPhotosOpen] = useState(false);
+  const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Attendance
   const [attendees, setAttendees] = useState<EventAttendee[]>([]);
@@ -217,7 +225,28 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   };
 
   const isUserAttending = attendees.some((a) => a.userId === user?.id);
-  const isHost = collection?.creator.id === user?.id || isAdmin;
+  const isHost = collection?.creator?.id === user?.id || collection?.creator_id === user?.id || isAdmin;
+
+  const handleDeleteEvent = async (permanent: boolean = false) => {
+    if (!collectionId) return;
+    setIsDeleting(true);
+    try {
+      if (onDeleteAlbum) {
+        await onDeleteAlbum(collectionId, permanent);
+      } else {
+        await apiFetch(`/api/albums/${collectionId}${permanent ? '?permanent=true' : ''}`, {
+          method: 'DELETE',
+        });
+      }
+      setShowDeleteConfirm(false);
+      onClose();
+      if (onUpdated) onUpdated();
+    } catch (err) {
+      console.error('Failed to delete event:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
@@ -230,7 +259,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                 Event
               </span>
               <span className="text-xs text-[var(--text-muted)] font-mono">
-                {collection?.itemCount || 0} photos
+                {collection?.itemCount || items.length || 0} photos
               </span>
             </div>
             <h2 className="font-display font-bold text-lg sm:text-xl text-[var(--text-primary)]">
@@ -258,6 +287,28 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {isHost && (
+              <button
+                onClick={() => setIsPermissionsOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+                title="Adjust circles & viewing permissions"
+              >
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Permissions</span>
+              </button>
+            )}
+
+            {isHost && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 hover:text-rose-300 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+                title="Delete this event"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+            )}
+
             {!collection?.isEvent && isHost && (
               <button
                 onClick={() => setShowConvertToEvent((prev) => !prev)}
@@ -286,7 +337,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  <span>Convert Album into an Interactive Event</span>
+                  <span>Upgrade to Interactive Event</span>
                 </div>
                 <button
                   type="button"
@@ -297,7 +348,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                 </button>
               </div>
               <p className="text-[11px] text-neutral-300 leading-relaxed">
-                Transform this album into an event to unlock guest attendee tagging and a shared board for guest notes and memories.
+                Unlock guest attendee tagging and a shared board for guest notes and memories.
               </p>
               <div>
                 <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
@@ -461,7 +512,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                   className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-90 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Photos to Album</span>
+                  <span>Add Photos to Event</span>
                 </button>
               )}
             </div>
@@ -479,9 +530,19 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       const target = e.currentTarget;
-                      if (!target.dataset.triedFallback && (item.thumbKey || item.storageKey)) {
-                        target.dataset.triedFallback = 'true';
-                        target.src = `/api/storage/view?key=${encodeURIComponent(item.thumbKey || item.storageKey)}`;
+                      const stage = target.dataset.fallbackStage || '0';
+                      const key = item.thumbKey || item.storageKey;
+                      if (stage === '0' && key) {
+                        target.dataset.fallbackStage = '1';
+                        target.src = `/api/storage/view?key=${encodeURIComponent(key)}`;
+                      } else if (stage === '1' && key) {
+                        target.dataset.fallbackStage = '2';
+                        const clean = key.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
+                        target.src = `/uploads/${clean}`;
+                      } else if (stage !== '3') {
+                        target.dataset.fallbackStage = '3';
+                        target.src =
+                          'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="100%" height="100%" fill="%23181829"/><circle cx="200" cy="180" r="30" fill="%23f59e0b" opacity="0.2"/><path d="M180 200 L200 160 L220 200 Z" fill="%23f59e0b" opacity="0.8"/><circle cx="220" cy="160" r="6" fill="%23f43f5e" opacity="0.8"/></svg>';
                       }
                     }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
@@ -576,7 +637,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         </div>
       </div>
 
-      {/* Add Photos to Album Modal */}
+      {/* Add Photos to Event Modal */}
       {isAddPhotosOpen && collectionId && (
         <AddPhotosToAlbumModal
           isOpen={isAddPhotosOpen}
@@ -591,6 +652,77 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
             fetchCollection();
           }}
         />
+      )}
+
+      {/* Viewing Permissions Modal for Event */}
+      {isPermissionsOpen && collection && (
+        <ViewingPermissionsModal
+          item={{
+            type: 'collection_card',
+            id: collection.id,
+            title: collection.title,
+            description: collection.description,
+            isEvent: Boolean(collection.isEvent),
+            eventDate: collection.eventDate,
+            eventPlace: collection.eventPlace,
+            sortDate: collection.eventDate || collection.created_at,
+            itemCount: items.length,
+            mosaicUrls: [],
+            creator: {
+              id: collection.creator?.id || collection.creator_id || '',
+              username: collection.creator?.username || '',
+              displayName: collection.creator?.displayName || collection.creator?.username || 'Host',
+              avatarColor: collection.creator?.avatarColor || '#f59e0b',
+            },
+            attendeesCount: attendees.length,
+            userAttended: isUserAttending,
+            placements: collection.placements || [],
+          } as FeedItem}
+          isOpen={isPermissionsOpen}
+          onClose={() => setIsPermissionsOpen(false)}
+          groups={groups}
+          onPermissionsUpdated={() => {
+            fetchCollection();
+            if (onUpdated) onUpdated();
+          }}
+        />
+      )}
+
+      {/* Delete Event Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-[var(--bg-card)] border border-rose-500/30 rounded-3xl p-5 text-center shadow-2xl space-y-4 playful-card">
+            <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-500 flex items-center justify-center mx-auto shadow-sm">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-display font-bold text-base text-[var(--text-primary)]">
+                Delete "{collection?.title || 'Event'}"?
+              </h4>
+              <p className="text-xs text-[var(--text-muted)] mt-1.5 leading-relaxed">
+                Are you sure you want to delete this event? Memories inside will remain safely in your personal library.
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="flex-1 py-2 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-xs font-semibold text-[var(--text-secondary)] border border-[var(--border-color)] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteEvent(true)}
+                disabled={isDeleting}
+                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-semibold text-white shadow-md transition disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Event'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

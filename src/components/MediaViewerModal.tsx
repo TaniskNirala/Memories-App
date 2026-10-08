@@ -370,7 +370,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               {hasMultiplePhotos && (
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1">
                   <Images className="w-3 h-3" />
-                  {files.length} Photos Album
+                  {files.length} Event Photos
                 </span>
               )}
             </div>
@@ -393,7 +393,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 title="View All Photos as Grid"
               >
                 <Grid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Album Grid</span>
+                <span className="hidden sm:inline">Photo Grid</span>
               </button>
 
               <button
@@ -411,12 +411,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             </div>
           )}
 
-          {/* Add More Photos to Album */}
+          {/* Add More Photos to Event */}
           {(canDelete || isAdmin || item.owner?.id === user?.id) && (
             <button
               onClick={() => setIsAddPhotosModalOpen(true)}
               className="px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-rose-500/20 border border-amber-500/30 text-amber-300 hover:text-white hover:border-amber-400 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
-              title="Add More Photos to this Album"
+              title="Add More Photos to this Event"
             >
               <Plus className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">Add Photos</span>
@@ -643,7 +643,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   </h2>
                 ) : (
                   <h2 className="font-display font-bold text-lg sm:text-xl text-neutral-300 italic">
-                    Shared Memories Album
+                    Event Photos
                   </h2>
                 )}
                 <div className="flex items-center gap-3 text-xs text-neutral-400 mt-1">
@@ -787,7 +787,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   <span className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
                     Add Photos
                   </span>
-                  <span className="text-[10px] text-neutral-400 mt-0.5">to this album</span>
+                  <span className="text-[10px] text-neutral-400 mt-0.5">to this event</span>
                 </div>
               )}
             </div>

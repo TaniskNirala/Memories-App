@@ -939,10 +939,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       >
                         <span className="text-xs font-bold flex items-center gap-1.5 text-white">
                           <Layers className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Grouped Album</span>
+                          <span>Grouped Event Story</span>
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)] leading-tight">
-                          1 memory with collage & full album grid
+                          1 memory with collage & photo grid
                         </span>
                       </button>
 
@@ -1100,6 +1100,31 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <p className="text-[11px] text-[var(--text-muted)] mb-2">
               Select which friend circles can see this memory. Leave unselected to keep as a private memory only you can see.
             </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const ev = groups.find((g) => g.isEveryone);
+                  if (ev) {
+                    setSelectedGroupIds((prev) =>
+                      prev.includes(ev.id) ? prev.filter((id) => id !== ev.id) : [...prev, ev.id]
+                    );
+                  }
+                }}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] font-medium transition"
+              >
+                {selectedGroupIds.some((id) => groups.find((g) => g.id === id)?.isEveryone)
+                  ? 'Remove "Everyone"'
+                  : '+ "Everyone" Circle'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedGroupIds([])}
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-amber-400 font-medium transition"
+              >
+                Keep Private (Only Me)
+              </button>
+            </div>
             <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1">
               {groups.map((g) => {
                 const selected = selectedGroupIds.includes(g.id);

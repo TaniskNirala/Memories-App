@@ -19,6 +19,7 @@ import {
   MapPin,
   ShieldAlert,
   SlidersHorizontal,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
@@ -58,9 +59,18 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>, storageKey?: string) => {
     const target = e.currentTarget;
-    if (!target.dataset.triedFallback && storageKey) {
-      target.dataset.triedFallback = 'true';
+    const stage = target.dataset.fallbackStage || '0';
+    if (stage === '0' && storageKey) {
+      target.dataset.fallbackStage = '1';
       target.src = `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
+    } else if (stage === '1' && storageKey) {
+      target.dataset.fallbackStage = '2';
+      const clean = storageKey.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
+      target.src = `/uploads/${clean}`;
+    } else if (stage !== '3') {
+      target.dataset.fallbackStage = '3';
+      target.src =
+        'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"><rect width="100%" height="100%" fill="%23181829"/><circle cx="400" cy="270" r="45" fill="%23f59e0b" opacity="0.2"/><path d="M370 295 L400 245 L430 295 Z" fill="%23f59e0b" opacity="0.8"/><circle cx="430" cy="245" r="9" fill="%23f43f5e" opacity="0.8"/></svg>';
     }
   };
 
@@ -319,6 +329,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   const [eventPlace, setEventPlace] = useState('');
   const [convertingLoading, setConvertingLoading] = useState(false);
   const [permissionsItem, setPermissionsItem] = useState<FeedItem | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Delete protection capability
   const [isDeleteProtected, setIsDeleteProtected] = useState(true);
@@ -464,6 +475,13 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
 
   const handleRemoveFromCircle = async (item: FeedItem, groupId: string) => {
     const placement = item.placements?.find((p) => p.groupId === groupId);
+    const circleName = placement?.groupName || groups.find((g) => g.id === groupId)?.name || 'circle';
+
+    // Optimistically update placement list locally
+    if (item.placements) {
+      item.placements = item.placements.filter((p) => p.groupId !== groupId);
+    }
+
     try {
       let res;
       if (placement && placement.id) {
@@ -476,11 +494,22 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
           body: JSON.stringify({ itemId: item.id, itemType, groupId }),
         });
       }
-      if (res && res.ok && onMemoryUpdated) {
-        onMemoryUpdated();
+
+      if (res && res.ok) {
+        setToastMessage(`Removed from "${circleName}"`);
+        setTimeout(() => setToastMessage(null), 3000);
+        if (onMemoryUpdated) {
+          onMemoryUpdated();
+        }
+      } else {
+        const errData = await res?.json().catch(() => ({}));
+        setToastMessage(errData?.error || `Failed to remove from "${circleName}"`);
+        setTimeout(() => setToastMessage(null), 3000);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to remove from circle', e);
+      setToastMessage('Error removing from circle');
+      setTimeout(() => setToastMessage(null), 3000);
     }
   };
 
@@ -527,6 +556,14 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
 
   return (
     <div className="relative pl-6 sm:pl-8 py-2">
+      {/* Floating Action Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-black/90 border border-amber-500/40 text-amber-300 text-xs font-semibold shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
       {/* Continuous vertical timeline rail line */}
       <div className="absolute left-2.5 sm:left-3 top-6 bottom-4 w-0.5 bg-[var(--border-color)] opacity-80" />
 
@@ -739,7 +776,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                                   className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-400 transition flex items-center gap-2 cursor-pointer"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
-                                  <span>{item.type === 'collection_card' ? 'Delete Album' : 'Delete Memory'}</span>
+                                  <span>{item.type === 'collection_card' ? 'Delete Event' : 'Delete Memory'}</span>
                                 </button>
                               )
                             )}
@@ -856,14 +893,14 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                               onClick={() => onOpenCollection(item.id)}
                               className="px-3 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium transition cursor-pointer"
                             >
-                              Open
+                              View Event
                             </button>
 
                             {!item.isEvent && (
                               <button
                                 onClick={() => onOpenCollection(item.id)}
                                 className="px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/15 to-rose-500/15 hover:from-amber-500/25 hover:to-rose-500/25 border border-amber-500/30 text-amber-300 font-medium transition flex items-center gap-1 cursor-pointer text-xs"
-                                title="Convert this album into an interactive event"
+                                title="Convert into an interactive event"
                               >
                                 <Sparkles className="w-3 h-3 text-amber-400" />
                                 <span>Convert to Event</span>

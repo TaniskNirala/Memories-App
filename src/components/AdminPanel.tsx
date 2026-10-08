@@ -336,7 +336,7 @@ export const AdminPanel: React.FC = () => {
         <div className="space-y-3">
           {proposals.length === 0 ? (
             <div className="p-8 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)]">
-              No pending album/event proposals from members.
+              No pending event proposals from members.
             </div>
           ) : (
             proposals.map((p) => (
@@ -347,7 +347,7 @@ export const AdminPanel: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-[11px] text-amber-500 font-semibold uppercase">
-                      {p.is_event ? 'Event Proposal' : 'Album Proposal'}
+                      Event Proposal
                     </span>
                     <span className="text-[11px] text-[var(--text-muted)]">
                       Proposed by @{p.creator_username}

@@ -43,8 +43,18 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
         onClick={() => onOpenCollection(item.id)}
         className="w-full rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] overflow-hidden cursor-pointer hover:border-[var(--accent-coral)]/40 transition-all playful-card mb-4 group"
       >
-        {/* Cover Mosaic (up to 4 thumbnails) */}
-        <div className="aspect-16/9 w-full bg-[var(--bg-surface)] grid grid-cols-2 gap-0.5 overflow-hidden">
+        {/* Cover Mosaic (dynamic layout based on photo count) */}
+        <div
+          className={`aspect-16/9 w-full bg-[var(--bg-surface)] overflow-hidden relative ${
+            !item.mosaicUrls || item.mosaicUrls.length <= 1
+              ? 'flex'
+              : item.mosaicUrls.length === 2
+              ? 'grid grid-cols-2 gap-0.5'
+              : item.mosaicUrls.length === 3
+              ? 'grid grid-cols-3 gap-0.5'
+              : 'grid grid-cols-2 gap-0.5'
+          }`}
+        >
           {item.mosaicUrls && item.mosaicUrls.length > 0 ? (
             item.mosaicUrls.slice(0, 4).map((url, idx) => (
               <div key={idx} className="relative w-full h-full overflow-hidden bg-neutral-900">
@@ -54,10 +64,15 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
+                {idx === 3 && item.itemCount > 4 && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center font-bold text-white text-xs">
+                    +{item.itemCount - 3}
+                  </div>
+                )}
               </div>
             ))
           ) : (
-            <div className="col-span-2 flex items-center justify-center text-[var(--text-muted)] text-xs">
+            <div className="w-full h-full flex items-center justify-center text-[var(--text-muted)] text-xs">
               <Layers className="w-8 h-8 opacity-40 mb-1" />
             </div>
           )}

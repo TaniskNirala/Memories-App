@@ -58,7 +58,13 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
   let albumSql = `
     SELECT DISTINCT a.*, u.username as creator_username, u.display_name as creator_display_name, u.avatar_color as creator_avatar_color,
       COALESCE(a.event_date, a.created_at) as sort_date,
-      (SELECT COUNT(*) FROM album_items ai WHERE ai.album_id = a.id) as item_count
+      COALESCE((
+        SELECT COUNT(pf.id)
+        FROM album_items ai
+        JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
+        JOIN post_files pf ON pf.post_id = p.id
+        WHERE ai.album_id = a.id
+      ), (SELECT COUNT(*) FROM album_items ai WHERE ai.album_id = a.id), 0) as item_count
     FROM albums a
     JOIN users u ON a.creator_id = u.id
     LEFT JOIN item_groups ig ON ig.item_type = 'album' AND ig.item_id = a.id
@@ -237,14 +243,14 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
   // Format collection cards
   const formattedAlbums = await Promise.all(
     albums.map(async (alb) => {
-      // Cover mosaic (up to 4 thumbnails)
+      // Cover mosaic (up to 4 thumbnails across all posts in the album)
       const topThumbnails = queryAll<any>(
         `SELECT pf.thumb_key, pf.storage_key
          FROM album_items ai
          JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
-         JOIN post_files pf ON pf.post_id = p.id AND pf.position = 0
+         JOIN post_files pf ON pf.post_id = p.id
          WHERE ai.album_id = ?
-         ORDER BY ai.position ASC LIMIT 4`,
+         ORDER BY ai.position ASC, pf.position ASC LIMIT 4`,
         [alb.id]
       );
 

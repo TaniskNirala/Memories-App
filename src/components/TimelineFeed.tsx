@@ -838,17 +838,25 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                         {item.type === 'single_post' ? (
                           <PostCollage item={item} onOpenViewer={onOpenViewer} />
                         ) : (
-                          /* Collection 2x2 cover mosaic grid */
+                          /* Collection cover collage / mosaic grid */
                           <div
                             onClick={() => onOpenCollection(item.id)}
-                            className="grid grid-cols-2 gap-1.5 w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden cursor-pointer mb-3 bg-neutral-950"
+                            className={`w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden cursor-pointer mb-3 bg-neutral-950 border border-[var(--border-color)] relative ${
+                              !item.mosaicUrls || item.mosaicUrls.length <= 1
+                                ? 'flex'
+                                : item.mosaicUrls.length === 2
+                                ? 'grid grid-cols-2 gap-1.5'
+                                : item.mosaicUrls.length === 3
+                                ? 'grid grid-cols-3 gap-1.5'
+                                : 'grid grid-cols-2 gap-1.5'
+                            }`}
                           >
                             {item.mosaicUrls && item.mosaicUrls.length > 0 ? (
                               item.mosaicUrls.slice(0, 4).map((mUrl, idx) => (
-                                <div key={idx} className="relative w-full h-full overflow-hidden bg-neutral-900">
+                                <div key={idx} className="relative w-full h-full overflow-hidden bg-neutral-900 group/mosaic">
                                   <img
                                     src={mUrl}
-                                    alt={`Preview ${idx}`}
+                                    alt={`Preview ${idx + 1}`}
                                     referrerPolicy="no-referrer"
                                     onError={(e) => {
                                       const target = e.currentTarget;
@@ -860,14 +868,25 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                                         } catch {}
                                       }
                                     }}
-                                    className="w-full h-full object-cover hover:scale-105 transition-transform"
+                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                                   />
+                                  {idx === 3 && item.itemCount > 4 && (
+                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center font-bold text-white text-xs sm:text-sm">
+                                      +{item.itemCount - 3} photos
+                                    </div>
+                                  )}
                                 </div>
                               ))
                             ) : (
-                              <div className="col-span-2 flex items-center justify-center text-xs text-[var(--text-muted)]">
+                              <div className="w-full h-full flex items-center justify-center text-xs text-[var(--text-muted)]">
                                 <Calendar className="w-6 h-6 mr-1" />
                                 <span>Event Preview</span>
+                              </div>
+                            )}
+                            {item.itemCount > 1 && item.mosaicUrls && item.mosaicUrls.length === 1 && (
+                              <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md text-[11px] font-semibold text-white border border-white/10 flex items-center gap-1 shadow-md">
+                                <Images className="w-3.5 h-3.5 text-amber-400" />
+                                <span>{item.itemCount} Photos</span>
                               </div>
                             )}
                           </div>

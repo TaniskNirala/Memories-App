@@ -825,16 +825,16 @@ const MainContent: React.FC = () => {
         onUpdated={() => fetchFeed(true)}
         groups={groups}
         onDeleteAlbum={handleDeleteAlbum}
-        onSelectPhoto={(postId) => {
+        onSelectPhoto={(postId, fileIndex = 0) => {
           const found = feedItems.find((i) => i.id === postId);
           if (found) {
-            handleOpenViewer(found, 0, 'expanded');
+            handleOpenViewer(found, fileIndex, 'expanded');
           } else {
             apiFetch(`/api/posts/${postId}`)
               .then((r) => r.json())
               .then((data) => {
                 if (data.post) {
-                  handleOpenViewer({ type: 'single_post', ...data.post }, 0, 'expanded');
+                  handleOpenViewer({ type: 'single_post', ...data.post }, fileIndex, 'expanded');
                 }
               });
           }

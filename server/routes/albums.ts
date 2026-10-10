@@ -186,7 +186,14 @@ albumsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
 
   if (!album) return res.status(404).json({ error: 'Album not found' });
 
-  const itemCount = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM album_items WHERE album_id = ?', [albumId]);
+  const itemCount = queryOne<{ count: number }>(
+    `SELECT COUNT(pf.id) as count
+     FROM album_items ai
+     JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
+     JOIN post_files pf ON pf.post_id = p.id
+     WHERE ai.album_id = ?`,
+    [albumId]
+  );
 
   res.json({
     album: {
@@ -221,12 +228,13 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
   }
 
   const items = queryAll<any>(
-    `SELECT ai.position, p.id as post_id, p.caption, p.taken_at, p.uploaded_at, pf.storage_key, pf.thumb_key, pf.file_type, pf.width, pf.height
+    `SELECT ai.position, p.id as post_id, pf.id as file_id, pf.position as file_position,
+            p.caption, p.taken_at, p.uploaded_at, pf.storage_key, pf.thumb_key, pf.file_type, pf.width, pf.height
      FROM album_items ai
      JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
-     JOIN post_files pf ON pf.post_id = p.id AND pf.position = 0
+     JOIN post_files pf ON pf.post_id = p.id
      WHERE ai.album_id = ?
-     ORDER BY ai.position ASC, p.taken_at ASC
+     ORDER BY ai.position ASC, pf.position ASC, p.taken_at ASC
      LIMIT ? OFFSET ?`,
     [albumId, limit, offset]
   );
@@ -234,7 +242,10 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
   const storage = getStorageAdapter();
   const loadedItems = await Promise.all(
     items.map(async (item) => ({
+      id: `${item.post_id}_${item.file_id || item.file_position || 0}`,
       postId: item.post_id,
+      fileId: item.file_id,
+      filePosition: item.file_position || 0,
       caption: item.caption,
       takenAt: item.taken_at,
       fileType: item.file_type,
@@ -248,7 +259,11 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
   );
 
   const totalCount = queryOne<{ count: number }>(
-    `SELECT COUNT(*) as count FROM album_items ai JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL WHERE ai.album_id = ?`,
+    `SELECT COUNT(*) as count
+     FROM album_items ai
+     JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
+     JOIN post_files pf ON pf.post_id = p.id
+     WHERE ai.album_id = ?`,
     [albumId]
   );
 
@@ -289,11 +304,11 @@ albumsRouter.post('/:id/items', async (req: AuthenticatedRequest, res) => {
     let addedCount = 0;
     for (let i = 0; i < postIds.length; i++) {
       const pId = postIds[i];
-      const existing = queryOne('SELECT id FROM album_items WHERE album_id = ? AND post_id = ?', [albumId, pId]);
+      const existing = queryOne('SELECT post_id FROM album_items WHERE album_id = ? AND post_id = ?', [albumId, pId]);
       if (!existing) {
         run(
-          'INSERT INTO album_items (id, album_id, post_id, position, added_at) VALUES (?, ?, ?, ?, ?)',
-          [crypto.randomUUID(), albumId, pId, startPos + addedCount, now]
+          'INSERT INTO album_items (album_id, post_id, position, added_at) VALUES (?, ?, ?, ?)',
+          [albumId, pId, startPos + addedCount, now]
         );
         addedCount++;
       }

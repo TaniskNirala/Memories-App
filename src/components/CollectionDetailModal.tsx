@@ -9,7 +9,7 @@ interface CollectionDetailModalProps {
   collectionId: string | null;
   isOpen: boolean;
   onClose: () => void;
-  onSelectPhoto: (postId: string) => void;
+  onSelectPhoto: (postId: string, initialIndex?: number) => void;
   onUpdated?: () => void;
   groups?: Group[];
   onDeleteAlbum?: (albumId: string, permanent?: boolean) => Promise<void>;
@@ -518,10 +518,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
             </div>
 
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {items.map((item) => (
+              {items.map((item, idx) => (
                 <div
-                  key={item.postId}
-                  onClick={() => onSelectPhoto(item.postId)}
+                  key={item.id || `${item.postId}_${idx}`}
+                  onClick={() => onSelectPhoto(item.postId, item.filePosition || 0)}
                   className="relative aspect-square rounded-xl overflow-hidden bg-neutral-900 cursor-pointer group border border-[var(--border-subtle)] hover:border-[var(--accent-coral)] transition"
                 >
                   <img

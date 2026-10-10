@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { queryOne, queryAll, run, getDatabaseStatus } from '../db.ts';
+import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync } from '../db.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
 import { syncStorageToDatabase } from '../storage/sync.ts';
@@ -60,6 +60,16 @@ adminRouter.get('/db-status', (_req: AuthenticatedRequest, res) => {
     userCount: users?.count || 0,
     postCount: posts?.count || 0,
   });
+});
+
+// Trigger manual cloud database sync
+adminRouter.post('/db-sync', (_req: AuthenticatedRequest, res) => {
+  try {
+    const result = triggerDatabaseSync();
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to sync database' });
+  }
 });
 
 // Sync past uploads from cloud storage into database

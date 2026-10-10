@@ -38,31 +38,59 @@ export async function getDb(): Promise<any> {
   if (tursoUrl && tursoToken) {
     const normalizedUrl = normalizeTursoUrl(tursoUrl);
     console.log(`🔌 Connecting to Turso Cloud Database via embedded replica (${normalizedUrl})...`);
-    try {
-      dbInstance = new (Database as any)(dbFile, {
+
+    const openReplica = () => {
+      return new (Database as any)(dbFile, {
         syncUrl: normalizedUrl,
         authToken: tursoToken,
         readYourWrites: true,
       });
-      isTursoSynced = true;
+    };
+
+    try {
+      try {
+        dbInstance = openReplica();
+      } catch (openErr: any) {
+        // If an existing SQLite file without wal_index is present, back it up and initialize a clean replica
+        if (openErr.message && (openErr.message.includes('wal_index') || openErr.message.includes('delete the database'))) {
+          console.warn('⚠️ Local SQLite file is not a sync replica. Backing up and recreating fresh replica for Turso Cloud...');
+          try {
+            if (fs.existsSync(dbFile)) {
+              fs.renameSync(dbFile, `${dbFile}.backup.${Date.now()}`);
+            }
+            const wal = `${dbFile}-wal`;
+            const shm = `${dbFile}-shm`;
+            if (fs.existsSync(wal)) fs.unlinkSync(wal);
+            if (fs.existsSync(shm)) fs.unlinkSync(shm);
+          } catch {}
+          dbInstance = openReplica();
+        } else {
+          throw openErr;
+        }
+      }
+
+      // Initial sync with Turso cloud
       try {
         dbInstance.sync();
         lastSyncTimestamp = new Date().toISOString();
         tursoSyncError = null;
+        isTursoSynced = true;
         console.log('✅ Successfully connected and synced with Turso cloud!');
       } catch (syncErr: any) {
         tursoSyncError = syncErr.message || String(syncErr);
+        isTursoSynced = false;
         console.warn('⚠️ Initial Turso sync notice:', syncErr.message || syncErr);
       }
 
       // Schedule periodic background sync every 30 seconds to ensure permanent cloud persistence
       if (!periodicSyncTimer) {
         periodicSyncTimer = setInterval(() => {
-          if (dbInstance && isTursoSynced) {
+          if (dbInstance && typeof dbInstance.sync === 'function') {
             try {
               dbInstance.sync();
               lastSyncTimestamp = new Date().toISOString();
               tursoSyncError = null;
+              isTursoSynced = true;
             } catch (err: any) {
               tursoSyncError = err.message || String(err);
               console.warn('⚠️ Periodic Turso sync warning:', err.message || err);
@@ -105,13 +133,58 @@ export function getDatabaseStatus(): {
   tursoConfigured: boolean;
   lastSync: string | null;
   error: string | null;
+  tursoUrl: string | null;
 } {
+  const url = process.env.TURSO_DATABASE_URL?.trim();
   return {
     isTursoSynced,
-    tursoConfigured: Boolean(process.env.TURSO_DATABASE_URL?.trim()),
+    tursoConfigured: Boolean(url),
     lastSync: lastSyncTimestamp,
     error: tursoSyncError,
+    tursoUrl: url ? normalizeTursoUrl(url) : null,
   };
+}
+
+export function triggerDatabaseSync(): { success: boolean; message: string; status: any } {
+  if (!dbInstance) {
+    throw new Error('Database not initialized');
+  }
+  const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
+  if (!tursoUrl) {
+    return {
+      success: false,
+      message: 'TURSO_DATABASE_URL is not configured.',
+      status: getDatabaseStatus(),
+    };
+  }
+
+  try {
+    if (typeof dbInstance.sync === 'function') {
+      dbInstance.sync();
+      lastSyncTimestamp = new Date().toISOString();
+      tursoSyncError = null;
+      isTursoSynced = true;
+      return {
+        success: true,
+        message: 'Successfully synced with Turso Cloud!',
+        status: getDatabaseStatus(),
+      };
+    } else {
+      return {
+        success: false,
+        message: 'Current database instance is not a sync replica.',
+        status: getDatabaseStatus(),
+      };
+    }
+  } catch (err: any) {
+    tursoSyncError = err.message || String(err);
+    isTursoSynced = false;
+    return {
+      success: false,
+      message: `Turso sync failed: ${err.message || err}`,
+      status: getDatabaseStatus(),
+    };
+  }
 }
 
 function cleanRow<T = any>(row: any): T {

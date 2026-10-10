@@ -51,7 +51,9 @@ export const AdminPanel: React.FC = () => {
   const [syncLoading, setSyncLoading] = useState(false);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [purgeLoading, setPurgeLoading] = useState(false);
-  const [dbStatus, setDbStatus] = useState<{ isTursoSynced: boolean; tursoConfigured: boolean; lastSync: string | null; error: string | null } | null>(null);
+  const [dbStatus, setDbStatus] = useState<{ isTursoSynced: boolean; tursoConfigured: boolean; lastSync: string | null; error: string | null; tursoUrl?: string | null; userCount?: number; postCount?: number } | null>(null);
+  const [showDbModal, setShowDbModal] = useState(false);
+  const [dbSyncLoading, setDbSyncLoading] = useState(false);
 
   const fetchDbStatus = async () => {
     try {
@@ -61,6 +63,25 @@ export const AdminPanel: React.FC = () => {
         setDbStatus(data);
       }
     } catch {}
+  };
+
+  const handleManualDbSync = async () => {
+    setDbSyncLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/db-sync', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setActionToast({ message: data.message || 'Successfully synced with Turso Cloud!', type: 'success' });
+        fetchDbStatus();
+      } else {
+        setActionToast({ message: data.message || 'Turso sync notice updated', type: 'error' });
+        fetchDbStatus();
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Error syncing database', type: 'error' });
+    } finally {
+      setDbSyncLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -330,25 +351,21 @@ export const AdminPanel: React.FC = () => {
             Admin Portal
           </h2>
           {dbStatus && (
-            <span
-              className={`text-[10px] px-2 py-0.5 rounded-full font-medium border flex items-center gap-1.5 transition ${
+            <button
+              type="button"
+              onClick={() => setShowDbModal(true)}
+              className={`text-[10px] px-2.5 py-0.5 rounded-full font-medium border flex items-center gap-1.5 transition cursor-pointer hover:opacity-85 ${
                 dbStatus.isTursoSynced
                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                   : dbStatus.tursoConfigured
                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                   : 'bg-neutral-800 border-neutral-700 text-neutral-400'
               }`}
-              title={
-                dbStatus.isTursoSynced
-                  ? `Turso Cloud Database synced! Last cloud sync: ${dbStatus.lastSync ? new Date(dbStatus.lastSync).toLocaleTimeString() : 'Active'}`
-                  : dbStatus.tursoConfigured
-                  ? `Turso notice: ${dbStatus.error || 'Initializing cloud connection'}`
-                  : 'Running on local SQLite database'
-              }
+              title="Click to view Turso Cloud Database diagnostics & trigger sync"
             >
               <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.isTursoSynced ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <span>{dbStatus.isTursoSynced ? 'Turso Cloud Synced' : dbStatus.tursoConfigured ? 'Turso Connecting...' : 'Local SQLite'}</span>
-            </span>
+              <span>{dbStatus.isTursoSynced ? 'Turso Cloud Synced' : dbStatus.tursoConfigured ? 'Turso Sync Status' : 'Local SQLite'}</span>
+            </button>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -959,6 +976,108 @@ export const AdminPanel: React.FC = () => {
               >
                 {purgeLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                 <span>{purgeLoading ? 'Purging Bucket...' : 'Yes, Wipe Everything'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Turso Database Diagnostics Modal */}
+      {showDbModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !dbSyncLoading) setShowDbModal(false);
+          }}
+        >
+          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
+                <Shield className="w-4 h-4 text-amber-500" />
+                <span>Turso Cloud Database Status</span>
+              </div>
+              <button
+                onClick={() => setShowDbModal(false)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--text-muted)] font-medium">Connection State</span>
+                  <span
+                    className={`font-semibold flex items-center gap-1.5 ${
+                      dbStatus?.isTursoSynced
+                        ? 'text-emerald-400'
+                        : dbStatus?.tursoConfigured
+                        ? 'text-amber-400'
+                        : 'text-neutral-400'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${dbStatus?.isTursoSynced ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    {dbStatus?.isTursoSynced ? 'Connected & Synced' : dbStatus?.tursoConfigured ? 'Connecting / Notice' : 'Local SQLite Only'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--text-muted)] font-medium">Turso URL</span>
+                  <span className="font-mono text-[11px] text-[var(--text-secondary)] truncate max-w-[220px]" title={dbStatus?.tursoUrl || 'Not configured'}>
+                    {dbStatus?.tursoUrl || 'Not configured'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--text-muted)] font-medium">Last Cloud Sync</span>
+                  <span className="text-[var(--text-secondary)]">
+                    {dbStatus?.lastSync ? new Date(dbStatus.lastSync).toLocaleString() : 'Not yet synced'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--text-muted)] font-medium">Local Database Records</span>
+                  <span className="text-[var(--text-secondary)] font-mono">
+                    {dbStatus?.userCount ?? 0} user(s), {dbStatus?.postCount ?? 0} post(s)
+                  </span>
+                </div>
+              </div>
+
+              {dbStatus?.error && (
+                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 space-y-1">
+                  <div className="font-semibold flex items-center gap-1 text-amber-400">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Sync Notice</span>
+                  </div>
+                  <pre className="font-mono whitespace-pre-wrap break-all text-[10px] text-neutral-300">
+                    {dbStatus.error}
+                  </pre>
+                </div>
+              )}
+
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                When synced, your accounts, circles, and memories are backed up permanently in Turso Cloud and will persist across all Render deployments.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={dbSyncLoading}
+                onClick={() => setShowDbModal(false)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={dbSyncLoading}
+                onClick={handleManualDbSync}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white hover:opacity-95 transition flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {dbSyncLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{dbSyncLoading ? 'Syncing with Turso...' : 'Sync Cloud Database Now'}</span>
               </button>
             </div>
           </div>

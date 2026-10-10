@@ -236,9 +236,28 @@ export async function createApp() {
         return fs.createReadStream(targetPath).pipe(res);
       }
 
-      // 2. Try S3 / Backblaze B2 storage adapter if configured
+      // 2. Try S3 / Backblaze B2 storage adapter via streaming pipe
       const storage = getStorageAdapter();
-      if (storage.getObject) {
+      if (storage.getObjectStream) {
+        const streamObj = await storage.getObjectStream(cleanKey);
+        if (streamObj && streamObj.stream) {
+          res.setHeader('Content-Type', streamObj.contentType || 'image/jpeg');
+          if (streamObj.contentLength) {
+            res.setHeader('Content-Length', streamObj.contentLength);
+          }
+          res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+
+          // Cache to local disk in background for instant subsequent requests
+          try {
+            const dir = path.dirname(targetPath);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            const diskWrite = fs.createWriteStream(targetPath);
+            streamObj.stream.pipe(diskWrite);
+          } catch {}
+
+          return streamObj.stream.pipe(res);
+        }
+      } else if (storage.getObject) {
         const obj = await storage.getObject(cleanKey);
         if (obj && obj.data) {
           try {
@@ -249,7 +268,7 @@ export async function createApp() {
 
           res.setHeader('Content-Type', obj.contentType || 'image/jpeg');
           res.setHeader('Content-Length', obj.data.length);
-          res.setHeader('Cache-Control', 'public, max-age=86400');
+          res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
           return res.send(obj.data);
         }
       }

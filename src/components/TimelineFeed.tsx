@@ -63,13 +63,20 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
     const stage = target.dataset.fallbackStage || '0';
     if (stage === '0' && storageKey) {
       target.dataset.fallbackStage = '1';
-      target.src = `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
+      // If thumb failed, try full res; if full res failed, try thumb
+      const altKey = storageKey.includes('_thumb')
+        ? storageKey.replace('_thumb', '')
+        : storageKey.replace(/(\.[a-zA-Z0-9]+)$/, '_thumb$1');
+      target.src = `/api/storage/view?key=${encodeURIComponent(altKey)}`;
     } else if (stage === '1' && storageKey) {
       target.dataset.fallbackStage = '2';
+      target.src = `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
+    } else if (stage === '2' && storageKey) {
+      target.dataset.fallbackStage = '3';
       const clean = storageKey.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
       target.src = `/uploads/${clean}`;
-    } else if (stage !== '3') {
-      target.dataset.fallbackStage = '3';
+    } else if (stage !== '4') {
+      target.dataset.fallbackStage = '4';
       target.src =
         'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"><rect width="100%" height="100%" fill="%23181829"/><circle cx="400" cy="270" r="45" fill="%23f59e0b" opacity="0.2"/><path d="M370 295 L400 245 L430 295 Z" fill="%23f59e0b" opacity="0.8"/><circle cx="430" cy="245" r="9" fill="%23f43f5e" opacity="0.8"/></svg>';
     }

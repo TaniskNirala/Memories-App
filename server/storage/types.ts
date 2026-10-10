@@ -31,6 +31,17 @@ export interface StorageAdapter {
     storageKey: string
   ): Promise<{ data: Buffer; contentType: string } | null>;
 
+  getObjectStream?(
+    storageKey: string
+  ): Promise<{
+    stream: import('stream').Readable;
+    contentType: string;
+    contentLength?: number;
+    resolvedKey: string;
+  } | null>;
+
+  resolveKey?(storageKey: string): Promise<string | null>;
+
   listObjects?(prefix?: string): Promise<string[]>;
 
   purgeAllObjects?(): Promise<{ deleted: number }>;

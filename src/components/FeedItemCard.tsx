@@ -229,9 +229,20 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
               referrerPolicy="no-referrer"
               onError={(e) => {
                 const target = e.currentTarget;
-                if (!target.dataset.triedFallback && mainFile.storageKey) {
-                  target.dataset.triedFallback = 'true';
+                const stage = target.dataset.triedFallback || '0';
+                if (stage === '0' && mainFile.storageKey) {
+                  target.dataset.triedFallback = '1';
+                  const altKey = (mainFile.thumbKey || mainFile.storageKey).includes('_thumb')
+                    ? (mainFile.thumbKey || mainFile.storageKey).replace('_thumb', '')
+                    : mainFile.storageKey.replace(/(\.[a-zA-Z0-9]+)$/, '_thumb$1');
+                  target.src = `/api/storage/view?key=${encodeURIComponent(altKey)}`;
+                } else if (stage === '1' && mainFile.storageKey) {
+                  target.dataset.triedFallback = '2';
                   target.src = `/api/storage/view?key=${encodeURIComponent(mainFile.storageKey)}`;
+                } else if (stage === '2' && mainFile.storageKey) {
+                  target.dataset.triedFallback = '3';
+                  const clean = mainFile.storageKey.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
+                  target.src = `/uploads/${clean}`;
                 }
               }}
               className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"

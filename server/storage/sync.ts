@@ -20,6 +20,48 @@ export function extractCaptionFromStorageKey(key: string): string {
   return cleanName.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+export async function repairPostFileKeys(): Promise<number> {
+  const storage = getStorageAdapter();
+  if (!storage.resolveKey) return 0;
+
+  let repaired = 0;
+  try {
+    const files = queryAll<any>('SELECT id, storage_key, thumb_key FROM post_files');
+    for (const f of files) {
+      let needsUpdate = false;
+      let newStorageKey = f.storage_key;
+      let newThumbKey = f.thumb_key;
+
+      if (f.storage_key) {
+        const resolved = await storage.resolveKey(f.storage_key);
+        if (resolved && resolved !== f.storage_key) {
+          newStorageKey = resolved;
+          needsUpdate = true;
+        }
+      }
+
+      if (f.thumb_key) {
+        const resolvedThumb = await storage.resolveKey(f.thumb_key);
+        if (resolvedThumb && resolvedThumb !== f.thumb_key) {
+          newThumbKey = resolvedThumb;
+          needsUpdate = true;
+        }
+      }
+
+      if (needsUpdate) {
+        run('UPDATE post_files SET storage_key = ?, thumb_key = ? WHERE id = ?', [newStorageKey, newThumbKey, f.id]);
+        repaired++;
+      }
+    }
+    if (repaired > 0) {
+      console.log(`🔧 [Key Alignment] Successfully linked ${repaired} photo(s) to exact Backblaze B2 keys!`);
+    }
+  } catch (err: any) {
+    console.warn('⚠️ Key alignment notice:', err.message || err);
+  }
+  return repaired;
+}
+
 /**
  * Scans storage (Backblaze B2 / S3 / local) for any past uploaded files
  * that are missing from the database (e.g. after a server migration, db wipe, or restart)
@@ -31,6 +73,9 @@ export async function syncStorageToDatabase(): Promise<{ recovered: number; tota
     if (!storage.listObjects) {
       return { recovered: 0, totalFound: 0 };
     }
+
+    // Align and verify all existing database keys against live cloud bucket
+    await repairPostFileKeys();
 
     // Clean up captions for any existing memories that have null or generic 'Memory' captions
     try {

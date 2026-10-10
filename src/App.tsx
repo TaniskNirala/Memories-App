@@ -778,21 +778,23 @@ const MainContent: React.FC = () => {
         </div>
       )}
 
-      <MediaViewerModal
-        item={viewerItem}
-        initialIndex={viewerIndex}
-        initialMode={viewerMode}
-        isOpen={Boolean(viewerItem)}
-        onClose={() => setViewerItem(null)}
-        onOpenComments={(item) => setCommentsItem(item)}
-        onOpenShareModal={(item) => setShareItem(item)}
-        onDeletePost={handleDeletePost}
-        onDeleteFile={handleDeleteSinglePhoto}
-        onPhotoUpdated={handlePhotoUpdated}
-        onOverrideVisibility={handleAdminOverride}
-        groups={groups}
-        onPermissionsUpdated={() => fetchFeed(true)}
-      />
+      {viewerItem && (
+        <MediaViewerModal
+          item={viewerItem}
+          initialIndex={viewerIndex}
+          initialMode={viewerMode}
+          isOpen={true}
+          onClose={() => setViewerItem(null)}
+          onOpenComments={(item) => setCommentsItem(item)}
+          onOpenShareModal={(item) => setShareItem(item)}
+          onDeletePost={handleDeletePost}
+          onDeleteFile={handleDeleteSinglePhoto}
+          onPhotoUpdated={handlePhotoUpdated}
+          onOverrideVisibility={handleAdminOverride}
+          groups={groups}
+          onPermissionsUpdated={() => fetchFeed(true)}
+        />
+      )}
 
       <CommentsDrawer
         isOpen={Boolean(commentsItem)}

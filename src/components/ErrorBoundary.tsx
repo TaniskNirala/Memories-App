@@ -24,9 +24,23 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('Kinfolk uncaught application error:', error, errorInfo);
   }
 
-  private handleReset = () => {
+  private handleReset = async () => {
+    try {
+      if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if (typeof window !== 'undefined' && 'caches' in window) {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          await caches.delete(k);
+        }
+      }
+    } catch {}
     this.setState({ hasError: false, error: null });
-    window.location.reload();
+    window.location.href = window.location.origin + window.location.pathname + '?reload=' + Date.now();
   };
 
   public render() {

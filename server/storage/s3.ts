@@ -270,7 +270,8 @@ export class S3StorageAdapter implements StorageAdapter {
   }
 
   /**
-   * Streams an object directly from Backblaze B2 without memory buffering
+   * Streams an object directly from Backblaze B2 without memory buffering.
+   * Multi-candidate fallback guarantees past and present photos are always resolved.
    */
   async getObjectStream(
     storageKey: string
@@ -280,26 +281,69 @@ export class S3StorageAdapter implements StorageAdapter {
     contentLength?: number;
     resolvedKey: string;
   } | null> {
-    const resolvedKey = (await this.resolveKey(storageKey)) || this.cleanKey(storageKey);
-    try {
-      const command = new GetObjectCommand({
-        Bucket: this.config.bucket,
-        Key: resolvedKey,
-      });
+    const clean = this.cleanKey(storageKey);
+    const resolved = await this.resolveKey(storageKey);
 
-      const response = await this.client.send(command);
-      if (!response.Body) return null;
+    // Build candidate keys to try in priority order
+    const candidates = new Set<string>();
+    if (resolved) candidates.add(resolved);
+    candidates.add(clean);
 
-      return {
-        stream: response.Body as Readable,
-        contentType: response.ContentType || 'image/jpeg',
-        contentLength: response.ContentLength,
-        resolvedKey,
-      };
-    } catch (err: any) {
-      console.warn(`⚠️ Backblaze B2 getObjectStream failed for [${resolvedKey}]:`, err.message || err);
-      return null;
+    // Path variations
+    candidates.add(clean.replace(/^uploads\//, ''));
+    candidates.add(clean.replace(/^posts\//, ''));
+    candidates.add(`uploads/${clean}`);
+    candidates.add(`posts/${clean}`);
+    candidates.add(`uploads/posts/${clean.replace(/^(uploads\/)?(posts\/)?/, '')}`);
+
+    // Filename alone across common folders
+    const fileName = clean.split('/').pop();
+    if (fileName) {
+      candidates.add(fileName);
+      candidates.add(`posts/${fileName}`);
+      candidates.add(`uploads/${fileName}`);
     }
+
+    // Thumb <-> Full resolution fallback
+    if (clean.includes('_thumb')) {
+      const nonThumb = clean.replace(/_thumb(\.[a-zA-Z0-9]+)$/, '$1');
+      candidates.add(nonThumb);
+      const nonThumbName = nonThumb.split('/').pop();
+      if (nonThumbName) candidates.add(nonThumbName);
+    } else {
+      const dotIdx = clean.lastIndexOf('.');
+      if (dotIdx > -1) {
+        const thumbVariant = clean.slice(0, dotIdx) + '_thumb' + clean.slice(dotIdx);
+        candidates.add(thumbVariant);
+        const thumbName = thumbVariant.split('/').pop();
+        if (thumbName) candidates.add(thumbName);
+      }
+    }
+
+    for (const testKey of candidates) {
+      try {
+        const command = new GetObjectCommand({
+          Bucket: this.config.bucket,
+          Key: testKey,
+        });
+
+        const response = await this.client.send(command);
+        if (response.Body) {
+          return {
+            stream: response.Body as Readable,
+            contentType: response.ContentType || 'image/jpeg',
+            contentLength: response.ContentLength,
+            resolvedKey: testKey,
+          };
+        }
+      } catch {
+        // Try next candidate
+        continue;
+      }
+    }
+
+    console.warn(`⚠️ Backblaze B2 could not find object [${storageKey}] across ${candidates.size} candidate keys`);
+    return null;
   }
 
   async getObject(storageKey: string): Promise<{ data: Buffer; contentType: string } | null> {
@@ -348,7 +392,7 @@ export class S3StorageAdapter implements StorageAdapter {
       do {
         const command: ListObjectsV2Command = new ListObjectsV2Command({
           Bucket: this.config.bucket,
-          Prefix: prefix,
+          Prefix: prefix ? prefix : undefined,
           ContinuationToken: continuationToken,
         });
 

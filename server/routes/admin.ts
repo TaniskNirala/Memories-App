@@ -4,7 +4,7 @@ import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync } from 
 import { saveTursoCredentials } from '../tursoSync.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
-import { syncStorageToDatabase } from '../storage/sync.ts';
+import { syncStorageToDatabase, repairPostFileKeys } from '../storage/sync.ts';
 
 export const adminRouter = Router();
 
@@ -67,6 +67,7 @@ adminRouter.get('/db-status', (_req: AuthenticatedRequest, res) => {
 adminRouter.post('/db-sync', async (_req: AuthenticatedRequest, res) => {
   try {
     const result = await triggerDatabaseSync();
+    await repairPostFileKeys().catch(() => {});
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to sync database' });
@@ -77,6 +78,7 @@ adminRouter.post('/db-sync', async (_req: AuthenticatedRequest, res) => {
 adminRouter.post('/restore-turso', async (_req: AuthenticatedRequest, res) => {
   try {
     const result = await triggerDatabaseSync();
+    await repairPostFileKeys().catch(() => {});
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Failed to restore database from Turso Cloud' });

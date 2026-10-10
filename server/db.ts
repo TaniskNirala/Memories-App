@@ -5,7 +5,10 @@ import {
   getTursoCredentials,
   normalizeTursoUrl,
   restoreAllFromTurso,
+  pushAllLocalToTurso,
+  syncWithTursoCloud,
   pushWriteToTurso,
+  flushTursoWrites,
   shouldForwardToTurso,
 } from './tursoSync.ts';
 
@@ -36,10 +39,11 @@ export async function getDb(): Promise<any> {
 
   if (tursoUrl && tursoToken) {
     const normalizedUrl = normalizeTursoUrl(tursoUrl);
-    console.log(`🔌 Turso Cloud Database detected (${normalizedUrl}). Restoring full cloud state...`);
+    console.log(`🔌 Turso Cloud Database detected (${normalizedUrl}). Synchronizing state...`);
 
     try {
-      const restoreResult = await restoreAllFromTurso(dbInstance);
+      // Safe restore merges cloud state without wiping local records
+      const restoreResult = await restoreAllFromTurso(dbInstance, { clearLocalFirst: false });
       if (restoreResult.success) {
         isTursoSynced = true;
         lastSyncTimestamp = new Date().toISOString();
@@ -112,6 +116,7 @@ export function getDatabaseStatus(): {
 export async function triggerDatabaseSync(): Promise<{
   success: boolean;
   message: string;
+  totalPushed?: number;
   totalRestored?: number;
   counts?: Record<string, number>;
   status: any;
@@ -129,26 +134,26 @@ export async function triggerDatabaseSync(): Promise<{
   }
 
   try {
-    console.log(`🔄 Performing manual restore and sync from Turso Cloud...`);
-    const restoreResult = await restoreAllFromTurso(dbInstance);
+    console.log(`🔄 Performing bidirectional sync with Turso Cloud...`);
+    const syncResult = await syncWithTursoCloud(dbInstance);
 
-    if (restoreResult.success) {
+    if (syncResult.success) {
       isTursoSynced = true;
       lastSyncTimestamp = new Date().toISOString();
       tursoSyncError = null;
       return {
         success: true,
-        message: `Successfully restored ${restoreResult.totalRestored} record(s) from Turso Cloud!`,
-        totalRestored: restoreResult.totalRestored,
-        counts: restoreResult.counts,
+        message: `Successfully synchronized with Turso Cloud! (Pushed: ${syncResult.totalPushed}, Restored: ${syncResult.totalRestored})`,
+        totalPushed: syncResult.totalPushed,
+        totalRestored: syncResult.totalRestored,
         status: getDatabaseStatus(),
       };
     } else {
-      tursoSyncError = restoreResult.error || 'Restore failed';
+      tursoSyncError = syncResult.error || 'Sync failed';
       isTursoSynced = false;
       return {
         success: false,
-        message: `Turso Cloud restore failed: ${restoreResult.error}`,
+        message: `Turso Cloud sync failed: ${syncResult.error}`,
         status: getDatabaseStatus(),
       };
     }
@@ -162,6 +167,8 @@ export async function triggerDatabaseSync(): Promise<{
     };
   }
 }
+
+export { restoreAllFromTurso, pushAllLocalToTurso, flushTursoWrites };
 
 function cleanRow<T = any>(row: any): T {
   if (!row || typeof row !== 'object') return row;

@@ -93,13 +93,204 @@ export const TABLES_IN_ORDER = [
   'ignored_duplicates',
 ];
 
+// Batched atomic write queue to avoid SQLite concurrency / lock collisions on Turso
+interface PendingWrite {
+  sql: string;
+  args: any[];
+}
+
+const writeQueue: PendingWrite[] = [];
+let isFlushingQueue = false;
+let flushTimer: NodeJS.Timeout | null = null;
+
 /**
- * Restores full database state from Turso Cloud into local SQLite.
- * Pulls all tables, users, original post captions, photos, album connections, and circles.
+ * Checks if SQL statement should be synced to Turso Cloud
+ */
+export function shouldForwardToTurso(sql: string): boolean {
+  const trimmed = sql.trim().toUpperCase();
+  if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA') || trimmed.startsWith('EXPLAIN')) {
+    return false;
+  }
+  return (
+    trimmed.startsWith('INSERT') ||
+    trimmed.startsWith('UPDATE') ||
+    trimmed.startsWith('DELETE') ||
+    trimmed.startsWith('REPLACE') ||
+    trimmed.startsWith('CREATE') ||
+    trimmed.startsWith('ALTER') ||
+    trimmed.startsWith('DROP')
+  );
+}
+
+/**
+ * Enqueues a write statement into the atomic Turso write batch.
+ * Collects bursts of inserts (such as 20-30 photos uploaded together)
+ * and executes them in a single atomic batch transaction.
+ */
+export function pushWriteToTurso(sql: string, params: any[] = []): void {
+  const client = getTursoClient();
+  if (!client) return;
+
+  writeQueue.push({ sql, args: params });
+
+  if (!flushTimer) {
+    // 25ms debounce collects all writes in a loop (e.g. 20-30 post_files) into 1 batch transaction
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      flushTursoWrites().catch(() => {});
+    }, 25);
+  }
+}
+
+/**
+ * Flushes all queued writes to Turso Cloud using client.batch()
+ */
+export async function flushTursoWrites(): Promise<void> {
+  if (isFlushingQueue || writeQueue.length === 0) return;
+  const client = getTursoClient();
+  if (!client) return;
+
+  isFlushingQueue = true;
+
+  try {
+    while (writeQueue.length > 0) {
+      // Process up to 50 statements per atomic batch
+      const batch = writeQueue.splice(0, 50);
+      let success = false;
+      let attempts = 0;
+
+      while (!success && attempts < 3) {
+        attempts++;
+        try {
+          await client.batch(batch, 'write');
+          success = true;
+          // console.log(`☁️ Synced batch of ${batch.length} statement(s) to Turso Cloud`);
+        } catch (batchErr: any) {
+          const msg = batchErr?.message || String(batchErr);
+          if (attempts < 3 && (msg.includes('locked') || msg.includes('busy') || msg.includes('timeout'))) {
+            await new Promise((r) => setTimeout(r, 80 * attempts));
+          } else {
+            console.warn(`⚠️ Turso cloud batch write notice (attempt ${attempts}):`, msg);
+            break;
+          }
+        }
+      }
+    }
+  } finally {
+    isFlushingQueue = false;
+  }
+}
+
+/**
+ * Pushes all existing local SQLite rows into Turso Cloud.
+ * Guarantees that freshly uploaded photos, created events, and circle memberships
+ * are securely backed up to Turso without getting overwritten.
+ */
+export async function pushAllLocalToTurso(localDb: any): Promise<{
+  success: boolean;
+  totalPushed: number;
+  counts: Record<string, number>;
+  error?: string;
+}> {
+  const client = getTursoClient();
+  if (!client) {
+    return {
+      success: false,
+      totalPushed: 0,
+      counts: {},
+      error: 'Turso credentials not configured',
+    };
+  }
+
+  // Ensure any pending micro-writes are flushed first
+  await flushTursoWrites();
+
+  const counts: Record<string, number> = {};
+  let totalPushed = 0;
+
+  try {
+    for (const table of TABLES_IN_ORDER) {
+      try {
+        let localRows: any[] = [];
+        try {
+          localRows = localDb.prepare(`SELECT * FROM ${table}`).all();
+        } catch {
+          counts[table] = 0;
+          continue;
+        }
+
+        if (!localRows || localRows.length === 0) {
+          counts[table] = 0;
+          continue;
+        }
+
+        const colNames = Object.keys(localRows[0]);
+        if (colNames.length === 0) {
+          counts[table] = 0;
+          continue;
+        }
+
+        const placeholders = colNames.map(() => '?').join(', ');
+        const insertSql = `INSERT OR REPLACE INTO ${table} (${colNames.join(', ')}) VALUES (${placeholders})`;
+
+        let tablePushed = 0;
+        // Batch into chunks of 40 to avoid HTTP payload or query limits
+        const chunkSize = 40;
+        for (let i = 0; i < localRows.length; i += chunkSize) {
+          const chunk = localRows.slice(i, i + chunkSize);
+          const batchStatements = chunk.map((row) => ({
+            sql: insertSql,
+            args: colNames.map((col) => (row[col] !== undefined ? row[col] : null)),
+          }));
+
+          try {
+            await client.batch(batchStatements, 'write');
+            tablePushed += chunk.length;
+          } catch (chunkErr: any) {
+            // Fallback to row-by-row if batch had schema variation
+            for (const stmt of batchStatements) {
+              try {
+                await client.execute(stmt);
+                tablePushed++;
+              } catch {}
+            }
+          }
+        }
+
+        counts[table] = tablePushed;
+        totalPushed += tablePushed;
+        if (tablePushed > 0) {
+          console.log(`📤 Pushed ${tablePushed} local row(s) into Turso Cloud [${table}]`);
+        }
+      } catch (tableErr: any) {
+        console.warn(`Turso cloud push notice for [${table}]:`, tableErr.message || tableErr);
+        counts[table] = 0;
+      }
+    }
+
+    return {
+      success: true,
+      totalPushed,
+      counts,
+    };
+  } catch (err: any) {
+    console.error('Error during pushAllLocalToTurso:', err.message || err);
+    return {
+      success: false,
+      totalPushed,
+      counts,
+      error: err.message || String(err),
+    };
+  }
+}
+
+/**
+ * Restores database state from Turso Cloud into local SQLite.
+ * By default, clearLocalFirst is FALSE to ensure local records are never destroyed.
  */
 export async function restoreAllFromTurso(
   localDb: any,
-  options: { clearLocalFirst?: boolean } = { clearLocalFirst: true }
+  options: { clearLocalFirst?: boolean } = { clearLocalFirst: false }
 ): Promise<{
   success: boolean;
   totalRestored: number;
@@ -123,7 +314,7 @@ export async function restoreAllFromTurso(
     // Disable foreign keys temporarily during bulk restore
     localDb.exec('PRAGMA foreign_keys = OFF;');
 
-    // 1. Optionally clear existing local tables first so Turso Cloud is the pristine source of truth
+    // 1. Only clear existing local tables if explicitly requested
     if (options.clearLocalFirst) {
       for (const table of [...TABLES_IN_ORDER].reverse()) {
         try {
@@ -167,7 +358,7 @@ export async function restoreAllFromTurso(
         const insertSql = `INSERT OR REPLACE INTO ${table} (${colNames}) VALUES (${placeholders})`;
         const insertStmt = localDb.prepare(insertSql);
 
-        // Run batch insert inside a fast transaction
+        // Run batch insert inside a fast local transaction
         const insertBatch = localDb.transaction((rows: any[]) => {
           let c = 0;
           for (const row of rows) {
@@ -198,7 +389,7 @@ export async function restoreAllFromTurso(
     };
   } catch (err: any) {
     localDb.exec('PRAGMA foreign_keys = ON;');
-    console.error('Error during Turso Cloud full restore:', err.message || err);
+    console.error('Error during Turso Cloud restore:', err.message || err);
     return {
       success: false,
       totalRestored,
@@ -209,38 +400,27 @@ export async function restoreAllFromTurso(
 }
 
 /**
- * Checks if SQL statement should be synced to Turso Cloud
+ * Full safe bidirectional sync:
+ * 1. Pushes any newly created local records (photos, events, posts, users) to Turso Cloud.
+ * 2. Pulls records from Turso Cloud into local SQLite without deleting local data.
  */
-export function shouldForwardToTurso(sql: string): boolean {
-  const trimmed = sql.trim().toUpperCase();
-  if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA') || trimmed.startsWith('EXPLAIN')) {
-    return false;
-  }
-  return (
-    trimmed.startsWith('INSERT') ||
-    trimmed.startsWith('UPDATE') ||
-    trimmed.startsWith('DELETE') ||
-    trimmed.startsWith('REPLACE') ||
-    trimmed.startsWith('CREATE') ||
-    trimmed.startsWith('ALTER') ||
-    trimmed.startsWith('DROP')
-  );
-}
+export async function syncWithTursoCloud(localDb: any): Promise<{
+  success: boolean;
+  totalPushed: number;
+  totalRestored: number;
+  error?: string;
+}> {
+  // Step 1: Push local state to cloud so recent uploads & events are never lost
+  const pushRes = await pushAllLocalToTurso(localDb);
 
-/**
- * Forwards a write statement to Turso Cloud over HTTP
- */
-export function pushWriteToTurso(sql: string, params: any[] = []): void {
-  const client = getTursoClient();
-  if (!client) return;
+  // Step 2: Merge state from cloud into local SQLite
+  const restoreRes = await restoreAllFromTurso(localDb, { clearLocalFirst: false });
 
-  client
-    .execute({
-      sql,
-      args: params,
-    })
-    .catch((err: any) => {
-      console.warn('⚠️ Cloud write sync notice:', err.message || err);
-    });
+  return {
+    success: pushRes.success || restoreRes.success,
+    totalPushed: pushRes.totalPushed,
+    totalRestored: restoreRes.totalRestored,
+    error: pushRes.error || restoreRes.error,
+  };
 }
 

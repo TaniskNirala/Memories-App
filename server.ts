@@ -2,6 +2,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
+import { PassThrough } from 'stream';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb } from './server/db.ts';
@@ -247,15 +248,21 @@ export async function createApp() {
           }
           res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
 
+          const passForDisk = new PassThrough();
+          const passForRes = new PassThrough();
+          streamObj.stream.pipe(passForDisk);
+          streamObj.stream.pipe(passForRes);
+
           // Cache to local disk in background for instant subsequent requests
           try {
             const dir = path.dirname(targetPath);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             const diskWrite = fs.createWriteStream(targetPath);
-            streamObj.stream.pipe(diskWrite);
+            diskWrite.on('error', (err) => console.warn('Disk cache write notice:', err.message));
+            passForDisk.pipe(diskWrite);
           } catch {}
 
-          return streamObj.stream.pipe(res);
+          return passForRes.pipe(res);
         }
       } else if (storage.getObject) {
         const obj = await storage.getObject(cleanKey);

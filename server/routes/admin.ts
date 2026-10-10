@@ -60,6 +60,40 @@ adminRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
   }
 });
 
+// Purge all past uploaded files from cloud/local storage and wipe all posts/albums/comments from database
+adminRouter.post('/purge-all-data', async (_req: AuthenticatedRequest, res) => {
+  try {
+    const storage = getStorageAdapter();
+    let deletedFiles = 0;
+    if (storage.purgeAllObjects) {
+      const result = await storage.purgeAllObjects();
+      deletedFiles = result.deleted;
+    }
+
+    // Wipe all media posts, files, albums, comments, reactions from database
+    run('PRAGMA foreign_keys = OFF');
+    run('DELETE FROM comments');
+    run('DELETE FROM reactions');
+    run('DELETE FROM post_files');
+    run('DELETE FROM album_items');
+    run('DELETE FROM event_attendance');
+    run('DELETE FROM event_notes');
+    run("DELETE FROM item_groups WHERE item_type IN ('post', 'album')");
+    run('DELETE FROM posts');
+    run('DELETE FROM albums');
+    run('PRAGMA foreign_keys = ON');
+
+    res.json({
+      success: true,
+      message: `Permanently deleted ${deletedFiles} file(s) from storage bucket and cleared all posts and collections from the database.`,
+      deletedFiles,
+    });
+  } catch (err: any) {
+    console.error('Error during purge-all-data:', err);
+    res.status(500).json({ error: err.message || 'Failed to purge data from storage' });
+  }
+});
+
 // 1. Pending signups
 adminRouter.get('/pending-signups', (req: AuthenticatedRequest, res) => {
   const pending = queryAll<any>(

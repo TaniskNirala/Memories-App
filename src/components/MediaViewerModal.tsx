@@ -77,6 +77,18 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [postEventDate, setPostEventDate] = useState('');
   const [postEventPlace, setPostEventPlace] = useState('');
   const [isConvertingPost, setIsConvertingPost] = useState(false);
+  const [isDeleteProtected, setIsDeleteProtected] = useState(true);
+
+  useEffect(() => {
+    apiFetch('/api/config')
+      .then((r) => r.json())
+      .then((cfg) => {
+        if (typeof cfg.isDeleteProtected === 'boolean') {
+          setIsDeleteProtected(cfg.isDeleteProtected);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Zoom & Pan state
   const [zoom, setZoom] = useState(1);
@@ -233,18 +245,6 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const files = item.files || [];
   const currentFile = files[fileIndex] || files[0];
   const isOwner = user?.id === item.owner.id;
-  const [isDeleteProtected, setIsDeleteProtected] = useState(true);
-
-  useEffect(() => {
-    apiFetch('/api/config')
-      .then((r) => r.json())
-      .then((cfg) => {
-        if (typeof cfg.isDeleteProtected === 'boolean') {
-          setIsDeleteProtected(cfg.isDeleteProtected);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const canDelete = (isOwner || isAdmin) && !isDeleteProtected;
   const hasMultiplePhotos = files.length > 1;

@@ -49,6 +49,29 @@ export const AdminPanel: React.FC = () => {
   const [generatedLink, setGeneratedLink] = useState<{ username: string; link: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
+  const [purgeLoading, setPurgeLoading] = useState(false);
+
+  const handlePurgeAllData = async () => {
+    setPurgeLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/purge-all-data', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setActionToast({
+          message: data.message || 'All files permanently deleted from storage and feed cleared.',
+          type: 'success',
+        });
+        setShowPurgeConfirm(false);
+      } else {
+        setActionToast({ message: data.error || 'Failed to purge data', type: 'error' });
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Error purging data', type: 'error' });
+    } finally {
+      setPurgeLoading(false);
+    }
+  };
 
   const handleSyncStorage = async () => {
     setSyncLoading(true);
@@ -292,15 +315,26 @@ export const AdminPanel: React.FC = () => {
             Admin Portal
           </h2>
         </div>
-        <button
-          onClick={handleSyncStorage}
-          disabled={syncLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl text-xs font-semibold transition border border-amber-500/20 disabled:opacity-50 cursor-pointer"
-          title="Scan Backblaze B2 / local storage and restore past uploaded photos into feed"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
-          {syncLoading ? 'Syncing...' : 'Sync Cloud Storage'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncStorage}
+            disabled={syncLoading || purgeLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl text-xs font-semibold transition border border-amber-500/20 disabled:opacity-50 cursor-pointer"
+            title="Scan Backblaze B2 / local storage and restore past uploaded photos into feed"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
+            {syncLoading ? 'Syncing...' : 'Sync Storage'}
+          </button>
+          <button
+            onClick={() => setShowPurgeConfirm(true)}
+            disabled={syncLoading || purgeLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl text-xs font-semibold transition border border-rose-500/20 disabled:opacity-50 cursor-pointer"
+            title="Permanently delete all files from Backblaze B2/storage and clear all posts"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Wipe Storage Bucket
+          </button>
+        </div>
       </div>
 
       {/* Action Feedback Toast */}
@@ -843,6 +877,52 @@ export const AdminPanel: React.FC = () => {
               >
                 {deleteCircleLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                 <span>{deleteCircleLoading ? 'Deleting...' : 'Yes, Delete Circle'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Wipe Storage & Feed Confirmation Modal */}
+      {showPurgeConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !purgeLoading) setShowPurgeConfirm(false);
+          }}
+        >
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-rose-500/30 rounded-3xl shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Wipe Storage Bucket & Feed</span>
+            </div>
+
+            <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+              <p>
+                Are you sure you want to <strong>permanently delete all past files from your storage bucket</strong> and clear all posts and collections?
+              </p>
+              <p className="text-[11px] text-rose-300 bg-rose-950/40 p-2.5 rounded-xl border border-rose-500/30">
+                This will delete every uploaded photo/video from Backblaze B2 and reset feed data so you can start with a completely clean slate.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={purgeLoading}
+                onClick={() => setShowPurgeConfirm(false)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={purgeLoading}
+                onClick={handlePurgeAllData}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+              >
+                {purgeLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{purgeLoading ? 'Purging Bucket...' : 'Yes, Wipe Everything'}</span>
               </button>
             </div>
           </div>

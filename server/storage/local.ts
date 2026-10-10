@@ -121,4 +121,21 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
     scanDir(targetDir, prefix);
     return results;
   }
+
+  async purgeAllObjects(): Promise<{ deleted: number }> {
+    if (!fs.existsSync(this.baseDir)) return { deleted: 0 };
+    const files = await this.listObjects('');
+    let deleted = 0;
+    for (const f of files) {
+      const p = this.getFilePath(f);
+      if (fs.existsSync(p)) {
+        try {
+          fs.unlinkSync(p);
+          deleted++;
+        } catch {}
+      }
+    }
+    console.log(`✅ [Local Storage Purge] Deleted ${deleted} files`);
+    return { deleted };
+  }
 }

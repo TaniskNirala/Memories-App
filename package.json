@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit",
     "test": "tsx tests/run_tests.ts",
     "seed": "tsx scripts/seed.ts",
+    "purge:storage": "tsx scripts/purge-storage.ts",
     "start": "tsx server.ts"
   },
   "dependencies": {

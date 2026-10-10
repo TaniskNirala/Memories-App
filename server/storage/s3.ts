@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -204,6 +205,33 @@ export class S3StorageAdapter implements StorageAdapter {
     } catch (err: any) {
       console.error('⚠️ S3/Backblaze listObjects warning:', err.message || err);
       return [];
+    }
+  }
+
+  async purgeAllObjects(): Promise<{ deleted: number }> {
+    try {
+      const keys = await this.listObjects('');
+      if (keys.length === 0) return { deleted: 0 };
+
+      let deletedCount = 0;
+      // Delete in batches of 500 (S3 API supports up to 1000 per request)
+      for (let i = 0; i < keys.length; i += 500) {
+        const batch = keys.slice(i, i + 500);
+        const command = new DeleteObjectsCommand({
+          Bucket: this.config.bucket,
+          Delete: {
+            Objects: batch.map((k) => ({ Key: this.cleanKey(k) })),
+            Quiet: true,
+          },
+        });
+        await this.client.send(command);
+        deletedCount += batch.length;
+      }
+      console.log(`✅ [Storage Purge] Successfully deleted ${deletedCount} objects from bucket ${this.config.bucket}`);
+      return { deleted: deletedCount };
+    } catch (err: any) {
+      console.error('⚠️ S3/Backblaze purgeAllObjects error:', err.message || err);
+      throw err;
     }
   }
 }

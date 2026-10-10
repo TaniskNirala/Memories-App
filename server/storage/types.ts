@@ -32,4 +32,6 @@ export interface StorageAdapter {
   ): Promise<{ data: Buffer; contentType: string } | null>;
 
   listObjects?(prefix?: string): Promise<string[]>;
+
+  purgeAllObjects?(): Promise<{ deleted: number }>;
 }

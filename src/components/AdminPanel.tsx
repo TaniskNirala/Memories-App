@@ -16,6 +16,8 @@ import {
   Trash2,
   Users,
   RefreshCw,
+  Database,
+  Download,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
@@ -51,9 +53,23 @@ export const AdminPanel: React.FC = () => {
   const [syncLoading, setSyncLoading] = useState(false);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [purgeLoading, setPurgeLoading] = useState(false);
-  const [dbStatus, setDbStatus] = useState<{ isTursoSynced: boolean; tursoConfigured: boolean; lastSync: string | null; error: string | null; tursoUrl?: string | null; userCount?: number; postCount?: number } | null>(null);
+  const [dbStatus, setDbStatus] = useState<{
+    isTursoSynced: boolean;
+    tursoConfigured: boolean;
+    lastSync: string | null;
+    error: string | null;
+    tursoUrl?: string | null;
+    userCount?: number;
+    postCount?: number;
+    albumCount?: number;
+  } | null>(null);
   const [showDbModal, setShowDbModal] = useState(false);
   const [dbSyncLoading, setDbSyncLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [showCredForm, setShowCredForm] = useState(false);
+  const [customTursoUrl, setCustomTursoUrl] = useState('');
+  const [customTursoToken, setCustomTursoToken] = useState('');
+  const [saveCredLoading, setSaveCredLoading] = useState(false);
 
   const fetchDbStatus = async () => {
     try {
@@ -81,6 +97,62 @@ export const AdminPanel: React.FC = () => {
       setActionToast({ message: e.message || 'Error syncing database', type: 'error' });
     } finally {
       setDbSyncLoading(false);
+    }
+  };
+
+  const handleRestoreFromTurso = async () => {
+    setRestoreLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/restore-turso', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setActionToast({
+          message: data.message || `Successfully restored ${data.totalRestored ?? 'all'} record(s) from Turso Cloud!`,
+          type: 'success',
+        });
+        fetchDbStatus();
+        fetchUsers();
+        fetchCircles();
+        fetchSignups();
+      } else {
+        setActionToast({ message: data.message || 'Failed to restore from Turso Cloud', type: 'error' });
+        fetchDbStatus();
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Error restoring from Turso Cloud', type: 'error' });
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  const handleSaveTursoCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customTursoUrl.trim() || !customTursoToken.trim()) {
+      setActionToast({ message: 'Please provide both Turso URL and Auth Token', type: 'error' });
+      return;
+    }
+    setSaveCredLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/db-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tursoUrl: customTursoUrl.trim(), tursoToken: customTursoToken.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setActionToast({ message: data.message || 'Turso credentials saved & restored successfully!', type: 'success' });
+        setShowCredForm(false);
+        setCustomTursoToken('');
+        fetchDbStatus();
+        fetchUsers();
+        fetchCircles();
+      } else {
+        setActionToast({ message: data.error || 'Failed to save Turso credentials', type: 'error' });
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Error configuring Turso', type: 'error' });
+    } finally {
+      setSaveCredLoading(false);
     }
   };
 
@@ -1039,13 +1111,13 @@ export const AdminPanel: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-[var(--text-muted)] font-medium">Local Database Records</span>
                   <span className="text-[var(--text-secondary)] font-mono">
-                    {dbStatus?.userCount ?? 0} user(s), {dbStatus?.postCount ?? 0} post(s)
+                    {dbStatus?.userCount ?? 0} user(s), {dbStatus?.postCount ?? 0} memory(ies), {dbStatus?.albumCount ?? 0} event(s)
                   </span>
                 </div>
               </div>
 
               {dbStatus?.error && (
-                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 space-y-1">
+                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 space-y-1.5">
                   <div className="font-semibold flex items-center gap-1 text-amber-400">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>Sync Notice</span>
@@ -1053,18 +1125,79 @@ export const AdminPanel: React.FC = () => {
                   <pre className="font-mono whitespace-pre-wrap break-all text-[10px] text-neutral-300">
                     {dbStatus.error}
                   </pre>
+                  {dbStatus.error.includes('SyncNotSupported') && (
+                    <p className="text-[10px] text-amber-300/80">
+                      The server fell back to local storage on boot. Click &quot;Restore from Turso Cloud&quot; below to re-establish the Turso Cloud replica connection.
+                    </p>
+                  )}
+                  {dbStatus.error.includes('Handshake') && (
+                    <p className="text-[10px] text-amber-300/80">
+                      Network handshake timed out. Click &quot;Restore from Turso Cloud&quot; to connect via Turso&apos;s HTTPS REST endpoint.
+                    </p>
+                  )}
                 </div>
               )}
 
+              {/* Collapsible Turso Credentials Settings */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCredForm(!showCredForm)}
+                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>{showCredForm ? 'Hide Turso Credentials Form' : 'Update / Enter Turso Credentials'}</span>
+                </button>
+
+                {showCredForm && (
+                  <form onSubmit={handleSaveTursoCredentials} className="mt-2.5 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2.5">
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1">
+                        Turso Database URL
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="libsql://your-db-org.turso.io or https://..."
+                        value={customTursoUrl}
+                        onChange={(e) => setCustomTursoUrl(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-[11px] text-[var(--text-primary)] font-mono outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1">
+                        Turso Auth Token
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="eyJhbGciOi..."
+                        value={customTursoToken}
+                        onChange={(e) => setCustomTursoToken(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-[11px] text-[var(--text-primary)] font-mono outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="submit"
+                        disabled={saveCredLoading}
+                        className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-[11px] transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        {saveCredLoading && <RefreshCw className="w-3 h-3 animate-spin" />}
+                        <span>Save & Restore from Cloud</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
               <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                When synced, your accounts, circles, and memories are backed up permanently in Turso Cloud and will persist across all Render deployments.
+                When restored and synced, all your accounts, permanent permissions, friend circles, photos, captions, and albums are fetched directly from Turso Cloud.
               </p>
             </div>
 
-            <div className="pt-2 flex items-center justify-end gap-2">
+            <div className="pt-2 flex items-center justify-end gap-2 flex-wrap">
               <button
                 type="button"
-                disabled={dbSyncLoading}
+                disabled={dbSyncLoading || restoreLoading}
                 onClick={() => setShowDbModal(false)}
                 className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
               >
@@ -1072,12 +1205,25 @@ export const AdminPanel: React.FC = () => {
               </button>
               <button
                 type="button"
-                disabled={dbSyncLoading}
+                disabled={dbSyncLoading || restoreLoading}
                 onClick={handleManualDbSync}
-                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white hover:opacity-95 transition flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+                className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-primary)] transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {dbSyncLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>{dbSyncLoading ? 'Syncing with Turso...' : 'Sync Cloud Database Now'}</span>
+                <span>Sync Cloud Database</span>
+              </button>
+              <button
+                type="button"
+                disabled={dbSyncLoading || restoreLoading}
+                onClick={handleRestoreFromTurso}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white hover:opacity-95 transition flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {restoreLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                <span>{restoreLoading ? 'Restoring from Turso...' : 'Restore All Data from Turso Cloud'}</span>
               </button>
             </div>
           </div>

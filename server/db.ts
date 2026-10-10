@@ -1,22 +1,18 @@
 import Database from 'libsql';
 import fs from 'fs';
 import path from 'path';
+import {
+  getTursoCredentials,
+  normalizeTursoUrl,
+  restoreAllFromTurso,
+  pushWriteToTurso,
+  shouldForwardToTurso,
+} from './tursoSync.ts';
 
 let dbInstance: any = null;
 let isTursoSynced = false;
 let lastSyncTimestamp: string | null = null;
 let tursoSyncError: string | null = null;
-let periodicSyncTimer: any = null;
-
-function normalizeTursoUrl(url: string): string {
-  let cleaned = url.trim();
-  if (cleaned.startsWith('libsql://')) {
-    cleaned = 'https://' + cleaned.slice('libsql://'.length);
-  } else if (!cleaned.startsWith('https://') && !cleaned.startsWith('http://')) {
-    cleaned = 'https://' + cleaned;
-  }
-  return cleaned;
-}
 
 function getDbFilePath(): string {
   const dir = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
@@ -32,100 +28,43 @@ export async function getDb(): Promise<any> {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
-  const tursoToken = process.env.TURSO_AUTH_TOKEN?.trim();
+  // Open local SQLite database
+  dbInstance = new Database(dbFile);
+  initSchema(dbInstance);
+
+  const { url: tursoUrl, token: tursoToken } = getTursoCredentials();
 
   if (tursoUrl && tursoToken) {
     const normalizedUrl = normalizeTursoUrl(tursoUrl);
-    console.log(`🔌 Connecting to Turso Cloud Database via embedded replica (${normalizedUrl})...`);
-
-    const openReplica = () => {
-      return new (Database as any)(dbFile, {
-        syncUrl: normalizedUrl,
-        authToken: tursoToken,
-        readYourWrites: true,
-      });
-    };
+    console.log(`🔌 Turso Cloud Database detected (${normalizedUrl}). Restoring full cloud state...`);
 
     try {
-      try {
-        dbInstance = openReplica();
-      } catch (openErr: any) {
-        // If an existing SQLite file without wal_index is present, back it up and initialize a clean replica
-        if (openErr.message && (openErr.message.includes('wal_index') || openErr.message.includes('delete the database'))) {
-          console.warn('⚠️ Local SQLite file is not a sync replica. Backing up and recreating fresh replica for Turso Cloud...');
-          try {
-            if (fs.existsSync(dbFile)) {
-              fs.renameSync(dbFile, `${dbFile}.backup.${Date.now()}`);
-            }
-            const wal = `${dbFile}-wal`;
-            const shm = `${dbFile}-shm`;
-            if (fs.existsSync(wal)) fs.unlinkSync(wal);
-            if (fs.existsSync(shm)) fs.unlinkSync(shm);
-          } catch {}
-          dbInstance = openReplica();
-        } else {
-          throw openErr;
-        }
-      }
-
-      // Initial sync with Turso cloud
-      try {
-        dbInstance.sync();
+      const restoreResult = await restoreAllFromTurso(dbInstance);
+      if (restoreResult.success) {
+        isTursoSynced = true;
         lastSyncTimestamp = new Date().toISOString();
         tursoSyncError = null;
-        isTursoSynced = true;
-        console.log('✅ Successfully connected and synced with Turso cloud!');
-      } catch (syncErr: any) {
-        tursoSyncError = syncErr.message || String(syncErr);
+        console.log(`✅ Successfully restored and synchronized with Turso Cloud! (${restoreResult.totalRestored} records)`);
+      } else {
+        console.warn('⚠️ Turso Cloud restore notice on boot:', restoreResult.error);
+        tursoSyncError = restoreResult.error || 'Restore notice';
         isTursoSynced = false;
-        console.warn('⚠️ Initial Turso sync notice:', syncErr.message || syncErr);
-      }
-
-      // Schedule periodic background sync every 30 seconds to ensure permanent cloud persistence
-      if (!periodicSyncTimer) {
-        periodicSyncTimer = setInterval(() => {
-          if (dbInstance && typeof dbInstance.sync === 'function') {
-            try {
-              dbInstance.sync();
-              lastSyncTimestamp = new Date().toISOString();
-              tursoSyncError = null;
-              isTursoSynced = true;
-            } catch (err: any) {
-              tursoSyncError = err.message || String(err);
-              console.warn('⚠️ Periodic Turso sync warning:', err.message || err);
-            }
-          }
-        }, 30000);
-        periodicSyncTimer.unref?.();
       }
     } catch (err: any) {
-      console.error('❌ Failed to connect to Turso with syncUrl, falling back to local SQLite:', err.message || err);
+      console.error('❌ Failed to restore from Turso Cloud on boot:', err.message || err);
       tursoSyncError = err.message || String(err);
-      dbInstance = new Database(dbFile);
       isTursoSynced = false;
     }
   } else {
-    console.log(`📂 Using local SQLite database at ${dbFile}`);
-    dbInstance = new Database(dbFile);
+    console.log(`📂 Using local SQLite database at ${dbFile} (Turso credentials not configured)`);
     isTursoSynced = false;
   }
 
-  initSchema(dbInstance);
   return dbInstance;
 }
 
 export function saveDb(): void {
-  if (dbInstance && isTursoSynced) {
-    try {
-      dbInstance.sync();
-      lastSyncTimestamp = new Date().toISOString();
-      tursoSyncError = null;
-    } catch (err: any) {
-      tursoSyncError = err.message || String(err);
-      console.warn('⚠️ Turso sync warning on write:', err.message || err);
-    }
-  }
+  // Local writes are persistent via libsql/sqlite WAL mode.
 }
 
 export function getDatabaseStatus(): {
@@ -134,45 +73,82 @@ export function getDatabaseStatus(): {
   lastSync: string | null;
   error: string | null;
   tursoUrl: string | null;
+  userCount: number;
+  postCount: number;
+  albumCount: number;
 } {
-  const url = process.env.TURSO_DATABASE_URL?.trim();
+  const { url } = getTursoCredentials();
+  let userCount = 0;
+  let postCount = 0;
+  let albumCount = 0;
+
+  if (dbInstance) {
+    try {
+      const u = dbInstance.prepare('SELECT COUNT(*) as count FROM users').get();
+      userCount = u?.count || 0;
+    } catch {}
+    try {
+      const p = dbInstance.prepare('SELECT COUNT(*) as count FROM posts WHERE deleted_at IS NULL').get();
+      postCount = p?.count || 0;
+    } catch {}
+    try {
+      const a = dbInstance.prepare('SELECT COUNT(*) as count FROM albums WHERE deleted_at IS NULL').get();
+      albumCount = a?.count || 0;
+    } catch {}
+  }
+
   return {
     isTursoSynced,
     tursoConfigured: Boolean(url),
     lastSync: lastSyncTimestamp,
     error: tursoSyncError,
     tursoUrl: url ? normalizeTursoUrl(url) : null,
+    userCount,
+    postCount,
+    albumCount,
   };
 }
 
-export function triggerDatabaseSync(): { success: boolean; message: string; status: any } {
+export async function triggerDatabaseSync(): Promise<{
+  success: boolean;
+  message: string;
+  totalRestored?: number;
+  counts?: Record<string, number>;
+  status: any;
+}> {
   if (!dbInstance) {
     throw new Error('Database not initialized');
   }
-  const tursoUrl = process.env.TURSO_DATABASE_URL?.trim();
-  if (!tursoUrl) {
+  const { url: tursoUrl, token: tursoToken } = getTursoCredentials();
+  if (!tursoUrl || !tursoToken) {
     return {
       success: false,
-      message: 'TURSO_DATABASE_URL is not configured.',
+      message: 'TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be configured in environment variables or Admin Settings.',
       status: getDatabaseStatus(),
     };
   }
 
   try {
-    if (typeof dbInstance.sync === 'function') {
-      dbInstance.sync();
+    console.log(`🔄 Performing manual restore and sync from Turso Cloud...`);
+    const restoreResult = await restoreAllFromTurso(dbInstance);
+
+    if (restoreResult.success) {
+      isTursoSynced = true;
       lastSyncTimestamp = new Date().toISOString();
       tursoSyncError = null;
-      isTursoSynced = true;
       return {
         success: true,
-        message: 'Successfully synced with Turso Cloud!',
+        message: `Successfully restored ${restoreResult.totalRestored} record(s) from Turso Cloud!`,
+        totalRestored: restoreResult.totalRestored,
+        counts: restoreResult.counts,
         status: getDatabaseStatus(),
       };
     } else {
+      tursoSyncError = restoreResult.error || 'Restore failed';
+      isTursoSynced = false;
       return {
         success: false,
-        message: 'Current database instance is not a sync replica.',
+        message: `Turso Cloud restore failed: ${restoreResult.error}`,
         status: getDatabaseStatus(),
       };
     }
@@ -181,7 +157,7 @@ export function triggerDatabaseSync(): { success: boolean; message: string; stat
     isTursoSynced = false;
     return {
       success: false,
-      message: `Turso sync failed: ${err.message || err}`,
+      message: `Turso sync exception: ${err.message || err}`,
       status: getDatabaseStatus(),
     };
   }
@@ -219,6 +195,11 @@ export function run(sql: string, params: any[] = []): void {
     stmt.run();
   }
   saveDb();
+
+  // Forward data mutation to Turso Cloud for permanent persistence
+  if (shouldForwardToTurso(sql)) {
+    pushWriteToTurso(sql, params);
+  }
 }
 
 function initSchema(db: any) {

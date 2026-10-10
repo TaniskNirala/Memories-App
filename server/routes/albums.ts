@@ -285,8 +285,16 @@ albumsRouter.post('/:id/items', async (req: AuthenticatedRequest, res) => {
 
     const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
     if (!album) return res.status(404).json({ error: 'Album not found' });
-    if (!isAdmin && album.creator_id !== userId) {
-      return res.status(403).json({ error: 'Only the creator or an admin can add photos to this album' });
+
+    const isMemberOfEventCircle = queryOne(
+      `SELECT ig.id FROM item_groups ig
+       JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
+       WHERE ig.item_type = 'album' AND ig.item_id = ?`,
+      [userId, albumId]
+    );
+
+    if (!isAdmin && album.creator_id !== userId && !isMemberOfEventCircle) {
+      return res.status(403).json({ error: 'Only event contributors or the creator can add photos to this album' });
     }
 
     const { postIds } = req.body;

@@ -135,29 +135,47 @@ export class S3StorageAdapter implements StorageAdapter {
 
   async getObject(storageKey: string): Promise<{ data: Buffer; contentType: string } | null> {
     const key = this.cleanKey(storageKey);
-    try {
-      const command = new GetObjectCommand({
-        Bucket: this.config.bucket,
-        Key: key,
-      });
+    const candidates = [key];
 
-      const response = await this.client.send(command);
-      if (!response.Body) return null;
-
-      const stream = response.Body as Readable;
-      const chunks: Buffer[] = [];
-      for await (const chunk of stream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      }
-
-      return {
-        data: Buffer.concat(chunks),
-        contentType: response.ContentType || 'image/jpeg',
-      };
-    } catch (err: any) {
-      console.error(`⚠️ S3/Backblaze getObject warning for ${key}:`, err.message || err);
-      return null;
+    if (key.startsWith('uploads/')) {
+      candidates.push(key.replace(/^uploads\//, ''));
+    } else {
+      candidates.push(`uploads/${key}`);
     }
+
+    if (!key.startsWith('posts/') && !key.startsWith('uploads/')) {
+      candidates.push(`posts/${key}`);
+    }
+
+    if (key.includes('_thumb')) {
+      candidates.push(key.replace(/_thumb(\.[a-zA-Z0-9]+)$/, '$1'));
+    }
+
+    for (const candidateKey of candidates) {
+      try {
+        const command = new GetObjectCommand({
+          Bucket: this.config.bucket,
+          Key: candidateKey,
+        });
+
+        const response = await this.client.send(command);
+        if (!response.Body) continue;
+
+        const stream = response.Body as Readable;
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+
+        return {
+          data: Buffer.concat(chunks),
+          contentType: response.ContentType || 'image/jpeg',
+        };
+      } catch {}
+    }
+
+    console.warn(`⚠️ Backblaze B2 / S3 object not found for key: ${key}`);
+    return null;
   }
 
   async deleteObject(storageKey: string): Promise<void> {

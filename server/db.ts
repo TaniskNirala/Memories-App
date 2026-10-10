@@ -4,6 +4,19 @@ import path from 'path';
 
 let dbInstance: any = null;
 let isTursoSynced = false;
+let lastSyncTimestamp: string | null = null;
+let tursoSyncError: string | null = null;
+let periodicSyncTimer: any = null;
+
+function normalizeTursoUrl(url: string): string {
+  let cleaned = url.trim();
+  if (cleaned.startsWith('libsql://')) {
+    cleaned = 'https://' + cleaned.slice('libsql://'.length);
+  } else if (!cleaned.startsWith('https://') && !cleaned.startsWith('http://')) {
+    cleaned = 'https://' + cleaned;
+  }
+  return cleaned;
+}
 
 function getDbFilePath(): string {
   const dir = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
@@ -23,22 +36,44 @@ export async function getDb(): Promise<any> {
   const tursoToken = process.env.TURSO_AUTH_TOKEN?.trim();
 
   if (tursoUrl && tursoToken) {
-    console.log(`🔌 Connecting to Turso Database at ${tursoUrl}...`);
+    const normalizedUrl = normalizeTursoUrl(tursoUrl);
+    console.log(`🔌 Connecting to Turso Cloud Database via embedded replica (${normalizedUrl})...`);
     try {
       dbInstance = new (Database as any)(dbFile, {
-        syncUrl: tursoUrl,
+        syncUrl: normalizedUrl,
         authToken: tursoToken,
         readYourWrites: true,
       });
       isTursoSynced = true;
       try {
         dbInstance.sync();
+        lastSyncTimestamp = new Date().toISOString();
+        tursoSyncError = null;
         console.log('✅ Successfully connected and synced with Turso cloud!');
       } catch (syncErr: any) {
+        tursoSyncError = syncErr.message || String(syncErr);
         console.warn('⚠️ Initial Turso sync notice:', syncErr.message || syncErr);
+      }
+
+      // Schedule periodic background sync every 30 seconds to ensure permanent cloud persistence
+      if (!periodicSyncTimer) {
+        periodicSyncTimer = setInterval(() => {
+          if (dbInstance && isTursoSynced) {
+            try {
+              dbInstance.sync();
+              lastSyncTimestamp = new Date().toISOString();
+              tursoSyncError = null;
+            } catch (err: any) {
+              tursoSyncError = err.message || String(err);
+              console.warn('⚠️ Periodic Turso sync warning:', err.message || err);
+            }
+          }
+        }, 30000);
+        periodicSyncTimer.unref?.();
       }
     } catch (err: any) {
       console.error('❌ Failed to connect to Turso with syncUrl, falling back to local SQLite:', err.message || err);
+      tursoSyncError = err.message || String(err);
       dbInstance = new Database(dbFile);
       isTursoSynced = false;
     }
@@ -56,10 +91,27 @@ export function saveDb(): void {
   if (dbInstance && isTursoSynced) {
     try {
       dbInstance.sync();
-    } catch {
-      // Periodic sync will catch up
+      lastSyncTimestamp = new Date().toISOString();
+      tursoSyncError = null;
+    } catch (err: any) {
+      tursoSyncError = err.message || String(err);
+      console.warn('⚠️ Turso sync warning on write:', err.message || err);
     }
   }
+}
+
+export function getDatabaseStatus(): {
+  isTursoSynced: boolean;
+  tursoConfigured: boolean;
+  lastSync: string | null;
+  error: string | null;
+} {
+  return {
+    isTursoSynced,
+    tursoConfigured: Boolean(process.env.TURSO_DATABASE_URL?.trim()),
+    lastSync: lastSyncTimestamp,
+    error: tursoSyncError,
+  };
 }
 
 function cleanRow<T = any>(row: any): T {
@@ -324,5 +376,30 @@ function initSchema(db: any) {
 
   try {
     db.exec('ALTER TABLE post_files ADD COLUMN checksum TEXT');
+  } catch {}
+
+  // Auto-repair missing or generic captions from storage keys
+  try {
+    const nameless = db.prepare(
+      `SELECT p.id, pf.storage_key
+       FROM posts p
+       JOIN post_files pf ON pf.post_id = p.id AND pf.position = 0
+       WHERE p.caption IS NULL OR p.caption = '' OR p.caption = 'Memory'`
+    ).all();
+    for (const r of nameless) {
+      if (r.storage_key) {
+        const filename = r.storage_key.split('/').pop() || r.storage_key;
+        const withoutExt = filename.replace(/\.[^/.]+$/, '');
+        const cleanName = withoutExt
+          .replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[-_]?/i, '')
+          .replace(/^\d{10,14}[-_]?/, '')
+          .replace(/[_-]+/g, ' ')
+          .trim();
+        if (cleanName && cleanName.length > 0 && cleanName.toLowerCase() !== 'memory') {
+          const formatted = cleanName.replace(/\b\w/g, (c: string) => c.toUpperCase());
+          db.prepare('UPDATE posts SET caption = ? WHERE id = ?').run(formatted, r.id);
+        }
+      }
+    }
   } catch {}
 }

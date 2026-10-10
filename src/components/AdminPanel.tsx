@@ -51,6 +51,21 @@ export const AdminPanel: React.FC = () => {
   const [syncLoading, setSyncLoading] = useState(false);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [purgeLoading, setPurgeLoading] = useState(false);
+  const [dbStatus, setDbStatus] = useState<{ isTursoSynced: boolean; tursoConfigured: boolean; lastSync: string | null; error: string | null } | null>(null);
+
+  const fetchDbStatus = async () => {
+    try {
+      const res = await apiFetch('/api/admin/db-status');
+      if (res.ok) {
+        const data = await res.json();
+        setDbStatus(data);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchDbStatus();
+  }, []);
 
   const handlePurgeAllData = async () => {
     setPurgeLoading(true);
@@ -309,11 +324,32 @@ export const AdminPanel: React.FC = () => {
     <div className="w-full max-w-4xl mx-auto p-4 space-y-4">
       {/* Admin Title & Actions */}
       <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Shield className="w-5 h-5 text-amber-500" />
           <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">
             Admin Portal
           </h2>
+          {dbStatus && (
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded-full font-medium border flex items-center gap-1.5 transition ${
+                dbStatus.isTursoSynced
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  : dbStatus.tursoConfigured
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-400'
+              }`}
+              title={
+                dbStatus.isTursoSynced
+                  ? `Turso Cloud Database synced! Last cloud sync: ${dbStatus.lastSync ? new Date(dbStatus.lastSync).toLocaleTimeString() : 'Active'}`
+                  : dbStatus.tursoConfigured
+                  ? `Turso notice: ${dbStatus.error || 'Initializing cloud connection'}`
+                  : 'Running on local SQLite database'
+              }
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.isTursoSynced ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span>{dbStatus.isTursoSynced ? 'Turso Cloud Synced' : dbStatus.tursoConfigured ? 'Turso Connecting...' : 'Local SQLite'}</span>
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button

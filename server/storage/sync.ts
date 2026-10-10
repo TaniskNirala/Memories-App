@@ -1,6 +1,24 @@
 import { getStorageAdapter } from './index.ts';
-import { queryOne, run } from '../db.ts';
+import { queryOne, queryAll, run } from '../db.ts';
 import crypto from 'crypto';
+
+export function extractCaptionFromStorageKey(key: string): string {
+  const filename = key.split('/').pop() || key;
+  // Remove file extension
+  const withoutExt = filename.replace(/\.[^/.]+$/, '');
+  // Remove leading UUIDs or timestamps e.g. "1728529200-" or "uuid_"
+  const cleanName = withoutExt
+    .replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[-_]?/i, '')
+    .replace(/^\d{10,14}[-_]?/, '')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+
+  if (!cleanName || cleanName.length === 0) {
+    return 'Memory';
+  }
+  // Capitalize words
+  return cleanName.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 /**
  * Scans storage (Backblaze B2 / S3 / local) for any past uploaded files
@@ -13,6 +31,24 @@ export async function syncStorageToDatabase(): Promise<{ recovered: number; tota
     if (!storage.listObjects) {
       return { recovered: 0, totalFound: 0 };
     }
+
+    // Clean up captions for any existing memories that have null or generic 'Memory' captions
+    try {
+      const namelessPosts = queryAll<any>(
+        `SELECT p.id, pf.storage_key
+         FROM posts p
+         JOIN post_files pf ON pf.post_id = p.id AND pf.position = 0
+         WHERE p.caption IS NULL OR p.caption = '' OR p.caption = 'Memory'`
+      );
+      for (const np of namelessPosts) {
+        if (np.storage_key) {
+          const cleanTitle = extractCaptionFromStorageKey(np.storage_key);
+          if (cleanTitle && cleanTitle !== 'Memory') {
+            run('UPDATE posts SET caption = ? WHERE id = ?', [cleanTitle, np.id]);
+          }
+        }
+      }
+    } catch {}
 
     // List all objects across storage root and posts prefix
     let allKeys: string[] = [];
@@ -83,11 +119,12 @@ export async function syncStorageToDatabase(): Promise<{ recovered: number; tota
 
       const isVideo = /\.(mp4|mov|webm|avi)$/i.test(key);
       const fileType = isVideo ? 'video' : 'photo';
+      const caption = extractCaptionFromStorageKey(key);
 
       run(
         `INSERT INTO posts (id, owner_id, caption, taken_at, uploaded_at, date_basis, is_standalone, deleted_at, created_at)
          VALUES (?, ?, ?, ?, ?, 'uploaded_at', 1, NULL, ?)`,
-        [postId, targetUserId, null, now, now, now]
+        [postId, targetUserId, caption, now, now, now]
       );
 
       run(

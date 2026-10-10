@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { queryOne, queryAll, run } from '../db.ts';
+import { queryOne, queryAll, run, getDatabaseStatus } from '../db.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
 import { syncStorageToDatabase } from '../storage/sync.ts';
@@ -49,6 +49,18 @@ reportsRouter.post('/', (req: AuthenticatedRequest, res) => {
 
 // All following endpoints require Admin role
 adminRouter.use(requireAdmin);
+
+// Database persistence & Turso synchronization status
+adminRouter.get('/db-status', (_req: AuthenticatedRequest, res) => {
+  const status = getDatabaseStatus();
+  const users = queryOne<{ count: number }>('SELECT count(*) as count FROM users');
+  const posts = queryOne<{ count: number }>('SELECT count(*) as count FROM posts');
+  res.json({
+    ...status,
+    userCount: users?.count || 0,
+    postCount: posts?.count || 0,
+  });
+});
 
 // Sync past uploads from cloud storage into database
 adminRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {

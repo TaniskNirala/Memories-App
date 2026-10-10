@@ -74,7 +74,7 @@ albumsRouter.post('/', (req: AuthenticatedRequest, res) => {
 
   // If member proposed, notify admins
   if (!isAdmin) {
-    const admins = queryAll<{ id: string }>('SELECT id FROM users WHERE role = "admin"');
+    const admins = queryAll<{ id: string }>("SELECT id FROM users WHERE role = 'admin'");
     for (const adm of admins) {
       run(
         'INSERT INTO notifications (id, user_id, type, title, body, link, read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
@@ -518,12 +518,12 @@ albumsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
     return res.status(403).json({ error: 'Only the creator or admin can delete this album' });
   }
 
-  run('DELETE FROM item_groups WHERE item_type = "album" AND item_id = ?', [albumId]);
+  run("DELETE FROM item_groups WHERE item_type = 'album' AND item_id = ?", [albumId]);
   run('DELETE FROM event_attendance WHERE event_id = ?', [albumId]);
   run('DELETE FROM event_notes WHERE event_id = ?', [albumId]);
   run('DELETE FROM album_items WHERE album_id = ?', [albumId]);
-  run('DELETE FROM comments WHERE target_type = "album" AND target_id = ?', [albumId]);
-  run('DELETE FROM reactions WHERE target_type = "album" AND target_id = ?', [albumId]);
+  run("DELETE FROM comments WHERE target_type = 'album' AND target_id = ?", [albumId]);
+  run("DELETE FROM reactions WHERE target_type = 'album' AND target_id = ?", [albumId]);
   run('DELETE FROM albums WHERE id = ?', [albumId]);
 
   res.json({ success: true, message: 'Album deleted successfully' });

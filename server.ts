@@ -9,6 +9,7 @@ import { seedDatabase } from './server/seed.ts';
 import { authMiddleware } from './server/middleware/auth.ts';
 import { LocalDiskStorageAdapter } from './server/storage/local.ts';
 import { getStorageAdapter } from './server/storage/index.ts';
+import { syncStorageToDatabase } from './server/storage/sync.ts';
 import { isDeleteProtected } from './server/config.ts';
 
 // Routers
@@ -31,6 +32,7 @@ const __dirname = path.dirname(__filename);
 
 export async function createApp() {
   await getDb();
+  await syncStorageToDatabase().catch((e) => console.warn('Storage sync notice:', e));
 
   const app = express();
 

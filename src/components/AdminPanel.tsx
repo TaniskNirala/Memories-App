@@ -48,6 +48,39 @@ export const AdminPanel: React.FC = () => {
   // Generated reset link modal
   const [generatedLink, setGeneratedLink] = useState<{ username: string; link: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
+
+  const handleSyncStorage = async () => {
+    setSyncLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/sync-storage', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (data.recovered > 0) {
+          setActionToast({
+            message: `Successfully restored ${data.recovered} photo(s) from storage into feed! (${data.totalFound} found in storage)`,
+            type: 'success',
+          });
+        } else if (data.totalFound > 0) {
+          setActionToast({
+            message: `All ${data.totalFound} items in storage are already synced with feed.`,
+            type: 'success',
+          });
+        } else {
+          setActionToast({
+            message: 'No media items found in storage bucket or folder.',
+            type: 'success',
+          });
+        }
+      } else {
+        setActionToast({ message: data.error || 'Failed to sync storage', type: 'error' });
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Error syncing storage', type: 'error' });
+    } finally {
+      setSyncLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (actionToast) {
@@ -251,12 +284,23 @@ export const AdminPanel: React.FC = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4 space-y-4">
-      {/* Admin Title */}
-      <div className="flex items-center gap-2 pb-2 border-b border-[var(--border-color)]">
-        <Shield className="w-5 h-5 text-amber-500" />
-        <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">
-          Admin Portal
-        </h2>
+      {/* Admin Title & Actions */}
+      <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
+        <div className="flex items-center gap-2">
+          <Shield className="w-5 h-5 text-amber-500" />
+          <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">
+            Admin Portal
+          </h2>
+        </div>
+        <button
+          onClick={handleSyncStorage}
+          disabled={syncLoading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl text-xs font-semibold transition border border-amber-500/20 disabled:opacity-50 cursor-pointer"
+          title="Scan Backblaze B2 / local storage and restore past uploaded photos into feed"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
+          {syncLoading ? 'Syncing...' : 'Sync Cloud Storage'}
+        </button>
       </div>
 
       {/* Action Feedback Toast */}

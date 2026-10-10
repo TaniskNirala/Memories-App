@@ -30,4 +30,6 @@ export interface StorageAdapter {
   getObject?(
     storageKey: string
   ): Promise<{ data: Buffer; contentType: string } | null>;
+
+  listObjects?(prefix?: string): Promise<string[]>;
 }

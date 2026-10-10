@@ -95,4 +95,30 @@ export class LocalDiskStorageAdapter implements StorageAdapter {
     const filePath = this.getFilePath(storageKey);
     fs.writeFileSync(filePath, data);
   }
+
+  async listObjects(prefix: string = ''): Promise<string[]> {
+    const targetDir = path.join(this.baseDir, prefix);
+    if (!fs.existsSync(targetDir)) return [];
+
+    const results: string[] = [];
+    const scanDir = (dir: string, rel: string) => {
+      try {
+        const files = fs.readdirSync(dir);
+        for (const file of files) {
+          const fullPath = path.join(dir, file);
+          const relativePath = rel ? `${rel}/${file}` : file;
+          if (fs.statSync(fullPath).isDirectory()) {
+            scanDir(fullPath, relativePath);
+          } else {
+            results.push(relativePath.replace(/\\/g, '/'));
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading directory:', dir, e);
+      }
+    };
+
+    scanDir(targetDir, prefix);
+    return results;
+  }
 }

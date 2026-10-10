@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Readable } from 'stream';
@@ -173,6 +174,36 @@ export class S3StorageAdapter implements StorageAdapter {
       console.log(`✅ Deleted S3/Backblaze B2 object: ${key}`);
     } catch (err: any) {
       console.error(`⚠️ Failed to delete S3/Backblaze object ${key}:`, err.message || err);
+    }
+  }
+
+  async listObjects(prefix: string = ''): Promise<string[]> {
+    try {
+      const keys: string[] = [];
+      let continuationToken: string | undefined = undefined;
+
+      do {
+        const command: ListObjectsV2Command = new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        });
+
+        const res = await this.client.send(command);
+        if (res.Contents) {
+          for (const item of res.Contents) {
+            if (item.Key && !item.Key.endsWith('/')) {
+              keys.push(item.Key);
+            }
+          }
+        }
+        continuationToken = res.NextContinuationToken;
+      } while (continuationToken);
+
+      return keys;
+    } catch (err: any) {
+      console.error('⚠️ S3/Backblaze listObjects warning:', err.message || err);
+      return [];
     }
   }
 }

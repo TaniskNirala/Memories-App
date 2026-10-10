@@ -3,14 +3,18 @@ import fs from 'fs';
 import path from 'path';
 
 let dbInstance: any = null;
-const DB_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
-const DB_FILE = process.env.DB_PATH || path.join(DB_DIR, 'kinfolk.sqlite');
 let isTursoSynced = false;
+
+function getDbFilePath(): string {
+  const dir = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
+  return process.env.DB_PATH || path.join(dir, 'kinfolk.sqlite');
+}
 
 export async function getDb(): Promise<any> {
   if (dbInstance) return dbInstance;
 
-  const targetDir = path.dirname(DB_FILE);
+  const dbFile = getDbFilePath();
+  const targetDir = path.dirname(dbFile);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
@@ -21,7 +25,7 @@ export async function getDb(): Promise<any> {
   if (tursoUrl && tursoToken) {
     console.log(`🔌 Connecting to Turso Database at ${tursoUrl}...`);
     try {
-      dbInstance = new Database(DB_FILE, {
+      dbInstance = new (Database as any)(dbFile, {
         syncUrl: tursoUrl,
         authToken: tursoToken,
         readYourWrites: true,
@@ -35,12 +39,12 @@ export async function getDb(): Promise<any> {
       }
     } catch (err: any) {
       console.error('❌ Failed to connect to Turso with syncUrl, falling back to local SQLite:', err.message || err);
-      dbInstance = new Database(DB_FILE);
+      dbInstance = new Database(dbFile);
       isTursoSynced = false;
     }
   } else {
-    console.log(`📂 Using local SQLite database at ${DB_FILE}`);
-    dbInstance = new Database(DB_FILE);
+    console.log(`📂 Using local SQLite database at ${dbFile}`);
+    dbInstance = new Database(dbFile);
     isTursoSynced = false;
   }
 

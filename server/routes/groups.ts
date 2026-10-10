@@ -83,7 +83,7 @@ groupsRouter.get('/available-users', (req: AuthenticatedRequest, res) => {
     avatar_color: string;
     role: string;
   }>(
-    'SELECT id, username, display_name, avatar_color, role FROM users WHERE status = "active" AND role != "pending" ORDER BY display_name ASC'
+    "SELECT id, username, display_name, avatar_color, role FROM users WHERE status = 'active' AND role != 'pending' ORDER BY display_name ASC"
   );
   res.json({ users });
 });
@@ -117,7 +117,7 @@ groupsRouter.post('/', (req: AuthenticatedRequest, res) => {
       if (mId && mId !== userId) {
         // verify member is approved
         const target = queryOne<{ id: string }>(
-          'SELECT id FROM users WHERE id = ? AND status = "active" AND role != "pending"',
+          "SELECT id FROM users WHERE id = ? AND status = 'active' AND role != 'pending'",
           [mId]
         );
         if (target) {
@@ -239,7 +239,7 @@ groupsRouter.post('/:id/members', (req: AuthenticatedRequest, res) => {
   }
 
   const target = queryOne<{ id: string; display_name: string }>(
-    'SELECT id, display_name FROM users WHERE id = ? AND status = "active" AND role != "pending"',
+    "SELECT id, display_name FROM users WHERE id = ? AND status = 'active' AND role != 'pending'",
     [memberId]
   );
 

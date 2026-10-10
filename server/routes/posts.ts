@@ -6,6 +6,7 @@ import multer from 'multer';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved, requireAdmin } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { syncStorageToDatabase } from '../storage/sync.ts';
 import { isDeleteProtected } from '../config.ts';
 
 // Multer disk storage setup for reliable multipart file uploads
@@ -144,8 +145,15 @@ postsRouter.post(
 
       // If cloud storage backend is configured, sync uploaded buffers to cloud safely
       const storage = getStorageAdapter();
-      const backend = process.env.STORAGE_BACKEND;
-      if (backend === 's3' || backend === 'r2') {
+      const backend = (process.env.STORAGE_BACKEND || '').toLowerCase();
+      const isCloud =
+        backend === 's3' ||
+        backend === 'r2' ||
+        backend === 'b2' ||
+        backend === 'backblaze' ||
+        Boolean(process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME);
+
+      if (isCloud && storage.putObject) {
         try {
           const fileBuf = fs.readFileSync(mainFile.path);
           await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype);
@@ -223,6 +231,16 @@ const handleSignedUploadUrls = async (req: AuthenticatedRequest, res: any) => {
 
 postsRouter.post('/signed-upload-urls', handleSignedUploadUrls);
 postsRouter.post('/presign-upload', handleSignedUploadUrls);
+
+// Sync past uploads from cloud storage into feed
+postsRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
+  try {
+    const result = await syncStorageToDatabase();
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to sync storage' });
+  }
+});
 
 // Create post after files have been uploaded directly to storage
 postsRouter.post('/', async (req: AuthenticatedRequest, res) => {
@@ -443,11 +461,11 @@ postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
         }
       } catch {}
     }
-    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
+    run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [postId]);
     run('DELETE FROM album_items WHERE post_id = ?', [postId]);
     run('DELETE FROM post_files WHERE post_id = ?', [postId]);
-    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [postId]);
-    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [postId]);
+    run("DELETE FROM comments WHERE target_type = 'post' AND target_id = ?", [postId]);
+    run("DELETE FROM reactions WHERE target_type = 'post' AND target_id = ?", [postId]);
     run('DELETE FROM posts WHERE id = ?', [postId]);
   } else {
     run('UPDATE posts SET deleted_at = ? WHERE id = ?', [new Date().toISOString(), postId]);
@@ -790,7 +808,7 @@ postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res)
   );
 
   // Copy placements from item_groups
-  const postPlacements = queryAll<any>('SELECT group_id FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
+  const postPlacements = queryAll<any>("SELECT group_id FROM item_groups WHERE item_type = 'post' AND item_id = ?", [postId]);
   for (const pl of postPlacements) {
     const plId = crypto.randomUUID();
     run(
@@ -1015,7 +1033,7 @@ postsRouter.post('/duplicates/resolve', async (req: AuthenticatedRequest, res) =
   } catch {}
 
   if ((totalFiles?.count || 0) <= 1) {
-    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [postId]);
+    run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [postId]);
     run('DELETE FROM album_items WHERE post_id = ?', [postId]);
     run('DELETE FROM post_files WHERE post_id = ?', [postId]);
     run('DELETE FROM posts WHERE id = ?', [postId]);

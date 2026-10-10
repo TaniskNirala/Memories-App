@@ -74,7 +74,7 @@ authRouter.post('/register', async (req, res) => {
     );
   } else {
     // Notify admins of new pending registration
-    const admins = queryAll<{ id: string }>('SELECT id FROM users WHERE role = "admin"');
+    const admins = queryAll<{ id: string }>("SELECT id FROM users WHERE role = 'admin'");
     for (const adm of admins) {
       run(
         'INSERT INTO notifications (id, user_id, type, title, body, link, read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
@@ -236,7 +236,7 @@ authRouter.delete('/account', async (req: AuthenticatedRequest, res) => {
   // If user is admin, check if they are the only admin
   if (req.user.role === 'admin') {
     const adminCount = queryOne<{ count: number }>(
-      'SELECT COUNT(*) as count FROM users WHERE role = "admin" AND id != ? AND status = "active"',
+      "SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND id != ? AND status = 'active'",
       [userId]
     );
     if (!adminCount || adminCount.count === 0) {
@@ -258,20 +258,20 @@ authRouter.delete('/account', async (req: AuthenticatedRequest, res) => {
       } catch {}
     }
     run('DELETE FROM post_files WHERE post_id = ?', [p.id]);
-    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [p.id]);
+    run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [p.id]);
     run('DELETE FROM album_items WHERE post_id = ?', [p.id]);
-    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [p.id]);
-    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [p.id]);
+    run("DELETE FROM comments WHERE target_type = 'post' AND target_id = ?", [p.id]);
+    run("DELETE FROM reactions WHERE target_type = 'post' AND target_id = ?", [p.id]);
   }
   run('DELETE FROM posts WHERE owner_id = ?', [userId]);
 
   const userAlbums = queryAll<any>('SELECT id FROM albums WHERE creator_id = ?', [userId]);
   for (const a of userAlbums) {
     run('DELETE FROM album_items WHERE album_id = ?', [a.id]);
-    run('DELETE FROM item_groups WHERE item_type = "album" AND item_id = ?', [a.id]);
+    run("DELETE FROM item_groups WHERE item_type = 'album' AND item_id = ?", [a.id]);
     run('DELETE FROM event_attendance WHERE event_id = ?', [a.id]);
     run('DELETE FROM event_notes WHERE event_id = ?', [a.id]);
-    run('DELETE FROM comments WHERE target_type = "album" AND target_id = ?', [a.id]);
+    run("DELETE FROM comments WHERE target_type = 'album' AND target_id = ?", [a.id]);
   }
   run('DELETE FROM albums WHERE creator_id = ?', [userId]);
 

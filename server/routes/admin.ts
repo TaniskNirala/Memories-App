@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { syncStorageToDatabase } from '../storage/sync.ts';
 
 export const adminRouter = Router();
 
@@ -27,7 +28,7 @@ reportsRouter.post('/', (req: AuthenticatedRequest, res) => {
   );
 
   // Notify admins
-  const admins = queryAll<{ id: string }>('SELECT id FROM users WHERE role = "admin"');
+  const admins = queryAll<{ id: string }>("SELECT id FROM users WHERE role = 'admin'");
   for (const adm of admins) {
     run(
       'INSERT INTO notifications (id, user_id, type, title, body, link, read, created_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
@@ -49,10 +50,20 @@ reportsRouter.post('/', (req: AuthenticatedRequest, res) => {
 // All following endpoints require Admin role
 adminRouter.use(requireAdmin);
 
+// Sync past uploads from cloud storage into database
+adminRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
+  try {
+    const result = await syncStorageToDatabase();
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to sync storage' });
+  }
+});
+
 // 1. Pending signups
 adminRouter.get('/pending-signups', (req: AuthenticatedRequest, res) => {
   const pending = queryAll<any>(
-    'SELECT id, username, display_name, avatar_color, created_at FROM users WHERE role = "pending" ORDER BY created_at ASC'
+    "SELECT id, username, display_name, avatar_color, created_at FROM users WHERE role = 'pending' ORDER BY created_at ASC"
   );
   res.json({ pending });
 });
@@ -67,7 +78,7 @@ adminRouter.post('/approve-user/:id', (req: AuthenticatedRequest, res) => {
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   const now = new Date().toISOString();
-  run('UPDATE users SET role = "member", status = "active" WHERE id = ?', [targetId]);
+  run("UPDATE users SET role = 'member', status = 'active' WHERE id = ?", [targetId]);
 
   // Ensure "Everyone" group exists and add user
   let everyone = queryOne<any>('SELECT id FROM groups WHERE is_everyone = 1');
@@ -199,10 +210,10 @@ adminRouter.delete('/users/:id', async (req: AuthenticatedRequest, res) => {
       } catch {}
     }
     run('DELETE FROM post_files WHERE post_id = ?', [p.id]);
-    run('DELETE FROM item_groups WHERE item_type = "post" AND item_id = ?', [p.id]);
+    run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [p.id]);
     run('DELETE FROM album_items WHERE post_id = ?', [p.id]);
-    run('DELETE FROM comments WHERE target_type = "post" AND target_id = ?', [p.id]);
-    run('DELETE FROM reactions WHERE target_type = "post" AND target_id = ?', [p.id]);
+    run("DELETE FROM comments WHERE target_type = 'post' AND target_id = ?", [p.id]);
+    run("DELETE FROM reactions WHERE target_type = 'post' AND target_id = ?", [p.id]);
   }
   run('DELETE FROM posts WHERE owner_id = ?', [targetId]);
 
@@ -210,10 +221,10 @@ adminRouter.delete('/users/:id', async (req: AuthenticatedRequest, res) => {
   const userAlbums = queryAll<any>('SELECT id FROM albums WHERE creator_id = ?', [targetId]);
   for (const a of userAlbums) {
     run('DELETE FROM album_items WHERE album_id = ?', [a.id]);
-    run('DELETE FROM item_groups WHERE item_type = "album" AND item_id = ?', [a.id]);
+    run("DELETE FROM item_groups WHERE item_type = 'album' AND item_id = ?", [a.id]);
     run('DELETE FROM event_attendance WHERE event_id = ?', [a.id]);
     run('DELETE FROM event_notes WHERE event_id = ?', [a.id]);
-    run('DELETE FROM comments WHERE target_type = "album" AND target_id = ?', [a.id]);
+    run("DELETE FROM comments WHERE target_type = 'album' AND target_id = ?", [a.id]);
   }
   run('DELETE FROM albums WHERE creator_id = ?', [targetId]);
 

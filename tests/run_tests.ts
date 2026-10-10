@@ -28,13 +28,12 @@ async function loginUser(baseUrl: string, username: string, password: string): P
 
 async function runTests() {
   process.env.NODE_ENV = 'test';
-  console.log('--- Starting Kinfolk Memories Automated Tests ---');
-
-  const dbFile = path.resolve(process.cwd(), 'data/kinfolk.sqlite');
-  const backupFile = path.resolve(process.cwd(), 'data/kinfolk.sqlite.test_backup');
-  if (fs.existsSync(dbFile)) {
-    fs.copyFileSync(dbFile, backupFile);
+  const testDbFile = path.resolve(process.cwd(), 'data/test_sandbox.sqlite');
+  process.env.DB_PATH = testDbFile;
+  if (fs.existsSync(testDbFile)) {
+    fs.unlinkSync(testDbFile);
   }
+  console.log('--- Starting Kinfolk Memories Automated Tests ---');
 
   const app = await createApp();
   const server = http.createServer(app);
@@ -71,7 +70,13 @@ async function runTests() {
 
     const gHikersId = 'g-weekend-hikers';
     const gRecipeId = 'g-recipe-club';
+    const gEveryoneId = '56896808-0e5c-4303-b413-98b0eb3ad540';
 
+    run(
+      `INSERT OR REPLACE INTO groups (id, name, description, creator_id, is_everyone, created_at)
+       VALUES (?, 'Everyone', 'Family circle containing all approved members', 'u-admin', 1, ?)`,
+      [gEveryoneId, now]
+    );
     run(
       `INSERT OR REPLACE INTO groups (id, name, description, creator_id, is_everyone, created_at)
        VALUES (?, 'Weekend Hikers', 'Hiking trails and summits', 'u-maya', 0, ?)`,
@@ -82,6 +87,11 @@ async function runTests() {
        VALUES (?, 'Recipe Club', 'Cooking experiments and favorites', 'u-sam', 0, ?)`,
       [gRecipeId, now]
     );
+
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-maya', ?)`, [gEveryoneId, now]);
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-leo', ?)`, [gEveryoneId, now]);
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-sam', ?)`, [gEveryoneId, now]);
+    run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-admin', ?)`, [gEveryoneId, now]);
 
     run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-maya', ?)`, [gHikersId, now]);
     run(`INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, 'u-leo', ?)`, [gHikersId, now]);
@@ -341,18 +351,19 @@ async function runTests() {
     server.closeAllConnections?.();
     server.close();
 
-    // Always restore the user's database from backup so NO test data ever remains!
-    if (fs.existsSync(backupFile)) {
-      fs.copyFileSync(backupFile, dbFile);
-      fs.unlinkSync(backupFile);
+    if (fs.existsSync(testDbFile)) {
+      try {
+        fs.unlinkSync(testDbFile);
+      } catch {}
     }
 
     process.exit(allPassed ? 0 : 1);
   } catch (err) {
     console.error('Fatal test error:', err);
-    if (fs.existsSync(backupFile)) {
-      fs.copyFileSync(backupFile, dbFile);
-      fs.unlinkSync(backupFile);
+    if (fs.existsSync(testDbFile)) {
+      try {
+        fs.unlinkSync(testDbFile);
+      } catch {}
     }
     server.close();
     process.exit(1);

@@ -190,7 +190,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
       if (activeGroupId) {
         const cCount = queryOne<{ count: number }>(
-          'SELECT COUNT(*) as count FROM comments WHERE target_type = "post" AND target_id = ? AND group_id = ? AND deleted_at IS NULL',
+          "SELECT COUNT(*) as count FROM comments WHERE target_type = 'post' AND target_id = ? AND group_id = ? AND deleted_at IS NULL",
           [p.id, activeGroupId]
         );
         commentsCount = cCount?.count || 0;
@@ -199,7 +199,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
           `SELECT emoji, COUNT(*) as count,
                   MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted
            FROM reactions
-           WHERE target_type = "post" AND target_id = ? AND group_id = ?
+           WHERE target_type = 'post' AND target_id = ? AND group_id = ?
            GROUP BY emoji`,
           [userId, p.id, activeGroupId]
         );

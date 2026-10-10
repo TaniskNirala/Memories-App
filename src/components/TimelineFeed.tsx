@@ -20,6 +20,7 @@ import {
   ShieldAlert,
   SlidersHorizontal,
   CheckCircle2,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';

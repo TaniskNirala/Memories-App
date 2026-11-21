@@ -175,9 +175,9 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
           </span>
           {[
             { id: 'nostalgic', label: '⏳ Throwback / Nostalgic' },
-            { id: 'warm', label: '💫 Warm & Heartfelt' },
-            { id: 'witty', label: '😄 Fun & Witty' },
-            { id: 'short', label: '📍 Minimal' },
+            { id: 'warm', label: 'Warm & Heartfelt' },
+            { id: 'witty', label: 'Fun & Witty' },
+            { id: 'short', label: 'Minimal' },
           ].map((t) => (
             <button
               key={t.id}
@@ -218,7 +218,7 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
         <div className="flex-1 overflow-y-auto my-3.5 space-y-2.5 pr-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-neutral-300">
-              ✨ Suggested by Gemini (Click to select)
+              Suggested by Gemini (Click to select)
             </span>
             <span className="text-[10px] text-amber-400/90 font-mono">
               Never overrides without your click

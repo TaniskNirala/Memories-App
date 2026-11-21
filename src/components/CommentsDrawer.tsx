@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ReactionIcon } from './Icons.tsx';
 import { X, Send, Trash2, Edit2, CornerDownRight, Check, Smile } from 'lucide-react';
 import { FeedItem, CommentItem, GroupMember } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
@@ -228,7 +229,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
               onClick={() => onReactionToggle && onReactionToggle(item.id, activeGroupId, emoji)}
               className="w-8 h-8 flex items-center justify-center hover:scale-125 transition text-base"
             >
-              {emoji}
+              <ReactionIcon reaction={emoji} className="w-5 h-5" />
             </button>
           ))}
         </div>

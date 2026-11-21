@@ -236,10 +236,10 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
             <div className="flex items-center justify-between text-neutral-200">
               <span>
                 {selectedGroupIds.length === 0
-                  ? '🔒 Private (Visible to creator and admins only)'
+                  ? 'Private (Visible to creator and admins only)'
                   : isEveryoneSelected
-                  ? '🌐 Visible to Everyone (All Approved Members)'
-                  : `👥 Visible to ${selectedGroupIds.length} circle(s)`}
+                  ? 'Visible to Everyone (All Approved Members)'
+                  : `Visible to ${selectedGroupIds.length} circle(s)`}
               </span>
               <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold text-neutral-300 font-mono">
                 {selectedGroupIds.length} / {availableGroups.length} circles

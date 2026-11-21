@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ReactionIcon } from './Icons.tsx';
 import { Calendar, MapPin, MessageSquare, MoreHorizontal, Share2, Layers, Users, Trash2 } from 'lucide-react';
 import { FeedItem } from '../types/index.ts';
 import { LockedPlaceholder } from './LockedPlaceholder.tsx';
@@ -286,7 +287,7 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
                     : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--bg-surface-elevated)]'
                 }`}
               >
-                <span>{r.emoji}</span>
+                <ReactionIcon reaction={r.emoji} className="w-3.5 h-3.5" />
                 <span className="text-[10px] font-mono">{r.count}</span>
               </button>
             ))}
@@ -313,7 +314,7 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
                       }}
                       className="w-7 h-7 flex items-center justify-center hover:scale-125 transition text-sm"
                     >
-                      {emoji}
+                      <ReactionIcon reaction={emoji} className="w-4 h-4" />
                     </button>
                   ))}
                 </div>

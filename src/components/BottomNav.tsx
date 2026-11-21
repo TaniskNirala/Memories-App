@@ -1,10 +1,12 @@
 import React from 'react';
-import { Home, Calendar, PlusCircle, Users, Shield, Trash2 } from 'lucide-react';
+import { Home, CalendarDays, Plus, Users, Shield, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 
+type Tab = 'feed' | 'collections' | 'groups' | 'admin' | 'trash';
+
 interface BottomNavProps {
-  currentTab: 'feed' | 'collections' | 'groups' | 'admin' | 'trash';
-  onSelectTab: (tab: 'feed' | 'collections' | 'groups' | 'admin' | 'trash') => void;
+  currentTab: Tab;
+  onSelectTab: (tab: Tab) => void;
   onOpenUpload: () => void;
 }
 
@@ -13,85 +15,60 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, o
 
   if (!user || isPending) return null;
 
+  const lastTab: { id: Tab; label: string; Icon: typeof Shield } = isAdmin
+    ? { id: 'admin', label: 'Admin', Icon: Shield }
+    : { id: 'trash', label: 'Trash', Icon: Trash2 };
+
+  const tabs: { id: Tab; label: string; Icon: typeof Home }[] = [
+    { id: 'feed', label: 'Stream', Icon: Home },
+    { id: 'collections', label: 'Events', Icon: CalendarDays },
+  ];
+  const rightTabs: { id: Tab; label: string; Icon: typeof Home }[] = [
+    { id: 'groups', label: 'Circles', Icon: Users },
+    lastTab,
+  ];
+
+  const renderTab = ({ id, label, Icon }: { id: Tab; label: string; Icon: typeof Home }) => {
+    const active = currentTab === id;
+    return (
+      <button
+        key={id}
+        onClick={() => onSelectTab(id)}
+        aria-current={active ? 'page' : undefined}
+        className="group flex flex-col items-center justify-center w-full h-full gap-0.5 transition"
+      >
+        <span
+          className={`flex items-center justify-center w-10 h-7 rounded-full transition-all ${
+            active
+              ? 'bg-[var(--accent-amber)] text-[#1e2142] shadow-sm scale-105'
+              : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
+          }`}
+        >
+          <Icon className="w-[18px] h-[18px]" strokeWidth={active ? 2.5 : 2} />
+        </span>
+        <span className={`text-[10px] tracking-tight ${active ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+          {label}
+        </span>
+      </button>
+    );
+  };
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border-color)] bg-[var(--bg-card)]/95 backdrop-blur-lg pb-safe">
-      <div className="max-w-md mx-auto grid grid-cols-5 items-center h-14 px-2">
-        {/* Tab 1: Feed */}
-        <button
-          onClick={() => onSelectTab('feed')}
-          className={`flex flex-col items-center justify-center w-full h-full transition ${
-            currentTab === 'feed'
-              ? 'text-[var(--accent-coral)] font-semibold'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          <Home className="w-5 h-5" />
-          <span className="text-[10px] tracking-tight mt-0.5">Stream</span>
-        </button>
+    <nav className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none pb-safe px-3 sm:pb-4">
+      <div className="pointer-events-auto max-w-md mx-auto grid grid-cols-5 items-center h-16 px-2 rounded-[28px] border-2 border-[var(--border-color)] bg-[var(--bg-card)]/90 backdrop-blur-xl shadow-[0_10px_0_var(--sticker),0_18px_40px_-16px_rgba(0,0,0,0.5)]">
+        {tabs.map(renderTab)}
 
-        {/* Tab 2: Events */}
-        <button
-          onClick={() => onSelectTab('collections')}
-          className={`flex flex-col items-center justify-center w-full h-full transition ${
-            currentTab === 'collections'
-              ? 'text-[var(--accent-coral)] font-semibold'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          <Calendar className="w-5 h-5" />
-          <span className="text-[10px] tracking-tight mt-0.5">Events</span>
-        </button>
-
-        {/* Center: Upload Button */}
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center -mt-7">
           <button
             onClick={onOpenUpload}
             aria-label="Upload Memory"
-            className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center shadow-md active:scale-95 transition transform playful-btn"
+            className="w-14 h-14 rounded-[20px] rotate-3 bg-gradient-to-tr from-amber-400 to-rose-500 text-white flex items-center justify-center border-4 border-[var(--bg-page)] playful-btn"
           >
-            <PlusCircle className="w-6 h-6" />
+            <Plus className="w-7 h-7" strokeWidth={3} />
           </button>
         </div>
 
-        {/* Tab 4: Circles */}
-        <button
-          onClick={() => onSelectTab('groups')}
-          className={`flex flex-col items-center justify-center w-full h-full transition ${
-            currentTab === 'groups'
-              ? 'text-[var(--accent-coral)] font-semibold'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          <Users className="w-5 h-5" />
-          <span className="text-[10px] tracking-tight mt-0.5">Circles</span>
-        </button>
-
-        {/* Tab 5: Admin or Trash */}
-        {isAdmin ? (
-          <button
-            onClick={() => onSelectTab('admin')}
-            className={`flex flex-col items-center justify-center w-full h-full transition ${
-              currentTab === 'admin'
-                ? 'text-[var(--accent-coral)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <Shield className="w-5 h-5" />
-            <span className="text-[10px] tracking-tight mt-0.5">Admin</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => onSelectTab('trash')}
-            className={`flex flex-col items-center justify-center w-full h-full transition ${
-              currentTab === 'trash'
-                ? 'text-[var(--accent-coral)] font-semibold'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <Trash2 className="w-5 h-5" />
-            <span className="text-[10px] tracking-tight mt-0.5">Trash</span>
-          </button>
-        )}
+        {rightTabs.map(renderTab)}
       </div>
     </nav>
   );

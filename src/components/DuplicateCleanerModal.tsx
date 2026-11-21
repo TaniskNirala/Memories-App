@@ -282,7 +282,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
 
         {/* Protection Note */}
         <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
-          <span>🔒 <strong>Protected Preview:</strong> Deleting photos is disabled in this preview to protect your memories. You can safely keep all photos.</span>
+          <span><strong>Protected Preview:</strong> Deleting photos is disabled in this preview to protect your memories. You can safely keep all photos.</span>
         </div>
 
         {/* Summary Card */}

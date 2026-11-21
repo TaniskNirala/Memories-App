@@ -545,7 +545,7 @@ const MainContent: React.FC = () => {
         }}
       />
 
-      <div className="flex-1 flex max-w-5xl w-full mx-auto items-start relative">
+      <div className="flex-1 flex max-w-6xl w-full mx-auto items-start relative">
         {/* Left Circle Rail (All, E, AR, RK, +) matching user screenshot */}
         <CircleRail
           groups={groups}
@@ -561,7 +561,7 @@ const MainContent: React.FC = () => {
         <main className="flex-1 p-4 sm:p-6 min-w-0">
           {/* TAB: STREAM / TIMELINE */}
           {currentTab === 'feed' && (
-            <div className="space-y-4 max-w-2xl">
+            <div className="space-y-4 max-w-5xl mx-auto w-full">
               {/* Owner Pending Reference Requests Approval Banner */}
               <PendingReferencesBanner onUpdated={() => fetchFeed(true)} />
 
@@ -609,7 +609,7 @@ const MainContent: React.FC = () => {
 
           {/* TAB: EVENTS */}
           {currentTab === 'collections' && (
-            <div className="space-y-4 max-w-2xl">
+            <div className="space-y-4 max-w-5xl mx-auto w-full">
               <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
                 <div>
                   <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">Events</h2>
@@ -641,7 +641,7 @@ const MainContent: React.FC = () => {
 
           {/* TAB: CIRCLES */}
           {currentTab === 'groups' && (
-            <div className="space-y-4 max-w-2xl">
+            <div className="space-y-4 max-w-5xl mx-auto w-full">
               <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
                 <div>
                   <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">Friend Circles</h2>

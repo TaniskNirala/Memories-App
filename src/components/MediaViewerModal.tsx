@@ -339,7 +339,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
       });
 
       if (res.ok) {
-        setCaptionToast('✨ Converted into an Event collection!');
+        setCaptionToast('Converted into an Event collection!');
         setShowConvertPostToEvent(false);
         if (onPermissionsUpdated) {
           onPermissionsUpdated();
@@ -1274,7 +1274,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         onClose={() => setIsCaptionSuggestionsOpen(false)}
         item={item}
         onCaptionUpdated={(newCaption) => {
-          setCaptionToast('✨ Caption updated successfully!');
+          setCaptionToast('Caption updated successfully!');
           setTimeout(() => setCaptionToast(null), 3000);
           if (onPhotoUpdated && currentFile) {
             onPhotoUpdated(item.id, currentFile);

@@ -1079,7 +1079,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   title="Auto-generate caption using Gemini AI"
                 >
                   <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${isGeneratingCaption ? 'animate-spin' : ''}`} />
-                  <span>{isGeneratingCaption ? 'Analyzing photo...' : '✨ Auto-Generate Caption'}</span>
+                  <span>{isGeneratingCaption ? 'Analyzing photo...' : 'Auto-Generate Caption'}</span>
                 </button>
               )}
             </div>
@@ -1098,11 +1098,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 <div className="flex items-center justify-between flex-wrap gap-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
-                      ✨ Time-Aware Suggestions
+                      Time-Aware Suggestions
                     </span>
                     {captionTemporalSummary && (
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium">
-                        🕒 {captionTemporalSummary}
+                        {captionTemporalSummary}
                       </span>
                     )}
                   </div>

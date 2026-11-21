@@ -641,7 +641,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   };
 
   return (
-    <div className="relative pl-6 sm:pl-8 py-2">
+    <div className="tl-root">
       {/* Floating Action Toast Notification */}
       {toastMessage && (
         <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-black/90 border border-amber-500/40 text-amber-300 text-xs font-semibold shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150 flex items-center gap-2">
@@ -651,7 +651,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
       )}
 
       {/* Continuous vertical timeline rail line */}
-      <div className="absolute left-2.5 sm:left-3 top-6 bottom-4 w-0.5 bg-[var(--border-color)] opacity-80" />
+      <div className="tl-rail" aria-hidden="true" />
 
       {/* Empty State */}
       {items.length === 0 && (
@@ -688,15 +688,15 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
       {groupedSections.map((section) => (
         <div key={section.monthYear} className="space-y-6 mb-8">
           {/* Dynamic Month Year Section Header */}
-          <div className="relative flex items-center gap-2 mb-4">
-            <div className="w-3.5 h-3.5 rounded-xs bg-amber-500 shadow-xs -ml-[19px] sm:-ml-[25px] shrink-0" />
-            <span className="font-display font-bold text-sm sm:text-base text-[var(--text-primary)] tracking-wide">
+          <div className="tl-month">
+            <span className="tl-month-pill font-display text-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
               {section.monthYear}
             </span>
           </div>
 
           {/* Items in this Month */}
-          <div className="space-y-6">
+          <div className="space-y-6 tl-items">
             {section.items.map((item) => {
               const dateStr = item.type === 'single_post' ? item.takenAt : (item.eventDate || item.sortDate);
               const author = item.type === 'single_post' ? item.owner : item.creator;
@@ -717,16 +717,14 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                 : 'Personal (Only You)';
 
               return (
-                <div key={item.id} className="relative group">
+                <div key={item.id} className="tl-item group">
                   {/* Timeline Connector Dot */}
                   <div
-                    className={`absolute -left-[29px] sm:-left-[35px] top-4 w-3.5 h-3.5 rounded-full ring-4 ${getDotColor(
-                      authorName
-                    )} shadow-xs z-10`}
+                    className={`tl-dot ${getDotColor(authorName).split(" ")[0]}`}
                   />
 
                   {/* Card Container */}
-                  <div className="w-full rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-[var(--accent-amber)]/40 transition-all p-4 shadow-lg text-[var(--text-primary)] relative">
+                  <div className="tl-card w-full rounded-3xl bg-[var(--bg-card)] border-2 border-[var(--border-color)] hover:border-[var(--accent-amber)] p-4 text-[var(--text-primary)] relative">
                     {/* Header Meta & Options */}
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-medium truncate">

@@ -128,7 +128,7 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-[var(--border-color)] bg-[var(--bg-card)]/95 backdrop-blur-md px-4 sm:px-6 py-3 transition-colors">
+    <header className="sticky top-0 z-40 w-full border-b-2 border-[var(--border-color)] bg-[var(--bg-card)]/90 backdrop-blur-xl px-4 sm:px-6 py-3 transition-colors">
       <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
         {/* Left: Title matching user screenshot */}
         <div className="flex items-center gap-2">

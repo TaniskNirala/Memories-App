@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Lock, User, Key, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
+import { HeroIllustration } from './Illustrations.tsx';
 
 export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
@@ -68,8 +69,12 @@ export const AuthScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-page)] text-[var(--text-primary)] transition-colors">
-      <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl p-6 sm:p-8 playful-card relative">
+    <div className="min-h-screen flex items-center justify-center gap-12 p-4 text-[var(--text-primary)] transition-colors">
+      <aside className="hidden lg:flex flex-col items-center max-w-sm">
+        <HeroIllustration className="w-full floaty" />
+        <p className="font-display text-2xl font-bold text-center mt-2">Every memory, in its place on the timeline.</p>
+      </aside>
+      <div className="w-full max-w-md bg-[var(--bg-card)] border-2 border-[var(--border-color)] rounded-[2rem] shadow-[8px_8px_0_var(--sticker)] p-6 sm:p-8 playful-card relative">
         {/* Brand Header */}
         <div className="text-center mb-6">
           <img

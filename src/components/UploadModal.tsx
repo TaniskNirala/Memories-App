@@ -835,17 +835,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
           {/* Duplicate Detection Warning Banner */}
           {detectedDuplicates.length > 0 && (
-            <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-200 text-xs space-y-2 animate-in fade-in duration-150">
+            <div className="tone-amber p-3.5 rounded-2xl border text-xs space-y-2 animate-in fade-in duration-150">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 font-bold text-amber-300">
-                  <Copy className="w-4 h-4 text-amber-400 shrink-0" />
+                <div className="flex items-center gap-2 font-bold text-[var(--tone-amber-fg)]">
+                  <Copy className="w-4 h-4 shrink-0" />
                   <span>{detectedDuplicates.length} Duplicate Photo(s) Detected</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => setDetectedDuplicates([])}
-                    className="px-2.5 py-1 rounded-xl bg-white/10 text-white font-bold text-[11px] hover:bg-white/20 transition cursor-pointer"
+                    className="px-2.5 py-1 rounded-xl bg-[var(--bg-card)] border border-[var(--border-color)] text-[var(--text-primary)] font-bold text-[11px] hover:bg-[var(--bg-surface-elevated)] transition cursor-pointer"
                     title="Keep all photos in the upload queue and upload anyway"
                   >
                     Keep Both
@@ -859,7 +859,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   </button>
                 </div>
               </div>
-              <p className="text-[11px] text-amber-200/90 leading-relaxed">
+              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
                 We detected photos in your upload queue that already exist in your memories. You can skip them with one click or keep both copies.
               </p>
             </div>
@@ -919,7 +919,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <span className="font-semibold text-[var(--text-secondary)]">
                       Upload Queue ({queue.length} files)
                     </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-500 font-medium flex items-center gap-1 border border-amber-500/20">
+                    <span className="tone-amber text-[10px] px-1.5 py-0.5 rounded-md font-medium flex items-center gap-1 border">
                       <Sparkles className="w-2.5 h-2.5" /> 4K Ultra-HD
                     </span>
                   </div>
@@ -1035,7 +1035,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       <label className="block text-xs font-semibold text-[var(--text-secondary)]">
                         Upload Format ({queue.length} photos)
                       </label>
-                      <span className="text-[10px] text-amber-400 font-medium">Choose display style</span>
+                      <span className="text-[10px] text-[var(--tone-amber-fg)] font-medium">Choose display style</span>
                     </div>
                     <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2">
                       <button
@@ -1044,11 +1044,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 cursor-pointer ${
                           uploadStructure === 'grouped'
                             ? 'bg-amber-500/15 border-amber-500/50 text-[var(--text-primary)] ring-1 ring-amber-500/30'
-                            : 'border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-white/20'
+                            : 'border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-[var(--accent-amber)]/40'
                         }`}
                       >
-                        <span className="text-xs font-bold flex items-center gap-1.5 text-white">
-                          <Layers className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-xs font-bold flex items-center gap-1.5 text-[var(--text-primary)]">
+                          <Layers className="w-3.5 h-3.5 text-[var(--accent-amber)]" />
                           <span>Grouped Event Story</span>
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)] leading-tight">
@@ -1062,11 +1062,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 cursor-pointer ${
                           uploadStructure === 'separate'
                             ? 'bg-amber-500/15 border-amber-500/50 text-[var(--text-primary)] ring-1 ring-amber-500/30'
-                            : 'border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-white/20'
+                            : 'border-[var(--border-color)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-[var(--accent-amber)]/40'
                         }`}
                       >
-                        <span className="text-xs font-bold flex items-center gap-1.5 text-white">
-                          <Images className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-xs font-bold flex items-center gap-1.5 text-[var(--text-primary)]">
+                          <Images className="w-3.5 h-3.5 text-[var(--accent-amber)]" />
                           <span>Separate Posts</span>
                         </span>
                         <span className="text-[10px] text-[var(--text-muted)] leading-tight">
@@ -1091,10 +1091,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   type="button"
                   onClick={handleAutoGenerateCaption}
                   disabled={isGeneratingCaption || isProcessing}
-                  className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-[11px] font-semibold shadow-xs disabled:opacity-50 cursor-pointer"
+                  className="tone-amber px-2.5 py-1 rounded-lg border hover:opacity-90 transition flex items-center gap-1.5 text-[11px] font-semibold shadow-xs disabled:opacity-50 cursor-pointer"
                   title="Auto-generate caption using Gemini AI"
                 >
-                  <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${isGeneratingCaption ? 'animate-spin' : ''}`} />
+                  <Sparkles className={`w-3.5 h-3.5 ${isGeneratingCaption ? 'animate-spin' : ''}`} />
                   <span>{isGeneratingCaption ? 'Analyzing photo...' : 'Auto-Generate Caption'}</span>
                 </button>
               )}
@@ -1110,14 +1110,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
             {/* Gemini Caption Suggestions Chips */}
             {captionSuggestions.length > 0 && (
-              <div className="mt-2 space-y-1.5 p-2.5 rounded-xl bg-white/5 border border-white/10 animate-in fade-in duration-150">
+              <div className="mt-2 space-y-1.5 p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] animate-in fade-in duration-150">
                 <div className="flex items-center justify-between flex-wrap gap-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
+                    <span className="text-[10px] text-[var(--tone-amber-fg)] font-bold uppercase tracking-wider block">
                       Time-Aware Suggestions
                     </span>
                     {captionTemporalSummary && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium">
+                      <span className="tone-amber text-[10px] px-2 py-0.5 rounded-full border font-medium">
                         {captionTemporalSummary}
                       </span>
                     )}
@@ -1126,7 +1126,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setCaption(userTypedCaption)}
-                      className="text-[10px] text-amber-300 hover:text-white font-semibold flex items-center gap-1 transition cursor-pointer"
+                      className="text-[10px] text-[var(--tone-amber-fg)] hover:underline font-semibold flex items-center gap-1 transition cursor-pointer"
                     >
                       ↩️ Restore my text
                     </button>
@@ -1138,12 +1138,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       key={idx}
                       type="button"
                       onClick={() => setCaption(s.text)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 text-[11px] text-[var(--text-secondary)] hover:text-white transition text-left flex items-start gap-2 group cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] hover:bg-[var(--tone-amber-bg)] border border-[var(--border-subtle)] hover:border-[var(--tone-amber-border)] text-[11px] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition text-left flex items-start gap-2 group cursor-pointer"
                     >
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
+                      <span className="tone-amber text-[9px] uppercase px-1.5 py-0.5 rounded border font-bold shrink-0">
                         {s.tone}
                       </span>
-                      <span className="line-clamp-1 group-hover:text-amber-200">{s.text}</span>
+                      <span className="line-clamp-1 group-hover:text-[var(--text-primary)]">{s.text}</span>
                     </button>
                   ))}
                 </div>
@@ -1186,7 +1186,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
             {/* Detected metadata indicator */}
             {metadataSource && (
-              <div className="flex items-center gap-1.5 text-[11px] text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 animate-in fade-in">
+              <div className="tone-amber flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border animate-in fade-in">
                 <Sparkles className="w-3 h-3 shrink-0" />
                 <span>{metadataSource}</span>
               </div>
@@ -1197,12 +1197,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
               <label className="text-xs font-semibold text-[var(--text-secondary)] flex items-center gap-1">
-                <Users className="w-3.5 h-3.5 text-amber-500" /> Share to Circles
+                <Users className="w-3.5 h-3.5 text-[var(--accent-amber)]" /> Share to Circles
               </label>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
                 selectedGroupIds.length === 0
-                  ? 'bg-neutral-800 text-[var(--text-muted)] border border-neutral-700'
-                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                  ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] border-[var(--border-color)]'
+                  : 'tone-amber'
               }`}>
                 {selectedGroupIds.length === 0 ? 'Personal (Only You & Admins)' : `Sharing to ${selectedGroupIds.length} circle(s)`}
               </span>
@@ -1230,7 +1230,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedGroupIds([])}
-                className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-amber-400 font-medium transition"
+                className="text-[11px] px-2.5 py-1 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--tone-amber-fg)] font-medium transition"
               >
                 Keep Private (Only Me)
               </button>
@@ -1251,7 +1251,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   >
                     <span>{g.name}</span>
                     {g.isEveryone && (
-                      <span className="text-[9px] bg-white/20 px-1 rounded">ALL</span>
+                      <span
+                        className={`text-[9px] px-1 rounded font-mono ${
+                          selected
+                            ? 'bg-white/20 text-white'
+                            : 'bg-[var(--tone-amber-bg)] text-[var(--tone-amber-fg)] border border-[var(--tone-amber-border)]'
+                        }`}
+                      >
+                        ALL
+                      </span>
                     )}
                   </button>
                 );

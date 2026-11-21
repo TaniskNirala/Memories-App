@@ -661,7 +661,7 @@ const MemoryCard: React.FC<{
                 <>
                   <div className="my-1 h-px bg-[var(--border-subtle)]" />
                   {isDeleteProtected ? (
-                    <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
+                    <div className="tone-amber flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[10px] font-semibold">
                       <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> Delete is locked in preview
                     </div>
                   ) : (
@@ -927,7 +927,7 @@ const EventCard: React.FC<{
                     />
                     <div className="my-1 h-px bg-[var(--border-subtle)]" />
                     {isDeleteProtected ? (
-                      <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
+                      <div className="tone-amber flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[10px] font-semibold">
                         <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> Delete is locked in preview
                       </div>
                     ) : (
@@ -1314,9 +1314,11 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                       <div key={day.key} className="tl-day">
                         <div className="tl-day-head">
                           <span className="tl-day-rule" aria-hidden />
-                          <span className="tl-day-weekday">{weekdayLabel(day.date)}</span>
-                          <span className="tl-day-count">
-                            {dayCount === 1 ? '1 memory' : `${dayCount} memories`}
+                          <span className="tl-day-head-pill">
+                            <span className="tl-day-weekday">{weekdayLabel(day.date)}</span>
+                            <span className="tl-day-count">
+                              {dayCount === 1 ? '1 memory' : `${dayCount} memories`}
+                            </span>
                           </span>
                           <span className="tl-day-rule" aria-hidden />
                         </div>
@@ -1445,12 +1447,12 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
             type="button"
             onClick={() => executeDelete(true)}
             disabled={deleteLoading || isDeleteProtected}
-            className="flex w-full items-start gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/8 px-3.5 py-3 text-left transition hover:border-rose-500/45 disabled:opacity-50"
+            className="tone-rose flex w-full items-start gap-3 rounded-2xl border px-3.5 py-3 text-left transition hover:opacity-90 disabled:opacity-50"
           >
-            <X className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+            <X className="mt-0.5 h-4 w-4 shrink-0 text-[var(--tone-rose-fg)]" />
             <span>
-              <span className="block text-[12px] font-bold text-rose-300">Delete forever</span>
-              <span className="block text-[10.5px] text-rose-300/70">
+              <span className="block text-[12px] font-bold text-[var(--tone-rose-fg)]">Delete forever</span>
+              <span className="block text-[10.5px] text-[var(--tone-rose-muted)]">
                 {isDeleteProtected ? 'Locked in preview' : 'Removes the files immediately'}
               </span>
             </span>
@@ -1520,8 +1522,8 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
         <div className="p-5">
           {reportSuccess ? (
             <div className="py-6 text-center">
-              <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-400" />
-              <p className="text-[12px] font-semibold text-emerald-300">Report submitted. Thank you.</p>
+              <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-[var(--tone-emerald-fg)]" />
+              <p className="text-[12px] font-semibold text-[var(--tone-emerald-fg)]">Report submitted. Thank you.</p>
             </div>
           ) : (
             <>

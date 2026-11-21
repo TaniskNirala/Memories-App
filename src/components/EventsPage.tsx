@@ -129,7 +129,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({
         </span>
 
         {c.userAttended && (
-          <span className="pointer-events-none absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/25 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-200 backdrop-blur-md">
+          <span className="pointer-events-none absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full border border-emerald-400/50 bg-black/65 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-300 backdrop-blur-md">
             <CheckCircle2 className="h-2.5 w-2.5" /> Attended
           </span>
         )}

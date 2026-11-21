@@ -110,9 +110,9 @@ export const TrashView: React.FC = () => {
       </div>
 
       {isDeleteProtected && (
-        <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-3">
+        <div className="tone-amber flex items-start gap-2.5 rounded-2xl border px-3.5 py-3">
           <ShieldAlert className="mt-px h-4 w-4 shrink-0 text-[var(--accent-amber)]" />
-          <p className="text-[11px] leading-relaxed text-amber-200/90">
+          <p className="text-[11px] leading-relaxed">
             <strong className="font-bold">Preview protection is on.</strong> Permanent purging is disabled here so live
             memories stay safe. It's fully operational on the Render deployment.
           </p>
@@ -167,7 +167,7 @@ export const TrashView: React.FC = () => {
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-[var(--text-muted)]">
                     <span>Deleted {relativeTime(item.deleted_at)}</span>
                     <span aria-hidden>·</span>
-                    <span className={daysLeft <= 7 ? 'font-semibold text-rose-400' : ''}>
+                    <span className={daysLeft <= 7 ? 'font-semibold text-[var(--tone-rose-fg)]' : ''}>
                       {daysLeft} day{daysLeft === 1 ? '' : 's'} left
                     </span>
                     <span aria-hidden className="hidden sm:inline">·</span>

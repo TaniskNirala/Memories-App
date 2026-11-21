@@ -314,7 +314,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
                       </button>
                       <button
                         onClick={() => setEditingCommentId(null)}
-                        className="px-2 py-1 bg-neutral-700 text-white rounded text-xs"
+                        className="px-2 py-1 bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] rounded text-xs"
                       >
                         Cancel
                       </button>

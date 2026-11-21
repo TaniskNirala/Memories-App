@@ -397,7 +397,7 @@ export const MenuItem: React.FC<{
     onClick={onClick}
     className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] font-medium transition ${
       tone === 'danger'
-        ? 'text-rose-400 hover:bg-rose-500/10'
+        ? 'text-[var(--tone-rose-fg)] hover:bg-[var(--tone-rose-bg)]'
         : tone === 'accent'
           ? 'text-[var(--accent-amber)] hover:bg-[var(--accent-amber)]/10'
           : 'text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]'

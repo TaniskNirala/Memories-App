@@ -279,8 +279,8 @@ export const ProfilePage: React.FC = () => {
               </div>
               {avatarMsg && (
                 <p
-                  className={`mt-1.5 text-[10px] font-medium ${
-                    avatarMsg.tone === 'ok' ? 'text-emerald-400' : 'text-rose-400'
+                  className={`mt-1.5 text-[10px] font-semibold ${
+                    avatarMsg.tone === 'ok' ? 'text-[var(--tone-emerald-fg)]' : 'text-[var(--tone-rose-fg)]'
                   }`}
                 >
                   {avatarMsg.text}
@@ -383,9 +383,7 @@ export const ProfilePage: React.FC = () => {
           {profileMsg && (
             <p
               className={`rounded-xl border px-3 py-2 text-[11px] font-medium ${
-                profileMsg.tone === 'ok'
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                  : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                profileMsg.tone === 'ok' ? 'tone-emerald' : 'tone-rose'
               }`}
             >
               {profileMsg.text}
@@ -483,9 +481,7 @@ export const ProfilePage: React.FC = () => {
           {pwMsg && (
             <p
               className={`rounded-xl border px-3 py-2 text-[11px] font-medium ${
-                pwMsg.tone === 'ok'
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                  : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                pwMsg.tone === 'ok' ? 'tone-emerald' : 'tone-rose'
               }`}
             >
               {pwMsg.text}
@@ -557,22 +553,22 @@ export const ProfilePage: React.FC = () => {
       </section>
 
       {/* ---------------------------------------------------------- danger zone */}
-      <section className="overflow-hidden rounded-[22px] border border-rose-500/25 bg-rose-500/[0.04]">
-        <div className="flex items-start gap-3 border-b border-rose-500/20 px-4 py-3.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400">
+      <section className="overflow-hidden rounded-[22px] border border-[var(--tone-rose-border)] bg-[var(--tone-rose-bg)]/55">
+        <div className="flex items-start gap-3 border-b border-[var(--tone-rose-border)] px-4 py-3.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-[var(--tone-rose-border)] bg-[var(--tone-rose-bg)] text-[var(--tone-rose-fg)]">
             <AlertTriangle className="h-4 w-4" />
           </span>
           <div className="min-w-0">
-            <p className="font-display text-[15px] leading-tight text-rose-200">Danger zone</p>
-            <p className="mt-0.5 text-[11px] text-rose-300/70">
+            <p className="font-display text-[15px] leading-tight text-[var(--tone-rose-fg)]">Danger zone</p>
+            <p className="mt-0.5 text-[11px] text-[var(--tone-rose-muted)]">
               Deleting your account removes every memory, album, comment and circle membership you own. It cannot be
               undone.
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2.5 p-4">
-          <p className="text-[10.5px] text-[var(--text-muted)]">
-            Your handle is <span className="font-mono text-[var(--text-secondary)]">@{user?.username}</span>
+          <p className="text-[10.5px] text-[var(--text-secondary)]">
+            Your handle is <span className="font-mono font-semibold text-[var(--text-primary)]">@{user?.username}</span>
           </p>
           <button type="button" onClick={() => setDeleteOpen(true)} className="btn btn-danger btn-sm shrink-0">
             <Trash2 className="h-3.5 w-3.5" /> Delete account
@@ -598,7 +594,7 @@ export const ProfilePage: React.FC = () => {
             This permanently removes <strong>@{user?.username}</strong> along with every memory, album, comment and
             circle membership attached to it.
           </p>
-          <p className="rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2.5 text-[11px] leading-relaxed text-rose-300">
+          <p className="tone-rose rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed font-medium">
             This cannot be undone and there is no recovery window.
           </p>
           <div>
@@ -616,7 +612,7 @@ export const ProfilePage: React.FC = () => {
             />
           </div>
           {deleteError && (
-            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] font-medium text-rose-300">
+            <p className="tone-rose rounded-xl border px-3 py-2 text-[11px] font-medium">
               {deleteError}
             </p>
           )}

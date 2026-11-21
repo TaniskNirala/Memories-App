@@ -646,7 +646,7 @@ export const AdminPanel: React.FC = () => {
                   </button>
                   <button
                     onClick={() => handleRejectUser(u.id)}
-                    className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-rose-900/40 text-rose-400 font-semibold flex items-center gap-1 transition"
+                    className="tone-rose px-3 py-1.5 rounded-xl border font-semibold flex items-center gap-1 transition hover:opacity-90"
                   >
                     <X className="w-3.5 h-3.5" /> Reject
                   </button>
@@ -692,7 +692,7 @@ export const AdminPanel: React.FC = () => {
                   </button>
                   <button
                     onClick={() => handleProposalDecision(p.id, 'rejected')}
-                    className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-rose-900/40 text-rose-400 font-semibold flex items-center gap-1 transition"
+                    className="tone-rose px-3 py-1.5 rounded-xl border font-semibold flex items-center gap-1 transition hover:opacity-90"
                   >
                     <X className="w-3.5 h-3.5" /> Reject
                   </button>
@@ -725,25 +725,25 @@ export const AdminPanel: React.FC = () => {
                     <span className="text-[10px] text-[var(--text-muted)] font-mono truncate">@{u.username}</span>
 
                     {u.role === 'admin' && (
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold font-mono">
+                      <span className="tone-amber text-[9px] uppercase px-1.5 py-0.5 rounded border font-bold font-mono">
                         Admin
                       </span>
                     )}
 
                     {u.role === 'member' && u.status === 'active' && (
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-semibold font-mono flex items-center gap-0.5">
+                      <span className="tone-emerald text-[9px] uppercase px-1.5 py-0.5 rounded border font-semibold font-mono flex items-center gap-0.5">
                         <Check className="w-2.5 h-2.5 stroke-[2.5]" /> Approved Member
                       </span>
                     )}
 
                     {u.role === 'pending' && (
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500 font-semibold font-mono flex items-center gap-0.5">
+                      <span className="tone-amber text-[9px] uppercase px-1.5 py-0.5 rounded border font-semibold font-mono flex items-center gap-0.5">
                         <Clock className="w-2.5 h-2.5" /> Pending Approval
                       </span>
                     )}
 
                     {u.status === 'suspended' && (
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-bold font-mono">
+                      <span className="tone-rose text-[9px] uppercase px-1.5 py-0.5 rounded border font-bold font-mono">
                         Suspended
                       </span>
                     )}
@@ -766,19 +766,19 @@ export const AdminPanel: React.FC = () => {
                 <button
                   onClick={() => handleGenerateReset(u.id)}
                   title="Generate 1-time Password Reset Link"
-                  className="px-2.5 py-1 text-xs rounded-xl bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-1"
+                  className="px-2.5 py-1 text-xs rounded-xl bg-[var(--bg-surface)] text-[var(--text-primary)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-subtle)] transition flex items-center gap-1"
                 >
-                  <Key className="w-3 h-3 text-amber-400" />
+                  <Key className="w-3 h-3 text-[var(--tone-amber-fg)]" />
                   <span>Reset Link</span>
                 </button>
 
                 {u.role !== 'admin' && (
                   <button
                     onClick={() => handleToggleSuspend(u.id)}
-                    className={`px-2.5 py-1 text-xs rounded-xl transition flex items-center gap-1 ${
+                    className={`px-2.5 py-1 text-xs rounded-xl border transition flex items-center gap-1 ${
                       u.status === 'active'
-                        ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
-                        : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                        ? 'tone-rose hover:opacity-90'
+                        : 'tone-emerald hover:opacity-90'
                     }`}
                   >
                     {u.status === 'active' ? (
@@ -798,7 +798,7 @@ export const AdminPanel: React.FC = () => {
                   <button
                     onClick={() => setUserToDelete(u)}
                     title={`Permanently delete user @${u.username}`}
-                    className="px-2.5 py-1 text-xs rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-400 hover:text-white transition flex items-center gap-1 font-semibold"
+                    className="tone-rose px-2.5 py-1 text-xs rounded-xl border hover:bg-rose-600 hover:text-white hover:border-rose-600 transition flex items-center gap-1 font-semibold"
                   >
                     <Trash2 className="w-3 h-3" />
                     <span>Delete</span>
@@ -827,11 +827,11 @@ export const AdminPanel: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-bold text-[var(--text-primary)] text-sm">{c.name}</span>
                     {c.isEveryone ? (
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold font-mono">
+                      <span className="tone-emerald text-[9px] uppercase px-1.5 py-0.5 rounded border font-bold font-mono">
                         Everyone (Default)
                       </span>
                     ) : (
-                      <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold font-mono">
+                      <span className="tone-sky text-[9px] uppercase px-1.5 py-0.5 rounded border font-bold font-mono">
                         Custom Circle
                       </span>
                     )}
@@ -849,7 +849,7 @@ export const AdminPanel: React.FC = () => {
                     <button
                       onClick={() => setCircleToDelete(c)}
                       title={`Permanently delete circle "${c.name}"`}
-                      className="px-3 py-1.5 text-xs rounded-xl bg-rose-500/15 hover:bg-rose-500 text-rose-400 hover:text-white transition flex items-center gap-1.5 font-semibold"
+                      className="tone-rose px-3 py-1.5 text-xs rounded-xl border hover:bg-rose-600 hover:text-white hover:border-rose-600 transition flex items-center gap-1.5 font-semibold"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Delete Circle</span>
@@ -873,7 +873,7 @@ export const AdminPanel: React.FC = () => {
             reports.map((r) => (
               <div key={r.id} className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] text-xs space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-rose-400 flex items-center gap-1">
+                  <span className="font-semibold text-[var(--tone-rose-fg)] flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5" /> Report ({r.target_type})
                   </span>
                   <span className="text-[10px] text-[var(--text-muted)] font-mono">{r.status}</span>
@@ -884,13 +884,13 @@ export const AdminPanel: React.FC = () => {
                     <>
                       <button
                         onClick={() => handleReportDecision(r.id, 'resolved')}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px]"
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold"
                       >
                         Mark Resolved
                       </button>
                       <button
                         onClick={() => handleReportDecision(r.id, 'dismissed')}
-                        className="px-2.5 py-1 rounded-lg bg-neutral-800 text-[var(--text-muted)] text-[11px]"
+                        className="px-2.5 py-1 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] text-[11px] font-medium"
                       >
                         Dismiss
                       </button>
@@ -1101,8 +1101,8 @@ export const AdminPanel: React.FC = () => {
             if (e.target === e.currentTarget && !clearFeedLoading) setShowClearFeedConfirm(false);
           }}
         >
-          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-amber-500/30 rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
-            <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--tone-amber-border)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
+            <div className="flex items-center gap-2 text-[var(--tone-amber-fg)] font-bold text-sm">
               <AlertTriangle className="w-4 h-4" />
               <span>Clear Feed Memories</span>
             </div>
@@ -1111,7 +1111,7 @@ export const AdminPanel: React.FC = () => {
               <p>
                 Are you sure you want to <strong>clear all test memories and collections from the feed</strong>?
               </p>
-              <p className="text-[11px] text-amber-300 bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/30">
+              <p className="tone-amber text-[11px] p-2.5 rounded-xl border">
                 This will remove the current feed posts and sync the clean state to Neon so you can start fresh. All user accounts, circles, and stored files are kept completely safe.
               </p>
             </div>
@@ -1165,7 +1165,7 @@ export const AdminPanel: React.FC = () => {
                   </>
                 )}
               </p>
-              <p className="text-[11px] text-rose-300 bg-rose-950/40 p-2.5 rounded-xl border border-rose-500/30">
+              <p className="tone-rose text-[11px] p-2.5 rounded-xl border">
                 {storageStatus?.backend === 'telegram'
                   ? 'Feed memories, collections, and local server cache will be cleared. Original documents saved in your private Telegram channel remain safely archived (archive-on-delete).'
                   : 'This will delete every uploaded photo/video from Backblaze B2 and reset feed data so you can start with a completely clean slate.'}
@@ -1224,13 +1224,13 @@ export const AdminPanel: React.FC = () => {
                   <span
                     className={`font-semibold flex items-center gap-1.5 ${
                       dbStatus?.isTursoSynced
-                        ? 'text-emerald-400'
+                        ? 'text-[var(--tone-emerald-fg)]'
                         : dbStatus?.tursoConfigured
-                        ? 'text-amber-400'
+                        ? 'text-[var(--tone-amber-fg)]'
                         : 'text-[var(--text-muted)]'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${dbStatus?.isTursoSynced ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    <span className={`w-2 h-2 rounded-full ${dbStatus?.isTursoSynced ? 'bg-emerald-500' : 'bg-amber-500'}`} />
                     {dbStatus?.isTursoSynced ? 'Connected & Synced' : dbStatus?.tursoConfigured ? 'Connecting / Notice' : 'Local only - set DATABASE_URL'}
                   </span>
                 </div>
@@ -1258,8 +1258,8 @@ export const AdminPanel: React.FC = () => {
               </div>
 
               {dbStatus?.error && (
-                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-[11px] text-amber-200 space-y-1.5">
-                  <div className="font-semibold flex items-center gap-1 text-amber-400">
+                <div className="tone-amber p-3 rounded-xl border text-[11px] space-y-1.5">
+                  <div className="font-semibold flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>Sync Notice</span>
                   </div>
@@ -1325,7 +1325,7 @@ export const AdminPanel: React.FC = () => {
           <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
-                <HardDrive className="w-4 h-4 text-sky-400" />
+                <HardDrive className="w-4 h-4 text-[var(--tone-sky-fg)]" />
                 <span>Media Storage Diagnostics</span>
               </div>
               <button
@@ -1348,7 +1348,7 @@ export const AdminPanel: React.FC = () => {
 
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[var(--text-muted)] font-medium">Max Upload File Size</span>
-                  <span className="font-mono font-bold text-sky-400">
+                  <span className="font-mono font-bold text-[var(--tone-sky-fg)]">
                     {storageStatus.maxFileSizeLabel}
                   </span>
                 </div>
@@ -1357,7 +1357,7 @@ export const AdminPanel: React.FC = () => {
                   <>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[var(--text-muted)] font-medium">Bot API Lane (≤ 15 MB)</span>
-                      <span className={`font-semibold ${storageStatus.botApiEnabled ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                      <span className={`font-semibold ${storageStatus.botApiEnabled ? 'text-[var(--tone-emerald-fg)]' : 'text-[var(--text-muted)]'}`}>
                         {storageStatus.botApiEnabled
                           ? storageStatus.customBotApiUrl
                             ? 'Enabled (Custom Server)'
@@ -1368,7 +1368,7 @@ export const AdminPanel: React.FC = () => {
 
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[var(--text-muted)] font-medium">MTProto Lane (Up to 2 GB)</span>
-                      <span className={`font-semibold ${storageStatus.mtprotoEnabled ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                      <span className={`font-semibold ${storageStatus.mtprotoEnabled ? 'text-[var(--tone-emerald-fg)]' : 'text-[var(--text-muted)]'}`}>
                         {storageStatus.mtprotoEnabled
                           ? storageStatus.mtprotoMode === 'external'
                             ? 'External Server'
@@ -1390,7 +1390,7 @@ export const AdminPanel: React.FC = () => {
 
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[var(--text-muted)] font-medium">Deletion Policy</span>
-                      <span className="font-semibold text-amber-400">
+                      <span className="font-semibold text-[var(--tone-amber-fg)]">
                         Archive-on-Delete (Preserved)
                       </span>
                     </div>
@@ -1399,7 +1399,7 @@ export const AdminPanel: React.FC = () => {
 
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[var(--text-muted)] font-medium">Backblaze B2 Fallback</span>
-                  <span className={`font-semibold ${storageStatus.b2FallbackEnabled ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
+                  <span className={`font-semibold ${storageStatus.b2FallbackEnabled ? 'text-[var(--tone-emerald-fg)]' : 'text-[var(--text-muted)]'}`}>
                     {storageStatus.b2FallbackEnabled ? 'Active (Legacy Reads)' : 'Inactive'}
                   </span>
                 </div>
@@ -1416,15 +1416,15 @@ export const AdminPanel: React.FC = () => {
                 <div
                   className={`p-3 rounded-xl border text-[11px] space-y-1.5 ${
                     storageTestResult.ok
-                      ? 'bg-emerald-950/35 border-emerald-500/30 text-emerald-200'
-                      : 'bg-rose-950/35 border-rose-500/30 text-rose-200'
+                      ? 'tone-emerald'
+                      : 'tone-rose'
                   }`}
                 >
                   <div className="font-semibold flex items-center gap-1.5">
                     {storageTestResult.ok ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     ) : (
-                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     )}
                     <span>{storageTestResult.summary}</span>
                   </div>
@@ -1483,16 +1483,16 @@ export const AdminPanel: React.FC = () => {
       {actionToast && (
         <div
           role="status"
-          className={`fixed bottom-20 right-4 z-50 flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-semibold shadow-xl backdrop-blur-xl lg:bottom-6 ${
+          className={`fixed bottom-20 right-4 z-50 flex items-center gap-2 rounded-2xl border bg-[var(--bg-card)] px-4 py-2.5 text-xs font-semibold shadow-xl backdrop-blur-xl lg:bottom-6 ${
             actionToast.type === 'success'
-              ? 'border-emerald-500/35 bg-emerald-950/90 text-emerald-200'
-              : 'border-rose-500/35 bg-rose-950/90 text-rose-200'
+              ? 'border-[var(--tone-emerald-border)] text-[var(--tone-emerald-fg)]'
+              : 'border-[var(--tone-rose-border)] text-[var(--tone-rose-fg)]'
           }`}
         >
           {actionToast.type === 'success' ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
           ) : (
-            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+            <AlertTriangle className="h-4 w-4 shrink-0" />
           )}
           <span>{actionToast.message}</span>
         </div>

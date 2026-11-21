@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Home, CalendarDays, Users, Shield, Trash2, Sparkles, Plus, Compass, KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { Group } from '../types/index.ts';
@@ -43,6 +43,20 @@ export const SideNav: React.FC<SideNavProps> = ({
   eventCount,
 }) => {
   const { user, isAdmin } = useAuth();
+  const circlesListRef = useRef<HTMLDivElement>(null);
+
+  const handleAsideWheel = (e: React.WheelEvent<HTMLElement>) => {
+    const listEl = circlesListRef.current;
+    if (!listEl) return;
+    // If the wheel event already originated inside the scrollable circles list,
+    // let native scrolling + overscroll-contain handle it directly.
+    if (listEl.contains(e.target as Node)) return;
+    // If the user scrolls over non-scrollable parts of the left rail while
+    // there are overflow circles, scroll ONLY the left rail's circles list.
+    if (listEl.scrollHeight > listEl.clientHeight) {
+      listEl.scrollTop += e.deltaY;
+    }
+  };
 
   const items: { id: Tab; label: string; count?: number; hint: string }[] = [
     { id: 'feed', label: 'Timeline', count: feedCount, hint: 'Every memory, one rail' },
@@ -53,10 +67,13 @@ export const SideNav: React.FC<SideNavProps> = ({
   ];
 
   return (
-    <aside className="hidden w-[210px] shrink-0 lg:block">
-      <div className="sticky top-[76px] space-y-3 pb-8">
+    <aside
+      onWheel={handleAsideWheel}
+      className="hidden w-[210px] shrink-0 overscroll-contain lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden"
+    >
+      <div className="flex h-full min-h-0 flex-col gap-3 pb-4">
         {/* Primary navigation */}
-        <nav className="surface overflow-hidden p-1.5">
+        <nav className="surface shrink-0 overflow-hidden p-1.5">
           {items.map((item) => {
             const Icon = NAV_ICONS[item.id as keyof typeof NAV_ICONS];
             const active = currentTab === item.id;
@@ -108,8 +125,8 @@ export const SideNav: React.FC<SideNavProps> = ({
         </nav>
 
         {/* Circles */}
-        <section className="surface overflow-hidden">
-          <div className="flex items-center justify-between px-2.5 pb-1 pt-2.5">
+        <section className="surface flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex shrink-0 items-center justify-between px-2.5 pb-1 pt-2.5">
             <h2 className="eyebrow">Your circles</h2>
             <button
               type="button"
@@ -122,7 +139,10 @@ export const SideNav: React.FC<SideNavProps> = ({
             </button>
           </div>
 
-          <div className="max-h-[38vh] overflow-y-auto px-1.5 pb-1.5">
+          <div
+            ref={circlesListRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 pb-1.5"
+          >
             <button
               type="button"
               onClick={() => onSelectGroup(undefined)}
@@ -180,7 +200,7 @@ export const SideNav: React.FC<SideNavProps> = ({
           <button
             type="button"
             onClick={onOpenGroupsManager}
-            className="flex w-full items-center justify-between gap-2 border-t border-[var(--border-subtle)] px-2.5 py-2 text-[10px] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]"
+            className="flex w-full shrink-0 items-center justify-between gap-2 border-t border-[var(--border-subtle)] px-2.5 py-2 text-[10px] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]"
           >
             <span className="flex min-w-0 items-center gap-1.5">
               <KeyRound className="h-3 w-3 shrink-0" /> <span className="truncate">Manage members &amp; rules</span>
@@ -190,13 +210,13 @@ export const SideNav: React.FC<SideNavProps> = ({
         </section>
 
         {/* Upload CTA */}
-        <button type="button" onClick={onOpenUpload} className="btn btn-primary btn-block !rounded-xl !py-2.5 !text-[11.5px]">
+        <button type="button" onClick={onOpenUpload} className="btn btn-primary btn-block shrink-0 !rounded-xl !py-2.5 !text-[11.5px]">
           <Plus className="h-4 w-4" strokeWidth={3} />
           Add a memory
         </button>
 
         {user?.role === 'admin' && (
-          <p className="px-1 text-[9.5px] leading-relaxed text-[var(--text-muted)]">
+          <p className="shrink-0 px-1 text-[9.5px] leading-relaxed text-[var(--text-muted)]">
             Signed in as admin — visibility overrides and audit trails are in Admin studio.
           </p>
         )}

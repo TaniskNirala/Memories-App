@@ -111,7 +111,8 @@ export function avatarGradient(color?: string, name = ''): string {
 /** Accent hue for timeline nodes, derived from the author name. */
 export function accentFromName(name?: string): string {
   const h = hueFromString(name || 'nest');
-  return `hsl(${h} 78% 62%)`;
+  const isLight = typeof document !== 'undefined' && !document.documentElement.classList.contains('dark');
+  return isLight ? `hsl(${h} 72% 38%)` : `hsl(${h} 78% 62%)`;
 }
 
 export function clampText(text: string, max = 120): string {

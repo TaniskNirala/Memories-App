@@ -101,8 +101,8 @@ export const HeroRail: React.FC<HeroRailProps> = ({
   }
 
   return (
-    <div className="sticky top-[76px] space-y-3 pb-8">
-      <section className="surface relative overflow-hidden p-4">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain pb-4">
+      <section className="surface relative shrink-0 overflow-hidden p-4">
         <div
           aria-hidden
           className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full opacity-40 blur-2xl"

@@ -70,6 +70,11 @@ function handleAvatarUpload(req: any, res: any, next: any) {
   });
 }
 
+/** Only the two supported palettes are ever persisted or returned. */
+function normaliseTheme(value: unknown): 'dark' | 'light' | undefined {
+  return value === 'dark' || value === 'light' ? value : undefined;
+}
+
 const registerLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, max: 10, message: 'Too many sign-up attempts. Please try again later.' });
 const redeemLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10, message: 'Too many attempts. Please try again later.' });
 const sensitiveLimiter = createRateLimiter({
@@ -249,6 +254,7 @@ authRouter.post('/login', async (req, res) => {
       status: user.status,
       avatarColor: user.avatar_color,
       avatarUrl: avatarUrlFor((user as any).avatar_url),
+      themePreference: normaliseTheme((user as any).theme_preference),
     },
     isPending: user.role === 'pending',
   });
@@ -280,7 +286,7 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const { displayName, username, avatarColor, currentPassword, removeAvatar } = req.body || {};
+  const { displayName, username, avatarColor, currentPassword, removeAvatar, themePreference } = req.body || {};
   const touchesIdentity = typeof username === 'string' && username.trim().toLowerCase() !== req.user.username;
 
   // Changing the handle you sign in with is a credential change: prove it is you.
@@ -321,6 +327,14 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     nextDisplayName = displayName.trim();
   }
 
+  let nextTheme: 'dark' | 'light' | undefined;
+  if (themePreference !== undefined) {
+    nextTheme = normaliseTheme(themePreference);
+    if (!nextTheme) {
+      return res.status(400).json({ error: 'Theme must be "dark" or "light"' });
+    }
+  }
+
   let nextAvatar: string | undefined;
   if (avatarColor !== undefined) {
     if (typeof avatarColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(avatarColor)) {
@@ -339,6 +353,9 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
   }
   if (nextAvatar !== undefined) {
     run('UPDATE users SET avatar_color = ? WHERE id = ?', [nextAvatar, req.user.id]);
+  }
+  if (nextTheme !== undefined) {
+    run('UPDATE users SET theme_preference = ? WHERE id = ?', [nextTheme, req.user.id]);
   }
 
   let removedKey: string | null = null;
@@ -361,6 +378,7 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     status: string;
     avatar_color: string;
     avatar_url: string | null;
+    theme_preference: string | null;
     created_at: string;
   }>('SELECT * FROM users WHERE id = ?', [req.user.id]);
 
@@ -379,6 +397,7 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
       status: fresh.status,
       avatarColor: fresh.avatar_color,
       avatarUrl: avatarUrlFor(fresh.avatar_url),
+      themePreference: normaliseTheme(fresh.theme_preference),
     },
   });
 });

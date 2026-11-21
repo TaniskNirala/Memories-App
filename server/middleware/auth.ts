@@ -13,6 +13,8 @@ export interface AuthenticatedUser {
   avatarColor: string;
   /** Uploaded profile photo URL, resolved from the stored storage key */
   avatarUrl?: string;
+  /** 'dark' | 'light' | undefined (never chosen / new account) */
+  themePreference?: 'dark' | 'light';
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -55,8 +57,9 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
       status: string;
       avatar_color: string;
       avatar_url: string | null;
+      theme_preference: string | null;
     }>(
-      'SELECT id, username, display_name, role, status, avatar_color, avatar_url FROM users WHERE id = ?',
+      'SELECT id, username, display_name, role, status, avatar_color, avatar_url, theme_preference FROM users WHERE id = ?',
       [session.user_id]
     );
 
@@ -71,6 +74,10 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
         avatarUrl: user.avatar_url
           ? `/api/storage/view?key=${encodeURIComponent(user.avatar_url)}`
           : undefined,
+        themePreference:
+          user.theme_preference === 'dark' || user.theme_preference === 'light'
+            ? user.theme_preference
+            : undefined,
       };
       req.token = token;
 

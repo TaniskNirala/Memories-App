@@ -492,6 +492,11 @@ function initSchema(db: any) {
     db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
   } catch {}
 
+  // Per-account appearance preference, so a new device opens in the user's theme
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN theme_preference TEXT');
+  } catch {}
+
   // Set when the backing Telegram message was deleted from the channel
   try {
     db.exec('ALTER TABLE post_files ADD COLUMN tg_deleted_at TEXT');

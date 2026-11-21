@@ -7,6 +7,8 @@ export interface User {
   avatarColor: string;
   /** Uploaded profile photo; falls back to the colour avatar when absent */
   avatarUrl?: string;
+  /** Appearance saved on the account, so new devices open in the same theme */
+  themePreference?: 'dark' | 'light';
 }
 
 export interface GroupMember {

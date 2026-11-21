@@ -340,7 +340,12 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
     : `${imageSize.width} / ${imageSize.height}`;
 
   return (
-    <div className="scrim z-50 select-none">
+    <div
+      className="scrim z-50 select-none"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isSaving) onClose();
+      }}
+    >
       <div className="relative w-full max-w-4xl max-h-[94vh] bg-neutral-900 border border-neutral-800 rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden text-white">
         {/* Top Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-xs">

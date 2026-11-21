@@ -68,7 +68,12 @@ export const PWAInstallButton: React.FC = () => {
       </button>
 
       {showIOSGuide && (
-        <div className="scrim z-50">
+        <div
+          className="scrim z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowIOSGuide(false);
+          }}
+        >
           <div className="modal-panel max-w-xs p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm">Install Nest on iOS</h3>

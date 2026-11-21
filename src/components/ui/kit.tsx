@@ -244,39 +244,140 @@ export const Dropdown: React.FC<{
   className?: string;
 }> = ({ trigger, children, align = 'right', width = 240, className = '' }) => {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<{
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+    maxHeight: number;
+    originY: 'top' | 'bottom';
+  } | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setCoords(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const margin = 12;
+      const gap = 8;
+
+      const spaceBelow = vh - rect.bottom - margin - gap;
+      const spaceAbove = rect.top - margin - gap;
+      const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+
+      const effectiveWidth = Math.min(width, vw - margin * 2, 320);
+
+      let left: number | undefined;
+      let right: number | undefined;
+
+      if (align === 'right') {
+        const computedRight = Math.max(margin, vw - rect.right);
+        if (vw - computedRight - effectiveWidth < margin) {
+          left = margin;
+        } else {
+          right = computedRight;
+        }
+      } else {
+        const computedLeft = Math.max(margin, rect.left);
+        if (computedLeft + effectiveWidth > vw - margin) {
+          right = margin;
+        } else {
+          left = computedLeft;
+        }
+      }
+
+      if (openUp) {
+        setCoords({
+          bottom: vh - rect.top + gap,
+          left,
+          right,
+          maxHeight: Math.max(160, Math.min(spaceAbove, vh * 0.72)),
+          originY: 'bottom',
+        });
+      } else {
+        setCoords({
+          top: rect.bottom + gap,
+          left,
+          right,
+          maxHeight: Math.max(160, Math.min(spaceBelow, vh * 0.72)),
+          originY: 'top',
+        });
+      }
+    };
+
+    updatePosition();
+
     const onDown = (e: MouseEvent | TouchEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    const onScrollOrResize = (e: Event) => {
+      if (e.type === 'scroll' && menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) {
+        return;
+      }
+      updatePosition();
+    };
+
     document.addEventListener('mousedown', onDown);
     document.addEventListener('touchstart', onDown);
     document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onScrollOrResize);
+    window.addEventListener('scroll', onScrollOrResize, true);
     return () => {
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('touchstart', onDown);
       document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onScrollOrResize);
+      window.removeEventListener('scroll', onScrollOrResize, true);
     };
-  }, [open]);
+  }, [open, align, width]);
 
   return (
-    <div ref={ref} className={`relative ${className}`}>
+    <div ref={triggerRef} className={`relative ${className}`}>
       {trigger({ open, toggle: () => setOpen((v) => !v) })}
-      {open && (
-        <div
-          style={{ width, maxWidth: 'min(calc(100vw - 1.5rem), 320px)' }}
-          className={`absolute z-[70] mt-2 max-h-[70dvh] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 p-1.5 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in ${
-            align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
-          }`}
-        >
-          {children({ close: () => setOpen(false) })}
-        </div>
-      )}
+      {open &&
+        coords &&
+        createPortal(
+          <div
+            ref={menuRef}
+            style={{
+              position: 'fixed',
+              top: coords.top,
+              bottom: coords.bottom,
+              left: coords.left,
+              right: coords.right,
+              width,
+              maxWidth: 'min(calc(100vw - 1.5rem), 320px)',
+              maxHeight: coords.maxHeight,
+            }}
+            className={`z-[95] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 p-1.5 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in ${
+              coords.originY === 'bottom'
+                ? align === 'right'
+                  ? 'origin-bottom-right'
+                  : 'origin-bottom-left'
+                : align === 'right'
+                  ? 'origin-top-right'
+                  : 'origin-top-left'
+            }`}
+          >
+            {children({ close: () => setOpen(false) })}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

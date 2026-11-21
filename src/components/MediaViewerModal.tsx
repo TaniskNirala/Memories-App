@@ -549,7 +549,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
       {/* Convert Memory/Album to Event Modal Dialog */}
       {showConvertPostToEvent && (
-        <div className="scrim z-60">
+        <div
+          className="scrim z-60"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isConvertingPost) setShowConvertPostToEvent(false);
+          }}
+        >
           <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 text-white space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
@@ -1118,7 +1123,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
       {/* Delete confirmation dialog */}
       {showDeleteConfirm && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs">
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeletingFile) setShowDeleteConfirm(false);
+          }}
+        >
           <div className="w-full max-w-sm p-5 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl text-white">
             <h4 className="font-semibold text-sm mb-2 text-rose-400 flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4" />
@@ -1193,7 +1203,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
       {/* Delete Single Photo confirmation dialog */}
       {deleteTargetPhoto && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs">
+        <div
+          className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeletingFile) setDeleteTargetPhoto(null);
+          }}
+        >
           <div className="w-full max-w-sm p-5 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-2xl text-white">
             <h4 className="font-semibold text-sm mb-2 text-amber-400 flex items-center gap-1.5">
               <Trash2 className="w-4 h-4 text-amber-400" />

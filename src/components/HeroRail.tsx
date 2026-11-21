@@ -62,7 +62,7 @@ export const HeroRail: React.FC<HeroRailProps> = ({
 
   if (compact) {
     return (
-      <header className="relative overflow-hidden rounded-[24px] border border-[var(--border-color)] bg-[var(--bg-card)]/80 p-4 backdrop-blur-xl">
+      <header className="surface relative overflow-hidden p-4">
         <p className="eyebrow flex items-center gap-1.5">
           {selectedGroupName && <Users className="h-3 w-3 text-[var(--accent-cyan)]" />}
           {eyebrow}

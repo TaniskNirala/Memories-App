@@ -108,71 +108,60 @@ export const AuthScreen: React.FC = () => {
         : 'Paste the one-time token an admin shared with you.';
 
   return (
-    <div className="auth-page relative flex min-h-dvh items-center justify-center px-3 py-6 sm:px-6 sm:py-10">
-      {/* theme toggle — floats above the card, like a modal close affordance */}
-      <button
-        type="button"
-        onClick={toggleTheme}
-        className="btn-icon absolute right-4 top-4 z-30 !h-9 !w-9 backdrop-blur-xl"
-        aria-label="Toggle theme"
-      >
-        {isDark ? (
-          <Sun className="h-4 w-4 text-[var(--accent-amber)]" />
-        ) : (
-          <Moon className="h-4 w-4 text-[var(--accent-indigo)]" />
-        )}
-      </button>
-
-      <div className="relative w-full max-w-[1040px]">
-        {/* soft halo behind the card */}
+    <div className="auth-page relative min-h-dvh lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+      {/* ------------------------------------------- full-bleed illustrated left */}
+      <aside className="relative isolate hidden overflow-hidden bg-[#0d0b16] lg:block">
+        <img
+          src="/auth-illustration.webp"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-full object-cover"
+        />
         <div
           aria-hidden
-          className="pointer-events-none absolute -inset-x-10 -top-16 bottom-0 -z-10 opacity-70 blur-3xl"
+          className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, var(--accent-amber) 30%, transparent), transparent 70%), radial-gradient(50% 50% at 85% 85%, color-mix(in oklab, var(--accent-coral) 26%, transparent), transparent 70%)',
+              'linear-gradient(180deg, rgba(10,12,20,0.3) 0%, rgba(10,12,20,0.1) 40%, rgba(10,12,20,0.8) 100%)',
           }}
         />
-
-        <div className="auth-card card-glow overflow-hidden">
-          <div className="grid lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
-            {/* ------------------------------------------------ illustrated side */}
-            <aside className="relative isolate hidden overflow-hidden bg-[#0d0b16] lg:block">
-              <img
-                src="/auth-illustration.webp"
-                alt=""
+        <div className="relative flex h-full flex-col justify-between p-10">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/25 bg-white/10 backdrop-blur-md">
+              <span
                 aria-hidden
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 rounded-[14px] opacity-90"
+                style={{ background: 'var(--gradient-ember)' }}
               />
-              <div
-                aria-hidden
-                className="absolute inset-0"
-                style={{
-                  background:
-                    'linear-gradient(180deg, rgba(10,12,20,0.28) 0%, rgba(10,12,20,0.12) 38%, rgba(10,12,20,0.78) 100%)',
-                }}
-              />
-              <div className="relative flex h-full flex-col justify-between p-8">
-                <div className="flex items-center gap-2.5">
-                  <span className="relative flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/25 bg-white/10 backdrop-blur-md">
-                    <span
-                      aria-hidden
-                      className="absolute inset-0 rounded-[14px] opacity-90"
-                      style={{ background: 'var(--gradient-ember)' }}
-                    />
-                    <img src="/icon.svg" alt="" className="relative z-10 h-5 w-5" />
-                  </span>
-                  <span className="font-display text-[1.35rem] leading-none text-white">Nest</span>
-                </div>
+              <img src="/icon.svg" alt="" className="relative z-10 h-5 w-5" />
+            </span>
+            <span className="font-display text-[1.35rem] leading-none text-white">Nest</span>
+          </div>
 
-                <h1 className="max-w-sm font-display text-[1.9rem] leading-[1.12] text-white">
-                  Your photos, <span className="glow-text">in the order life happened.</span>
-                </h1>
-              </div>
-            </aside>
+          <h1 className="max-w-md font-display text-[2.1rem] leading-[1.1] text-white">
+            Your photos, <span className="glow-text">in the order life happened.</span>
+          </h1>
+        </div>
+      </aside>
 
-            {/* ---------------------------------------------------- form side */}
-            <section className="relative flex flex-col justify-center px-5 py-7 sm:px-9 sm:py-10">
+      {/* ------------------------------------------------------- form, right side */}
+      <div className="relative flex min-h-dvh items-center justify-center px-3 py-6 sm:px-6 sm:py-10">
+        {/* theme toggle */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="btn-icon absolute right-4 top-4 z-30 !h-9 !w-9 backdrop-blur-xl"
+          aria-label="Toggle theme"
+        >
+          {isDark ? (
+            <Sun className="h-4 w-4 text-[var(--accent-amber)]" />
+          ) : (
+            <Moon className="h-4 w-4 text-[var(--accent-indigo)]" />
+          )}
+        </button>
+
+        <div className="auth-panel relative w-full max-w-[380px] p-5 sm:p-7">
+            <div className="relative">
               {/* compact brand row for phones */}
               <div className="mb-5 flex items-center gap-2.5 lg:hidden">
                 <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-[12px] border border-[var(--border-color)] bg-[var(--bg-card)]">
@@ -368,8 +357,7 @@ export const AuthScreen: React.FC = () => {
                 </button>
 
               </form>
-            </section>
-          </div>
+            </div>
         </div>
       </div>
     </div>

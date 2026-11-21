@@ -60,6 +60,8 @@
     --shadow-float: 0 24px 60px -28px rgba(0, 0, 0, 0.95);
     --sticker: rgba(246, 181, 68, 0.1);
     --paper-dot: rgba(255, 255, 255, 0.04);
+    --pattern-ink: rgba(255, 255, 255, 0.055);
+    --pattern-size: 620px auto;
     --blob-a: rgba(255, 112, 105, 0.18);
     --blob-b: rgba(94, 234, 212, 0.12);
     --blob-c: rgba(155, 155, 255, 0.14);
@@ -93,6 +95,8 @@
     --shadow-float: 0 24px 60px -30px rgba(70, 50, 20, 0.4);
     --sticker: rgba(196, 122, 9, 0.12);
     --paper-dot: rgba(26, 24, 38, 0.055);
+    --pattern-ink: rgba(26, 24, 38, 0.075);
+    --pattern-size: 620px auto;
     --blob-a: rgba(246, 169, 43, 0.22);
     --blob-b: rgba(13, 143, 132, 0.13);
     --blob-c: rgba(85, 81, 212, 0.1);
@@ -111,9 +115,12 @@
 
   body {
     background-color: var(--bg-page);
-    background-image: radial-gradient(var(--paper-dot) 1px, transparent 1px);
-    background-size: 24px 24px;
-    background-attachment: fixed;
+    background-image:
+      radial-gradient(var(--paper-dot) 1px, transparent 1px),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.05'/></svg>");
+    background-size: 24px 24px, 140px 140px;
+    background-repeat: repeat, repeat;
+    background-attachment: fixed, fixed;
     color: var(--text-primary);
     font-family: var(--font-sans);
     font-feature-settings: 'ss01' on, 'cv11' on;
@@ -137,15 +144,30 @@
     filter: saturate(1.05);
   }
 
-  /* Fine film-grain texture */
+  /* ------------------------------------------------------------------------
+     Doodle line-art pattern — repeats across every page, pinned to the
+     viewport so it holds still through scrolls, route changes and modals.
+     The artwork ships as pure black strokes and is used as an alpha mask,
+     so the ink colour comes from --pattern-ink and follows the theme.
+     ------------------------------------------------------------------------ */
   body::after {
     content: "";
     position: fixed;
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    opacity: 0.35;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.05'/></svg>");
+    background-color: var(--pattern-ink);
+    -webkit-mask-image: url("/bg-pattern.svg");
+    mask-image: url("/bg-pattern.svg");
+    -webkit-mask-repeat: repeat;
+    mask-repeat: repeat;
+    -webkit-mask-size: var(--pattern-size);
+    mask-size: var(--pattern-size);
+    -webkit-mask-position: 0 0;
+    mask-position: 0 0;
+    -webkit-mask-mode: alpha;
+    mask-mode: alpha;
+    transition: background-color 0.4s ease;
   }
 
   h1, h2, h3, h4, .font-display {

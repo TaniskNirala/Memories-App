@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, MapPin, Users, Plus, Check, Trash2, Eye, EyeOff, Sparkles, Shield, AlertTriangle } from 'lucide-react';
+import { X, Calendar, MapPin, Users, Plus, Check, Trash2, Eye, EyeOff, Sparkles, Shield, AlertTriangle, Play } from 'lucide-react';
 import { EventAttendee, EventNote, Group, FeedItem } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
+import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 
 interface CollectionDetailModalProps {
   collectionId: string | null;
@@ -524,29 +525,55 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                   onClick={() => onSelectPhoto(item.postId, item.filePosition || 0)}
                   className="relative aspect-square rounded-xl overflow-hidden bg-neutral-900 cursor-pointer group border border-[var(--border-subtle)] hover:border-[var(--accent-coral)] transition"
                 >
-                  <img
-                    src={item.thumbUrl || item.viewUrl}
-                    alt={item.caption || 'Event photo'}
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      const stage = target.dataset.fallbackStage || '0';
-                      const key = item.thumbKey || item.storageKey;
-                      if (stage === '0' && key) {
-                        target.dataset.fallbackStage = '1';
-                        target.src = `/api/storage/view?key=${encodeURIComponent(key)}`;
-                      } else if (stage === '1' && key) {
-                        target.dataset.fallbackStage = '2';
-                        const clean = key.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
-                        target.src = `/uploads/${clean}`;
-                      } else if (stage !== '3') {
-                        target.dataset.fallbackStage = '3';
-                        target.src =
-                          'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="100%" height="100%" fill="%23181829"/><circle cx="200" cy="180" r="30" fill="%23f59e0b" opacity="0.2"/><path d="M180 200 L200 160 L220 200 Z" fill="%23f59e0b" opacity="0.8"/><circle cx="220" cy="160" r="6" fill="%23f43f5e" opacity="0.8"/></svg>';
-                      }
-                    }}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                  />
+                  {isVideoMedia(item) ? (
+                    <>
+                      {getVideoPosterUrl(item) ? (
+                        <img
+                          src={getVideoPosterUrl(item)}
+                          alt={item.caption || 'Event video'}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        />
+                      ) : (
+                        <video
+                          src={item.viewUrl ? `${item.viewUrl}#t=0.1` : undefined}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        />
+                      )}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-9 h-9 rounded-full bg-black/70 border border-white/25 flex items-center justify-center text-white shadow-md">
+                          <Play className="w-4 h-4 fill-current text-amber-400 ml-0.5" />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      src={item.thumbUrl || item.viewUrl}
+                      alt={item.caption || 'Event photo'}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        const stage = target.dataset.fallbackStage || '0';
+                        const key = item.thumbKey || item.storageKey;
+                        if (stage === '0' && key) {
+                          target.dataset.fallbackStage = '1';
+                          target.src = `/api/storage/view?key=${encodeURIComponent(key)}`;
+                        } else if (stage === '1' && key) {
+                          target.dataset.fallbackStage = '2';
+                          const clean = key.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
+                          target.src = `/uploads/${clean}`;
+                        } else if (stage !== '3') {
+                          target.dataset.fallbackStage = '3';
+                          target.src =
+                            'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="100%" height="100%" fill="%23181829"/><circle cx="200" cy="180" r="30" fill="%23f59e0b" opacity="0.2"/><path d="M180 200 L200 160 L220 200 Z" fill="%23f59e0b" opacity="0.8"/><circle cx="220" cy="160" r="6" fill="%23f43f5e" opacity="0.8"/></svg>';
+                        }
+                      }}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                    />
+                  )}
                   {item.caption && (
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex items-end">
                       <span className="text-[10px] text-white line-clamp-2 leading-tight">

@@ -21,9 +21,12 @@ import {
   SlidersHorizontal,
   CheckCircle2,
   RefreshCw,
+  Play,
+  Maximize2,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
+import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 
 interface TimelineFeedProps {
   items: FeedItem[];
@@ -82,9 +85,87 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
     }
   };
 
-  // 1 photo: Full width
+  const renderMediaTile = (
+    f: SinglePostFeedItem['files'][number],
+    alt: string,
+    imgClassName: string
+  ) => {
+    if (isVideoMedia(f)) {
+      const posterUrl = getVideoPosterUrl(f);
+      return (
+        <>
+          {posterUrl ? (
+            <img
+              src={posterUrl}
+              alt={alt}
+              referrerPolicy="no-referrer"
+              onError={(e) => handleImageError(e, f.thumbKey || f.storageKey)}
+              className={imgClassName}
+            />
+          ) : (
+            <video
+              src={f.viewUrl ? `${f.viewUrl}#t=0.1` : undefined}
+              muted
+              playsInline
+              preload="metadata"
+              className={imgClassName}
+            />
+          )}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-10 h-10 rounded-full bg-black/70 backdrop-blur-xs border border-white/25 flex items-center justify-center text-white shadow-lg">
+              <Play className="w-4 h-4 fill-current text-amber-400 ml-0.5" />
+            </div>
+          </div>
+          <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-bold uppercase tracking-wider pointer-events-none">
+            Video
+          </span>
+        </>
+      );
+    }
+
+    return (
+      <img
+        src={f.viewUrl || f.thumbUrl}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        onError={(e) => handleImageError(e, f.storageKey)}
+        className={imgClassName}
+      />
+    );
+  };
+
+  // 1 photo or video: Full width
   if (count === 1) {
     const f = files[0];
+    if (isVideoMedia(f)) {
+      const posterUrl = getVideoPosterUrl(f);
+      return (
+        <div className="relative w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden bg-black border border-[var(--border-color)] mb-3 group/media">
+          <video
+            src={f.viewUrl}
+            poster={posterUrl}
+            controls
+            playsInline
+            preload="metadata"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full h-full object-contain bg-black"
+          />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenViewer(item, 0, 'expanded');
+            }}
+            className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1 shadow-lg transition cursor-pointer"
+            title="Open video in full viewer"
+          >
+            <Maximize2 className="w-3 h-3 text-amber-400" />
+            <span>Expand</span>
+          </button>
+        </div>
+      );
+    }
+
     return (
       <div
         onClick={() => onOpenViewer(item, 0, 'expanded')}
@@ -101,7 +182,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
     );
   }
 
-  // 2 photos: Split columns side-by-side
+  // 2 items: Split columns side-by-side
   if (count === 2) {
     return (
       <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
@@ -115,13 +196,11 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
               }}
               className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
             >
-              <img
-                src={f.viewUrl || f.thumbUrl}
-                alt={`${item.caption || 'Memory'} ${idx + 1}`}
-                referrerPolicy="no-referrer"
-                onError={(e) => handleImageError(e, f.storageKey)}
-                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-              />
+              {renderMediaTile(
+                f,
+                `${item.caption || 'Memory'} ${idx + 1}`,
+                'w-full h-full object-cover hover:scale-105 transition-transform duration-300'
+              )}
             </div>
           ))}
         </div>
@@ -134,13 +213,13 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
-          <span>2 Photos</span>
+          <span>2 Items</span>
         </button>
       </div>
     );
   }
 
-  // 3 photos: 1 large feature photo on left, 2 stacked on right
+  // 3 items: 1 large feature item on left, 2 stacked on right
   if (count === 3) {
     return (
       <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
@@ -152,13 +231,11 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
             }}
             className="col-span-2 relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
           >
-            <img
-              src={files[0].viewUrl || files[0].thumbUrl}
-              alt={`${item.caption || 'Memory'} 1`}
-              referrerPolicy="no-referrer"
-              onError={(e) => handleImageError(e, files[0].storageKey)}
-              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-            />
+            {renderMediaTile(
+              files[0],
+              `${item.caption || 'Memory'} 1`,
+              'w-full h-full object-cover hover:scale-105 transition-transform duration-300'
+            )}
           </div>
 
           <div className="col-span-1 grid grid-rows-2 gap-1.5 h-full">
@@ -173,13 +250,11 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
                   }}
                   className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
                 >
-                  <img
-                    src={f.viewUrl || f.thumbUrl}
-                    alt={`${item.caption || 'Memory'} ${realIdx + 1}`}
-                    referrerPolicy="no-referrer"
-                    onError={(e) => handleImageError(e, f.storageKey)}
-                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                  />
+                  {renderMediaTile(
+                    f,
+                    `${item.caption || 'Memory'} ${realIdx + 1}`,
+                    'w-full h-full object-cover hover:scale-105 transition-transform duration-300'
+                  )}
                 </div>
               );
             })}
@@ -194,13 +269,13 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
-          <span>3 Photos</span>
+          <span>3 Items</span>
         </button>
       </div>
     );
   }
 
-  // 4 photos: 2x2 grid
+  // 4 items: 2x2 grid
   if (count === 4) {
     return (
       <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
@@ -214,13 +289,11 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
               }}
               className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900"
             >
-              <img
-                src={f.viewUrl || f.thumbUrl}
-                alt={`${item.caption || 'Memory'} ${idx + 1}`}
-                referrerPolicy="no-referrer"
-                onError={(e) => handleImageError(e, f.storageKey)}
-                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-              />
+              {renderMediaTile(
+                f,
+                `${item.caption || 'Memory'} ${idx + 1}`,
+                'w-full h-full object-cover hover:scale-105 transition-transform duration-300'
+              )}
             </div>
           ))}
         </div>
@@ -233,13 +306,13 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
-          <span>4 Photos</span>
+          <span>4 Items</span>
         </button>
       </div>
     );
   }
 
-  // 5+ photos: 2x2 grid with +N overlay on the 4th item
+  // 5+ items: 2x2 grid with +N overlay on the 4th item
   const extraCount = count - 4;
   return (
     <div className="relative w-full aspect-16/10 rounded-xl overflow-hidden mb-3 border border-[var(--border-color)] bg-neutral-950 group/media shadow-md">
@@ -259,15 +332,13 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
               }}
               className="relative w-full h-full overflow-hidden cursor-pointer bg-neutral-900 group/cell"
             >
-              <img
-                src={f.viewUrl || f.thumbUrl}
-                alt={`${item.caption || 'Memory'} ${idx + 1}`}
-                referrerPolicy="no-referrer"
-                onError={(e) => handleImageError(e, f.storageKey)}
-                className={`w-full h-full object-cover transition-transform duration-300 ${
+              {renderMediaTile(
+                f,
+                `${item.caption || 'Memory'} ${idx + 1}`,
+                `w-full h-full object-cover transition-transform duration-300 ${
                   isFourth ? 'brightness-75' : 'hover:scale-105'
-                }`}
-              />
+                }`
+              )}
 
               {isFourth && (
                 <div className="absolute inset-0 bg-black/65 backdrop-blur-xs flex flex-col items-center justify-center text-white hover:bg-black/55 transition">

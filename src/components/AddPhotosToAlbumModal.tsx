@@ -9,6 +9,7 @@ import {
   Images,
   Sparkles,
   Check,
+  Play,
 } from 'lucide-react';
 import exifr from 'exifr';
 import { apiFetch } from '../context/AuthContext.tsx';
@@ -17,6 +18,7 @@ import {
   uploadFileWithProgress,
   StorageCapabilitiesResponse,
 } from '../utils/uploadWithProgress.ts';
+import { extractVideoThumbnail } from '../utils/videoThumbnail.ts';
 
 interface AddPhotosToAlbumModalProps {
   isOpen: boolean;
@@ -32,6 +34,8 @@ interface QueuedItem {
   file: File;
   previewUrl: string;
   detectedDate?: string;
+  thumbBlob?: Blob;
+  hasImagePreview?: boolean;
 }
 
 export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
@@ -121,9 +125,25 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
       id: crypto.randomUUID(),
       file: f,
       previewUrl: URL.createObjectURL(f),
+      hasImagePreview: f.type.startsWith('image/'),
     }));
 
     setQueue((prev) => [...prev, ...newItems]);
+
+    for (const qItem of newItems) {
+      if (qItem.file.type.startsWith('video/')) {
+        extractVideoThumbnail(qItem.file).then((thumb) => {
+          if (!thumb) return;
+          setQueue((prev) =>
+            prev.map((item) =>
+              item.id === qItem.id
+                ? { ...item, previewUrl: thumb.previewUrl, thumbBlob: thumb.thumbBlob, hasImagePreview: true }
+                : item
+            )
+          );
+        });
+      }
+    }
   };
 
   const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,11 +206,27 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
     }
   };
 
-  // Ultra-HD processing: preserve originals under 4096px, downscale giant images with high quality
-  const prepareBlobs = async (file: File): Promise<{ mainBlob: Blob; thumbBlob: Blob; width: number; height: number }> => {
+  // Ultra-HD processing: preserve originals under 4096px, downscale giant images with high quality, extract real JPEG posters for videos
+  const prepareBlobs = async (
+    file: File,
+    existingThumb?: Blob
+  ): Promise<{ mainBlob: Blob; thumbBlob?: Blob; width: number; height: number }> => {
+    if (file.type.startsWith('video/')) {
+      if (existingThumb) {
+        return { mainBlob: file, thumbBlob: existingThumb, width: 1280, height: 720 };
+      }
+      const extracted = await extractVideoThumbnail(file);
+      return {
+        mainBlob: file,
+        thumbBlob: extracted?.thumbBlob,
+        width: extracted?.width || 1280,
+        height: extracted?.height || 720,
+      };
+    }
+
     return new Promise((resolve) => {
       if (!file.type.startsWith('image/') || file.type.includes('svg') || file.type.includes('gif')) {
-        resolve({ mainBlob: file, thumbBlob: file, width: 1200, height: 800 });
+        resolve({ mainBlob: file, thumbBlob: file.type.startsWith('image/') ? file : undefined, width: 1200, height: 800 });
         return;
       }
 
@@ -292,10 +328,10 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
 
     try {
       // 1. Process and prepare Blobs
-      const preparedList: Array<{ mainBlob: Blob; thumbBlob: Blob; width: number; height: number; file: File }> = [];
+      const preparedList: Array<{ mainBlob: Blob; thumbBlob?: Blob; width: number; height: number; file: File }> = [];
       for (let i = 0; i < queue.length; i++) {
         const item = queue[i];
-        const res = await prepareBlobs(item.file);
+        const res = await prepareBlobs(item.file, item.thumbBlob);
         preparedList.push({ ...res, file: item.file });
         setUploadProgress(10 + Math.round(((i + 1) / queue.length) * 20));
       }
@@ -311,8 +347,9 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
 
         const formData = new FormData();
         formData.append('file', payloadBlob, item.file.name);
-        if (item.thumbBlob) {
-          formData.append('thumb', item.thumbBlob, `thumb_${item.file.name}`);
+        if (item.thumbBlob && item.thumbBlob.type.startsWith('image/')) {
+          const baseName = item.file.name.replace(/\.[^.]+$/, '');
+          formData.append('thumb', item.thumbBlob, `thumb_${baseName}.jpg`);
         }
         formData.append('width', String(item.width || 1200));
         formData.append('height', String(item.height || 800));
@@ -562,13 +599,24 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
                         key={item.id}
                         className="relative aspect-square rounded-xl overflow-hidden bg-neutral-900 border border-[var(--border-color)] group shadow-xs"
                       >
-                        <img
-                          src={item.previewUrl}
-                          alt="Thumbnail"
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-mono text-white">
-                          +{idx + 1}
+                        {item.file.type.startsWith('video/') && !item.hasImagePreview ? (
+                          <video
+                            src={item.previewUrl}
+                            muted
+                            playsInline
+                            preload="metadata"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <img
+                            src={item.previewUrl}
+                            alt="Thumbnail"
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[9px] font-mono text-white flex items-center gap-0.5">
+                          {item.file.type.startsWith('video/') && <Play className="w-2.5 h-2.5 fill-current text-amber-400" />}
+                          <span>+{idx + 1}</span>
                         </span>
                         {!isProcessing && (
                           <button

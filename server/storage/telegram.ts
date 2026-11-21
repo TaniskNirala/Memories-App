@@ -196,7 +196,13 @@ export class TelegramStorageAdapter implements StorageAdapter {
   }
 
   async getSignedViewUrl(storageKey: string): Promise<string> {
-    // Always proxy through /api/storage/view so Telegram bot tokens and MTProto sessions never reach browsers
+    // Always proxy through server so Telegram bot tokens and MTProto sessions never reach browsers.
+    // For MTProto keys (tgmsg:<msgId>/<fileName>), use NotaForge-style path ending with the real filename
+    // so HTML5 <video> players on Chrome, Safari, iOS, and Android stream and seek reliably.
+    const parsed = parseTelegramKey(storageKey);
+    if (parsed && parsed.lane === 'mtproto') {
+      return `/api/storage/file/${parsed.msgId}/${encodeURIComponent(parsed.fileName)}`;
+    }
     return `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
   }
 
@@ -411,12 +417,20 @@ export class TelegramStorageAdapter implements StorageAdapter {
       res.status(206);
       res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
       res.setHeader('Content-Length', String(end - start + 1));
+      if (req.method === 'HEAD') {
+        res.end();
+        return true;
+      }
       fs.createReadStream(diskPath, { start, end }).pipe(res);
       return true;
     }
 
     res.status(200);
     res.setHeader('Content-Length', String(fileSize));
+    if (req.method === 'HEAD') {
+      res.end();
+      return true;
+    }
     fs.createReadStream(diskPath).pipe(res);
     return true;
   }
@@ -484,7 +498,7 @@ export class TelegramStorageAdapter implements StorageAdapter {
     const contentRange = fileRes.headers.get('content-range');
     if (contentRange) res.setHeader('Content-Range', contentRange);
 
-    if (!fileRes.body) {
+    if (req.method === 'HEAD' || !fileRes.body) {
       res.end();
       return true;
     }

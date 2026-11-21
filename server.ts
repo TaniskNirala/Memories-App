@@ -117,7 +117,39 @@ export async function createApp() {
     })
   );
 
-  // Universal media view endpoint (streams from local disk or cloud S3/Backblaze B2)
+  // NotaForge-style direct Telegram MTProto media streaming endpoint (clean filename path for HTML5 <video> seeking)
+  const handleDirectTelegramFile = async (req: express.Request, res: express.Response) => {
+    try {
+      const msgId = parseInt(String(req.params.msgId || ''), 10);
+      if (!msgId || Number.isNaN(msgId) || msgId <= 0) {
+        return res.status(400).json({ error: 'Invalid Telegram message ID' });
+      }
+      const rawName = String(req.params.fileName || req.query.name || `media_${msgId}.bin`);
+      const storageKey = `tgmsg:${msgId}/${rawName}`;
+
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+
+      const storage = getStorageAdapter();
+      if (storage.streamToResponse) {
+        const handled = await storage.streamToResponse(storageKey, req, res);
+        if (handled) return;
+      }
+      if (!res.headersSent) {
+        res.status(404).json({ error: 'Telegram media not found' });
+      }
+    } catch (err: any) {
+      console.error('Direct Telegram media stream error:', err?.message || err);
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Failed to stream media from Telegram' });
+      }
+    }
+  };
+  app.get('/api/storage/file/:msgId/:fileName', handleDirectTelegramFile);
+  app.get('/api/storage/file/:msgId', handleDirectTelegramFile);
+
+  // Universal media view endpoint (streams from Telegram, local disk, or cloud S3/Backblaze B2)
   app.get('/api/storage/view', async (req, res) => {
     try {
       const rawKey = req.query.key as string;

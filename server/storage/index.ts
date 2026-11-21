@@ -6,16 +6,42 @@ import { HybridTelegramB2Adapter } from './hybrid.ts';
 
 let adapterInstance: StorageAdapter | null = null;
 
+function readTelegramEnv() {
+  const botToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+  const chatId = (
+    process.env.TELEGRAM_CHAT_ID ||
+    process.env.TELEGRAM_CHANNEL_ID ||
+    process.env.CHANNEL_ID ||
+    ''
+  ).trim();
+  const apiIdRaw = (process.env.TELEGRAM_API_ID || process.env.API_ID || '').trim();
+  const apiHash = (process.env.TELEGRAM_API_HASH || process.env.API_HASH || '').trim();
+  const session = (
+    process.env.TELEGRAM_SESSION ||
+    process.env.TELEGRAM_STRING_SESSION ||
+    process.env.STRING_SESSION ||
+    ''
+  ).trim();
+  const botApiBaseUrl = (process.env.TELEGRAM_API_BASE_URL || '').trim();
+  const mtprotoServerUrl = (process.env.TELEGRAM_MTPROTO_SERVER_URL || '').trim();
+
+  return {
+    botToken,
+    chatId,
+    apiId: apiIdRaw ? parseInt(apiIdRaw, 10) : undefined,
+    apiHash,
+    session,
+    botApiBaseUrl,
+    mtprotoServerUrl,
+  };
+}
+
 function hasTelegramCredentials(): boolean {
-  const hasChat = Boolean(process.env.TELEGRAM_CHAT_ID?.trim());
-  const hasBot = Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim() && hasChat);
-  const hasEmbeddedMtproto = Boolean(
-    process.env.TELEGRAM_API_ID?.trim() &&
-      process.env.TELEGRAM_API_HASH?.trim() &&
-      process.env.TELEGRAM_SESSION?.trim() &&
-      hasChat
-  );
-  const hasExternalMtproto = Boolean(process.env.TELEGRAM_MTPROTO_SERVER_URL?.trim());
+  const env = readTelegramEnv();
+  const hasChat = Boolean(env.chatId);
+  const hasBot = Boolean(env.botToken && hasChat);
+  const hasEmbeddedMtproto = Boolean(env.apiId && env.apiHash && env.session && hasChat);
+  const hasExternalMtproto = Boolean(env.mtprotoServerUrl);
   return hasBot || hasEmbeddedMtproto || hasExternalMtproto;
 }
 
@@ -106,17 +132,19 @@ export function getStorageAdapter(): StorageAdapter {
   const telegramExplicit = backend === 'telegram' || backend === 'tg';
   const s3Explicit = backend === 's3' || backend === 'r2' || backend === 'b2' || backend === 'backblaze';
   const localExplicit = backend === 'local';
+  const hasTg = hasTelegramCredentials();
 
   // Prefer Telegram when explicitly set OR when Telegram credentials exist and another backend wasn't forced
-  if (telegramExplicit || (!s3Explicit && !localExplicit && hasTelegramCredentials())) {
+  if (telegramExplicit || (!s3Explicit && !localExplicit && hasTg)) {
+    const tgEnv = readTelegramEnv();
     const telegramAdapter = new TelegramStorageAdapter({
-      botToken: process.env.TELEGRAM_BOT_TOKEN,
-      chatId: process.env.TELEGRAM_CHAT_ID,
-      botApiBaseUrl: process.env.TELEGRAM_API_BASE_URL,
-      apiId: process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : undefined,
-      apiHash: process.env.TELEGRAM_API_HASH,
-      session: process.env.TELEGRAM_SESSION,
-      mtprotoServerUrl: process.env.TELEGRAM_MTPROTO_SERVER_URL,
+      botToken: tgEnv.botToken,
+      chatId: tgEnv.chatId,
+      botApiBaseUrl: tgEnv.botApiBaseUrl,
+      apiId: tgEnv.apiId,
+      apiHash: tgEnv.apiHash,
+      session: tgEnv.session,
+      mtprotoServerUrl: tgEnv.mtprotoServerUrl,
     });
 
     const b2Fallback = createS3FallbackAdapter();
@@ -131,12 +159,20 @@ export function getStorageAdapter(): StorageAdapter {
   if (s3Explicit || (!localExplicit && Boolean(process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME))) {
     const s3 = createS3FallbackAdapter();
     if (s3) {
+      if (hasTg && s3Explicit) {
+        console.warn(
+          `⚠️ [Storage] Telegram credentials detected, but STORAGE_BACKEND=${backend} is forcing Backblaze B2. Change STORAGE_BACKEND=telegram in Render Environment to use Telegram with B2 fallback.`
+        );
+      } else {
+        console.log('📦 [Storage] Initialized Backblaze B2 / S3 Cloud');
+      }
       adapterInstance = s3;
       return adapterInstance;
     }
   }
 
   adapterInstance = new LocalDiskStorageAdapter();
+  console.log('💾 [Storage] Initialized Local Disk Storage');
   return adapterInstance;
 }
 

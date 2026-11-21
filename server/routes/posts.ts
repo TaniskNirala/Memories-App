@@ -241,9 +241,11 @@ postsRouter.post(
             mainStorageKey = returnedMainKey;
           }
 
-          // Smart thumbnail handling: skip redundant Telegram thumbnail upload for already-small photos (<250 KB)
+          // Smart thumbnail handling: only upload real image thumbnails (never re-upload a whole video as its own thumb),
+          // and skip redundant Telegram thumbnail upload for already-small photos (<250 KB)
+          const thumbIsImage = Boolean(thumbFile && thumbFile.mimetype.startsWith('image/'));
           const shouldUploadThumb =
-            Boolean(thumbFile) &&
+            thumbIsImage &&
             (caps.backend !== 'telegram' || mainFile.size >= 250 * 1024 || mainFile.mimetype.startsWith('video'));
 
           if (thumbFile && shouldUploadThumb) {

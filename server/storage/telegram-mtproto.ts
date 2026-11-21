@@ -550,6 +550,11 @@ export class TelegramMtprotoClient {
     }
     res.setHeader('Content-Length', String(end - start + 1));
 
+    if (req.method === 'HEAD') {
+      res.end();
+      return true;
+    }
+
     try {
       await this.streamRange(doc, start, end, res, isClosed);
     } catch (err: any) {
@@ -596,7 +601,7 @@ export class TelegramMtprotoClient {
       if (val) res.setHeader(h, val);
     }
 
-    if (!upstream.body) {
+    if (req.method === 'HEAD' || !upstream.body) {
       res.end();
       return true;
     }

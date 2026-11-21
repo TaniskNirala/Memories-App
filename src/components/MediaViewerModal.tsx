@@ -21,6 +21,7 @@ import {
   Sparkles,
   MapPin,
   ShieldAlert,
+  Play,
 } from 'lucide-react';
 import { FeedItem, Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
@@ -28,6 +29,7 @@ import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { CaptionSuggestionsModal } from './CaptionSuggestionsModal.tsx';
+import { isVideoMedia, isAudioMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 
 interface MediaViewerModalProps {
   item: FeedItem | null;
@@ -717,23 +719,49 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   }}
                   className="group relative aspect-square rounded-2xl overflow-hidden bg-neutral-900 border border-white/10 hover:border-amber-400/80 cursor-pointer shadow-lg transition-all duration-300 hover:scale-[1.03] hover:shadow-amber-500/10"
                 >
-                  <img
-                    src={file.viewUrl || file.thumbUrl}
-                    alt={`${item.caption || 'Memory'} ${idx + 1}`}
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      if (!target.dataset.triedFallback && file.storageKey) {
-                        target.dataset.triedFallback = 'true';
-                        target.src = `/api/storage/view?key=${encodeURIComponent(file.storageKey)}`;
-                      }
-                    }}
-                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
+                  {isVideoMedia(file) ? (
+                    <>
+                      {getVideoPosterUrl(file) ? (
+                        <img
+                          src={getVideoPosterUrl(file)}
+                          alt={`${item.caption || 'Video'} ${idx + 1}`}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <video
+                          src={file.viewUrl ? `${file.viewUrl}#t=0.1` : undefined}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      )}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-10 h-10 rounded-full bg-black/70 border border-white/25 flex items-center justify-center text-white shadow-lg">
+                          <Play className="w-4 h-4 fill-current text-amber-400 ml-0.5" />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      src={file.viewUrl || file.thumbUrl}
+                      alt={`${item.caption || 'Memory'} ${idx + 1}`}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.dataset.triedFallback && file.storageKey) {
+                          target.dataset.triedFallback = 'true';
+                          target.src = `/api/storage/view?key=${encodeURIComponent(file.storageKey)}`;
+                        }
+                      }}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                  )}
 
                   {/* Corner Badge */}
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono border border-white/10">
-                    #{idx + 1}
+                    {isVideoMedia(file) ? `VIDEO #${idx + 1}` : `#${idx + 1}`}
                   </div>
 
                   {/* Edit Photo Button on Thumbnail in Grid */}
@@ -800,94 +828,125 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
       {/* ======================================================== */}
       {(viewMode === 'expanded' || !hasMultiplePhotos) && (
         <div className="relative w-full h-full flex flex-col items-center justify-center pt-14 pb-28 sm:pb-32 overflow-hidden">
-          {/* Floating Zoom Controls Bar */}
-          <div className="absolute top-16 right-4 sm:top-18 sm:right-6 z-30 flex items-center gap-1 bg-black/80 backdrop-blur-md border border-white/20 rounded-full px-2 py-1 shadow-2xl text-white text-xs">
-            <button
-              onClick={() => {
-                setZoom((z) => {
-                  const next = Math.max(1, z - 0.5);
-                  if (next <= 1.05) setPan({ x: 0, y: 0 });
-                  return next;
-                });
-              }}
-              disabled={zoom <= 1.05}
-              className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
-              title="Zoom Out (-)"
-            >
-              <ZoomOut className="w-3.5 h-3.5" />
-            </button>
+          {/* Floating Zoom Controls Bar (photos only) */}
+          {currentFile && !isVideoMedia(currentFile) && !isAudioMedia(currentFile) && (
+            <div className="absolute top-16 right-4 sm:top-18 sm:right-6 z-30 flex items-center gap-1 bg-black/80 backdrop-blur-md border border-white/20 rounded-full px-2 py-1 shadow-2xl text-white text-xs">
+              <button
+                onClick={() => {
+                  setZoom((z) => {
+                    const next = Math.max(1, z - 0.5);
+                    if (next <= 1.05) setPan({ x: 0, y: 0 });
+                    return next;
+                  });
+                }}
+                disabled={zoom <= 1.05}
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
+                title="Zoom Out (-)"
+              >
+                <ZoomOut className="w-3.5 h-3.5" />
+              </button>
 
-            <button
-              onClick={resetZoom}
-              className="px-2 py-0.5 text-[11px] font-mono hover:text-amber-400 transition"
-              title="Click to reset zoom (0)"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-
-            <button
-              onClick={() => setZoom((z) => Math.min(6, z + 0.5))}
-              disabled={zoom >= 6}
-              className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
-              title="Zoom In (+)"
-            >
-              <ZoomIn className="w-3.5 h-3.5" />
-            </button>
-
-            {zoom > 1.05 && (
               <button
                 onClick={resetZoom}
-                className="p-1 rounded-full hover:bg-white/20 text-neutral-300 hover:text-amber-400 transition ml-0.5 active:scale-95"
-                title="Reset Zoom (1x)"
+                className="px-2 py-0.5 text-[11px] font-mono hover:text-amber-400 transition"
+                title="Click to reset zoom (0)"
               >
-                <RotateCcw className="w-3 h-3 text-amber-400" />
+                {Math.round(zoom * 100)}%
               </button>
-            )}
-          </div>
 
-          {/* Interactive Zoom & Pan Viewport */}
-          <div
-            ref={imageViewportRef}
-            onDoubleClick={handleDoubleClick}
-            className={`relative w-full flex-1 flex items-center justify-center overflow-hidden px-4 sm:px-12 touch-none select-none ${
-              zoom > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'
-            }`}
-          >
-            {currentFile && (
-              <img
-                src={currentFile.viewUrl || currentFile.thumbUrl}
-                alt={item.caption || 'Memory view'}
-                referrerPolicy="no-referrer"
-                draggable={false}
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  if (!target.dataset.triedFallback && currentFile.storageKey) {
-                    target.dataset.triedFallback = 'true';
-                    target.src = `/api/storage/view?key=${encodeURIComponent(currentFile.storageKey)}`;
-                  }
-                }}
-                style={{
-                  transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
-                  transformOrigin: 'center center',
-                  transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.2, 0, 0.2, 1)',
-                  maxHeight: '75vh',
-                  maxWidth: '92vw',
-                }}
-                className="w-auto h-auto object-contain rounded-xl shadow-2xl select-none pointer-events-none will-change-transform"
+              <button
+                onClick={() => setZoom((z) => Math.min(6, z + 0.5))}
+                disabled={zoom >= 6}
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-transparent transition active:scale-95"
+                title="Zoom In (+)"
+              >
+                <ZoomIn className="w-3.5 h-3.5" />
+              </button>
+
+              {zoom > 1.05 && (
+                <button
+                  onClick={resetZoom}
+                  className="p-1 rounded-full hover:bg-white/20 text-neutral-300 hover:text-amber-400 transition ml-0.5 active:scale-95"
+                  title="Reset Zoom (1x)"
+                >
+                  <RotateCcw className="w-3 h-3 text-amber-400" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Media Viewport: Native HTML5 Video/Audio Player or Interactive Zoom/Pan Photo */}
+          {currentFile && isVideoMedia(currentFile) ? (
+            <div className="relative w-full flex-1 flex items-center justify-center px-4 sm:px-14">
+              <video
+                key={currentFile.viewUrl || currentFile.id}
+                src={currentFile.viewUrl}
+                poster={getVideoPosterUrl(currentFile)}
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                style={{ maxHeight: '75vh', maxWidth: '92vw' }}
+                className="w-auto h-auto max-w-full max-h-[75vh] rounded-xl shadow-2xl bg-black"
               />
-            )}
-
-            {/* Helpful pan hint when zoomed in */}
-            {zoom > 1.1 && (
-              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-neutral-300 text-[11px] font-medium pointer-events-none shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
-                <span>Scroll to zoom</span>
-                <span>•</span>
-                <span>Drag to pan</span>
-                <span>•</span>
-                <span>Double-click to reset</span>
+            </div>
+          ) : currentFile && isAudioMedia(currentFile) ? (
+            <div className="relative w-full flex-1 flex items-center justify-center px-4 sm:px-14">
+              <div className="p-6 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md w-full max-w-md space-y-3 text-center">
+                <p className="text-sm font-semibold text-white">{item.caption || 'Audio Memory'}</p>
+                <audio
+                  key={currentFile.viewUrl || currentFile.id}
+                  src={currentFile.viewUrl}
+                  controls
+                  autoPlay
+                  className="w-full"
+                />
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div
+              ref={imageViewportRef}
+              onDoubleClick={handleDoubleClick}
+              className={`relative w-full flex-1 flex items-center justify-center overflow-hidden px-4 sm:px-12 touch-none select-none ${
+                zoom > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'
+              }`}
+            >
+              {currentFile && (
+                <img
+                  src={currentFile.viewUrl || currentFile.thumbUrl}
+                  alt={item.caption || 'Memory view'}
+                  referrerPolicy="no-referrer"
+                  draggable={false}
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.dataset.triedFallback && currentFile.storageKey) {
+                      target.dataset.triedFallback = 'true';
+                      target.src = `/api/storage/view?key=${encodeURIComponent(currentFile.storageKey)}`;
+                    }
+                  }}
+                  style={{
+                    transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
+                    transformOrigin: 'center center',
+                    transition: isDragging ? 'none' : 'transform 0.12s cubic-bezier(0.2, 0, 0.2, 1)',
+                    maxHeight: '75vh',
+                    maxWidth: '92vw',
+                  }}
+                  className="w-auto h-auto object-contain rounded-xl shadow-2xl select-none pointer-events-none will-change-transform"
+                />
+              )}
+
+              {/* Helpful pan hint when zoomed in */}
+              {zoom > 1.1 && (
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-neutral-300 text-[11px] font-medium pointer-events-none shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
+                  <span>Scroll to zoom</span>
+                  <span>•</span>
+                  <span>Drag to pan</span>
+                  <span>•</span>
+                  <span>Double-click to reset</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Left & Right Navigation Arrows (only when not heavily zoomed) */}
           {hasMultiplePhotos && (
@@ -990,20 +1049,44 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                           : 'border-white/20 opacity-60 hover:opacity-100 hover:border-white/60'
                       }`}
                     >
-                      <img
-                        src={f.viewUrl || f.thumbUrl}
-                        alt={`Thumb ${idx + 1}`}
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          if (!target.dataset.triedFallback && (f.storageKey || f.thumbKey)) {
-                            target.dataset.triedFallback = 'true';
-                            const fallbackKey = f.thumbKey || f.storageKey || '';
-                            target.src = `/api/storage/view?key=${encodeURIComponent(fallbackKey)}`;
-                          }
-                        }}
-                        className="w-full h-full object-cover"
-                      />
+                      {isVideoMedia(f) ? (
+                        <>
+                          {getVideoPosterUrl(f) ? (
+                            <img
+                              src={getVideoPosterUrl(f)}
+                              alt={`Video ${idx + 1}`}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <video
+                              src={f.viewUrl ? `${f.viewUrl}#t=0.1` : undefined}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+                            <Play className="w-3.5 h-3.5 fill-current text-amber-400" />
+                          </div>
+                        </>
+                      ) : (
+                        <img
+                          src={f.viewUrl || f.thumbUrl}
+                          alt={`Thumb ${idx + 1}`}
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const target = e.currentTarget;
+                            if (!target.dataset.triedFallback && (f.storageKey || f.thumbKey)) {
+                              target.dataset.triedFallback = 'true';
+                              const fallbackKey = f.thumbKey || f.storageKey || '';
+                              target.src = `/api/storage/view?key=${encodeURIComponent(fallbackKey)}`;
+                            }
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
                     </button>
                   ))}
                 </div>

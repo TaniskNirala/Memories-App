@@ -14,6 +14,7 @@ import {
   Copy,
   Layers,
   Images,
+  Play,
 } from 'lucide-react';
 import exifr from 'exifr';
 import { Group } from '../types/index.ts';
@@ -24,6 +25,7 @@ import {
   uploadFileWithProgress,
   StorageCapabilitiesResponse,
 } from '../utils/uploadWithProgress.ts';
+import { extractVideoThumbnail } from '../utils/videoThumbnail.ts';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -48,6 +50,7 @@ interface QueuedFile {
   width?: number;
   height?: number;
   detectedDate?: string;
+  hasImagePreview?: boolean;
 }
 
 // Client-side resizing (~2048px max dimension) and thumbnail (~400px) with resilient fallback
@@ -440,9 +443,33 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       previewUrl: URL.createObjectURL(f),
       status: 'pending' as const,
       progress: 0,
+      hasImagePreview: f.type.startsWith('image/'),
     }));
 
     setQueue((prev) => [...prev, ...newFiles]);
+
+    // Extract real JPEG poster frames for any selected videos in background
+    for (const qItem of newFiles) {
+      if (qItem.file.type.startsWith('video/')) {
+        extractVideoThumbnail(qItem.file).then((thumb) => {
+          if (!thumb) return;
+          setQueue((prev) =>
+            prev.map((item) =>
+              item.id === qItem.id
+                ? {
+                    ...item,
+                    previewUrl: thumb.previewUrl,
+                    thumbBlob: thumb.thumbBlob,
+                    width: thumb.width,
+                    height: thumb.height,
+                    hasImagePreview: true,
+                  }
+                : item
+            )
+          );
+        });
+      }
+    }
 
     // Check for duplicate photos in the selected files
     checkDuplicates(validFiles);
@@ -568,13 +595,25 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               item.thumbBlob = thumbBlob;
               item.width = width;
               item.height = height;
+            } else if (item.file.type.startsWith('video/')) {
+              item.mainBlob = item.file;
+              if (!item.thumbBlob) {
+                const extracted = await extractVideoThumbnail(item.file);
+                if (extracted) {
+                  item.thumbBlob = extracted.thumbBlob;
+                  item.width = extracted.width;
+                  item.height = extracted.height;
+                }
+              }
             } else {
               item.mainBlob = item.file;
-              item.thumbBlob = item.file;
+              item.thumbBlob = undefined;
             }
           } catch (err: any) {
             item.mainBlob = item.file;
-            item.thumbBlob = item.file;
+            if (!item.file.type.startsWith('image/')) {
+              item.thumbBlob = undefined;
+            }
           }
         }
       }
@@ -602,8 +641,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
             const formData = new FormData();
             formData.append('file', payloadBlob, item.file.name);
-            if (item.thumbBlob) {
-              formData.append('thumb', item.thumbBlob, `thumb_${item.file.name}`);
+            if (item.thumbBlob && item.thumbBlob.type.startsWith('image/')) {
+              const baseName = item.file.name.replace(/\.[^.]+$/, '');
+              formData.append('thumb', item.thumbBlob, `thumb_${baseName}.jpg`);
             }
             formData.append('width', String(item.width || 1200));
             formData.append('height', String(item.height || 800));
@@ -883,11 +923,28 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       key={item.id}
                       className="relative aspect-square rounded-xl overflow-hidden bg-neutral-900 border border-[var(--border-color)] group"
                     >
-                      <img
-                        src={item.previewUrl}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
+                      {item.file.type.startsWith('video/') && !item.hasImagePreview ? (
+                        <video
+                          src={item.previewUrl}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <img
+                          src={item.previewUrl}
+                          alt="Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+
+                      {item.file.type.startsWith('video/') && (
+                        <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-bold uppercase tracking-wider flex items-center gap-0.5 z-10">
+                          <Play className="w-2.5 h-2.5 fill-current text-amber-400" />
+                          <span>Video</span>
+                        </div>
+                      )}
 
                       {/* Duplicate Badge */}
                       {detectedDuplicates.some((d) => d.fileName === item.file.name) && (

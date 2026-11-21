@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AuthProvider, useAuth, apiFetch } from './context/AuthContext.tsx';
-import { ThemeProvider } from './context/ThemeContext.tsx';
+import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
 import { Header } from './components/Header.tsx';
 import { BottomNav } from './components/BottomNav.tsx';
-import { CircleRail } from './components/CircleRail.tsx';
+import { SideNav } from './components/SideNav.tsx';
 import { TimelineFeed } from './components/TimelineFeed.tsx';
 import { FeedSearchBar, FeedFilterState } from './components/FeedSearchBar.tsx';
 import { AuthScreen } from './components/AuthScreen.tsx';
@@ -17,15 +17,103 @@ import { SharePlacementModal } from './components/SharePlacementModal.tsx';
 import { ProposeCollectionModal } from './components/ProposeCollectionModal.tsx';
 import { PendingReferencesBanner } from './components/PendingReferencesBanner.tsx';
 import { TrashView } from './components/TrashView.tsx';
+import { EventsPage } from './components/EventsPage.tsx';
+import { CirclesPage } from './components/CirclesPage.tsx';
+import { CommandPalette, PaletteAction } from './components/CommandPalette.tsx';
 import { AdminPanel } from './components/AdminPanel.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { DuplicateCleanerModal } from './components/DuplicateCleanerModal.tsx';
 import { FeedItem, Group, NotificationItem } from './types/index.ts';
-import { RefreshCw, Upload, Trash2, AlertTriangle, Users } from 'lucide-react';
+import { RefreshCw, Upload, AlertTriangle } from 'lucide-react';
+import { Avatar, Modal, PageHero } from './components/ui/kit.tsx';
+import { FeedbackProvider } from './components/ui/Feedback.tsx';
+import { accentFromName, greeting } from './lib/format.ts';
+
+/* ---------------------------------------------------------------------------
+   Hero band: the "where am I" moment at the top of the timeline
+   --------------------------------------------------------------------------- */
+
+const HeroBand: React.FC<{
+  user: any;
+  groupsCount: number;
+  memories: number;
+  contributors: number;
+  selectedGroupName?: string;
+  selectedGroupDescription?: string;
+  selectedGroupMembers?: number;
+  onOpenUpload: () => void;
+  onOpenGroupsManager: () => void;
+}> = ({
+  user,
+  groupsCount,
+  memories,
+  contributors,
+  selectedGroupName,
+  selectedGroupDescription,
+  selectedGroupMembers,
+  onOpenUpload,
+  onOpenGroupsManager,
+}) => (
+  <PageHero
+    eyebrow={`${greeting()} · ${new Date().toLocaleDateString([], { weekday: 'long' })}`}
+    title={
+      selectedGroupName ? (
+        <>
+          Inside <span className="glow-text">{selectedGroupName}</span>
+        </>
+      ) : (
+        <>
+          Hello, <span className="glow-text">{user?.displayName?.split(' ')[0] || 'friend'}</span>
+        </>
+      )
+    }
+    subtitle={
+      selectedGroupName
+        ? selectedGroupDescription ||
+          `${selectedGroupMembers || 0} people in this circle — everything below is only visible to them.`
+        : 'Your memories, stacked by the day they happened. Pick a circle on the left to narrow the view.'
+    }
+    aside={
+      <div className="flex items-center gap-2">
+        <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} size={36} ring />
+        <div className="hidden leading-tight sm:block">
+          <p className="text-[11px] font-bold">@{user?.username}</p>
+          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">{user?.role}</p>
+        </div>
+      </div>
+    }
+    actions={
+      <>
+        <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 px-3 py-1.5">
+          {[
+            { label: 'memories', value: memories },
+            { label: 'circles', value: groupsCount },
+            { label: 'people', value: contributors },
+          ].map((s, i) => (
+            <div key={s.label} className={i > 0 ? 'border-l border-[var(--border-subtle)] pl-3' : ''}>
+              <p className="font-display text-[15px] leading-none tabular-nums">{s.value}</p>
+              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                {s.label}
+              </p>
+            </div>
+          ))}
+        </div>
+        <button type="button" onClick={onOpenUpload} className="btn btn-primary">
+          Add memory
+        </button>
+        <button type="button" onClick={onOpenGroupsManager} className="btn btn-soft hidden sm:inline-flex">
+          Circles
+        </button>
+      </>
+    }
+  />
+);
+
 
 const MainContent: React.FC = () => {
   const { user, loading, isPending, isAdmin } = useAuth();
+  const { toggleTheme } = useTheme();
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash'>('feed');
@@ -67,6 +155,7 @@ const MainContent: React.FC = () => {
   const [shareItem, setShareItem] = useState<FeedItem | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [isDuplicatesModalOpen, setIsDuplicatesModalOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // Search & filter state
   const initialFeedFilters: FeedFilterState = {
@@ -293,12 +382,30 @@ const MainContent: React.FC = () => {
     }
   };
 
+  // ⌘K / Ctrl-K opens the command palette
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   const selectedGroup = groups.find((g) => g.id === selectedGroupId);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] text-amber-500">
-        <RefreshCw className="w-6 h-6 animate-spin" />
+      <div className="app-shell items-center justify-center gap-3">
+        <span className="relative flex h-12 w-12 items-center justify-center">
+          <span className="absolute inset-0 rounded-2xl opacity-80" style={{ background: 'var(--gradient-ember)' }} />
+          <img src="/icon.svg" alt="" className="relative z-10 h-6 w-6" />
+        </span>
+        <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" /> opening nest
+        </span>
       </div>
     );
   }
@@ -309,7 +416,7 @@ const MainContent: React.FC = () => {
 
   if (isPending) {
     return (
-      <div className="min-h-screen bg-[var(--bg-page)] flex flex-col">
+      <div className="app-shell">
         <Header />
         <PendingApprovalScreen />
         <OfflineIndicator />
@@ -531,13 +638,13 @@ const MainContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg-page)] text-[var(--text-primary)] flex flex-col transition-colors pb-16">
-      {/* Top Header */}
+    <div className="app-shell bg-[var(--bg-page)] text-[var(--text-primary)] pb-24 transition-colors lg:pb-8">
       <Header
         selectedGroupName={selectedGroup?.name}
         onSelectGroup={(gid) => setSelectedGroupId(gid)}
         onNotificationClick={handleNotificationClick}
         onOpenDuplicates={() => setIsDuplicatesModalOpen(true)}
+        onOpenPalette={() => setPaletteOpen(true)}
         onUserSwitched={() => {
           setSelectedGroupId(undefined);
           fetchGroups();
@@ -545,27 +652,62 @@ const MainContent: React.FC = () => {
         }}
       />
 
-      <div className="flex-1 flex max-w-6xl w-full mx-auto items-start relative">
-        {/* Left Circle Rail (All, E, AR, RK, +) matching user screenshot */}
-        <CircleRail
+      <div className="page-wrap flex flex-1 items-start gap-6 pt-4">
+        <SideNav
+          currentTab={currentTab}
+          onSelectTab={(tab) => {
+            if (tab === 'admin' && !isAdmin) {
+              setCurrentTab('feed');
+              return;
+            }
+            setCurrentTab(tab);
+          }}
+          onOpenUpload={() => setIsUploadOpen(true)}
           groups={groups}
           selectedGroupId={selectedGroupId}
-          onSelectGroup={(gid) => setSelectedGroupId(gid)}
+          onSelectGroup={(gid) => {
+            setSelectedGroupId(gid);
+            setCurrentTab('feed');
+          }}
           onOpenCreateGroup={() => {
             setIsCreateGroupMode(true);
             setIsGroupsModalOpen(true);
           }}
+          onOpenGroupsManager={() => {
+            setIsCreateGroupMode(false);
+            setIsGroupsModalOpen(true);
+          }}
+          feedCount={feedItems.length}
+          eventCount={feedItems.filter((i) => i.type === 'collection_card').length}
         />
 
-        {/* Center Main Stream & Timeline */}
-        <main className="flex-1 p-4 sm:p-6 min-w-0">
+        <main className="min-w-0 flex-1">
+          {currentTab === 'feed' && (
+            <div className="mb-4">
+              <HeroBand
+                user={user}
+                groupsCount={groups.length}
+                memories={feedItems.length}
+                contributors={
+                  new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size
+                }
+                selectedGroupName={selectedGroup?.name}
+                selectedGroupDescription={selectedGroup?.description}
+                selectedGroupMembers={selectedGroup?.members?.length || selectedGroup?.memberCount}
+                onOpenUpload={() => setIsUploadOpen(true)}
+                onOpenGroupsManager={() => {
+                  setIsCreateGroupMode(false);
+                  setIsGroupsModalOpen(true);
+                }}
+              />
+            </div>
+          )}
+
           {/* TAB: STREAM / TIMELINE */}
           {currentTab === 'feed' && (
-            <div className="space-y-4 max-w-5xl mx-auto w-full">
-              {/* Owner Pending Reference Requests Approval Banner */}
+            <div className="space-y-4">
               <PendingReferencesBanner onUpdated={() => fetchFeed(true)} />
 
-              {/* Feed Search & Filter Bar */}
               <FeedSearchBar
                 filters={feedFilters}
                 onFilterChange={setFeedFilters}
@@ -575,7 +717,6 @@ const MainContent: React.FC = () => {
                 totalCount={feedItems.length}
               />
 
-              {/* Continuous Vertical Timeline Feed */}
               <TimelineFeed
                 items={filteredFeedItems}
                 groups={groups}
@@ -592,16 +733,24 @@ const MainContent: React.FC = () => {
                 onResetFilters={() => setFeedFilters(initialFeedFilters)}
               />
 
-              {/* Load More Button */}
               {hasMoreFeed && (
-                <div className="text-center pt-4">
-                  <button
-                    onClick={() => fetchFeed(false)}
-                    disabled={feedLoading}
-                    className="px-5 py-2.5 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-xs font-semibold text-[var(--text-primary)] transition"
-                  >
-                    {feedLoading ? 'Loading earlier memories...' : 'Load Earlier Memories'}
+                <div className="relative pt-2 text-center">
+                  <span aria-hidden className="absolute inset-x-10 top-0 h-px bg-[var(--border-subtle)]" />
+                  <button onClick={() => fetchFeed(false)} disabled={feedLoading} className="btn btn-soft relative">
+                    {feedLoading ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Loading earlier memories…
+                      </>
+                    ) : (
+                      'Load earlier memories'
+                    )}
                   </button>
+                  <p className="mt-2 text-[10px] text-[var(--text-muted)]">Scroll further back into the archive</p>
+                  {feedItems.length <= 3 && (
+                    <p className="mx-auto mt-1 max-w-xs text-[9.5px] leading-relaxed text-[var(--text-muted)]/70">
+                      Tip: drop photos anywhere on the window to add them instantly · press ⌘K for the palette
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -609,125 +758,38 @@ const MainContent: React.FC = () => {
 
           {/* TAB: EVENTS */}
           {currentTab === 'collections' && (
-            <div className="space-y-4 max-w-5xl mx-auto w-full">
-              <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
-                <div>
-                  <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">Events</h2>
-                  <span className="text-xs text-[var(--text-muted)]">Trips, gatherings, and celebrations</span>
-                </div>
-                <button
-                  onClick={() => setIsProposeModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500 to-rose-500 text-white text-xs font-semibold hover:opacity-95 shadow-sm transition"
-                >
-                  + New Event
-                </button>
-              </div>
-
-              <TimelineFeed
-                items={feedItems.filter((i) => i.type === 'collection_card')}
-                groups={groups}
-                selectedGroupId={selectedGroupId}
-                onOpenViewer={() => {}}
-                onOpenComments={(item) => setCommentsItem(item)}
-                onOpenCollection={(colId) => setActiveCollectionId(colId)}
-                onShareToGroup={handleDirectShare}
-                onOpenUpload={() => setIsUploadOpen(true)}
-                onDeletePost={handleDeletePost}
-                onDeleteAlbum={handleDeleteAlbum}
-                onMemoryUpdated={() => fetchFeed(true)}
-              />
-            </div>
+            <EventsPage
+              items={feedItems}
+              groups={groups}
+              onOpenCollection={(id) => setActiveCollectionId(id)}
+              onOpenComments={(item) => setCommentsItem(item)}
+              onPropose={() => setIsProposeModalOpen(true)}
+              onOpenUpload={() => setIsUploadOpen(true)}
+            />
           )}
 
           {/* TAB: CIRCLES */}
           {currentTab === 'groups' && (
-            <div className="space-y-4 max-w-5xl mx-auto w-full">
-              <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
-                <div>
-                  <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">Friend Circles</h2>
-                  <span className="text-xs text-[var(--text-muted)]">Private sharing groups</span>
-                </div>
-                <button
-                  onClick={() => setIsGroupsModalOpen(true)}
-                  className="px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition"
-                >
-                  Manage Circles
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {groups.map((g) => {
-                  const canDelete = !g.isEveryone && (isAdmin || g.canManage || g.creatorId === user?.id);
-                  return (
-                    <div
-                      key={g.id}
-                      className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] hover:border-amber-500/40 transition flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <h3
-                            onClick={() => {
-                              setSelectedGroupId(g.id);
-                              setCurrentTab('feed');
-                            }}
-                            className="font-display font-bold text-sm text-[var(--text-primary)] hover:underline cursor-pointer"
-                          >
-                            {g.name}
-                          </h3>
-                          <div className="flex items-center gap-1.5">
-                            {g.isEveryone ? (
-                              <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-mono px-1 rounded">ALL</span>
-                            ) : (
-                              canDelete && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCircleToDelete(g);
-                                  }}
-                                  title={`Delete circle "${g.name}"`}
-                                  className="p-1 rounded-lg text-rose-400 hover:bg-rose-500/15 transition"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )
-                            )}
-                          </div>
-                        </div>
-                        {g.description && (
-                          <p className="text-xs text-[var(--text-muted)] line-clamp-1 mb-2">{g.description}</p>
-                        )}
-                        <span className="text-[11px] text-[var(--text-muted)]">
-                          {g.members?.length || g.memberCount} approved members
-                        </span>
-                      </div>
-
-                      <div className="mt-3 pt-2 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
-                        <button
-                          onClick={() => {
-                            setSelectedGroupId(g.id);
-                            setCurrentTab('feed');
-                          }}
-                          className="text-xs text-amber-500 hover:underline font-semibold"
-                        >
-                          View Feed →
-                        </button>
-                        {canDelete && (
-                          <button
-                            onClick={() => setCircleToDelete(g)}
-                            className="text-xs text-rose-400 hover:underline flex items-center gap-1 font-medium"
-                          >
-                            <Trash2 className="w-3 h-3" /> Delete Circle
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <CirclesPage
+              groups={groups}
+              selectedGroupId={selectedGroupId}
+              onSelectGroup={(gid) => {
+                setSelectedGroupId(gid);
+                setCurrentTab('feed');
+              }}
+              onManage={() => {
+                setIsCreateGroupMode(false);
+                setIsGroupsModalOpen(true);
+              }}
+              onCreate={() => {
+                setIsCreateGroupMode(true);
+                setIsGroupsModalOpen(true);
+              }}
+              onRequestDelete={(g) => setCircleToDelete(g)}
+            />
           )}
 
-          {/* TAB: ADMIN PORTAL - strictly restricted to admin role */}
+          {/* TAB: ADMIN STUDIO */}
           {currentTab === 'admin' && isAdmin && <AdminPanel />}
 
           {/* TAB: TRASH BIN */}
@@ -735,13 +797,45 @@ const MainContent: React.FC = () => {
         </main>
       </div>
 
-      {/* Bottom Navigation */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        groups={groups}
+        isAdmin={isAdmin}
+        onSearch={(q) => {
+          setFeedFilters({ ...initialFeedFilters, searchQuery: q });
+          setCurrentTab('feed');
+        }}
+        run={(action: PaletteAction) => {
+          switch (action.kind) {
+            case 'tab':
+              if (action.tab === 'admin' && !isAdmin) return;
+              setCurrentTab(action.tab);
+              break;
+            case 'group':
+              setSelectedGroupId(action.groupId);
+              setCurrentTab('feed');
+              break;
+            case 'upload':
+              setIsUploadOpen(true);
+              break;
+            case 'duplicates':
+              setIsDuplicatesModalOpen(true);
+              break;
+            case 'newEvent':
+              setIsProposeModalOpen(true);
+              break;
+            case 'theme':
+              toggleTheme();
+              break;
+          }
+        }}
+      />
+
       <BottomNav
         currentTab={currentTab}
         onSelectTab={(tab) => {
-          if (tab === 'groups') {
-            setIsGroupsModalOpen(true);
-          } else if (tab === 'admin' && !isAdmin) {
+          if (tab === 'admin' && !isAdmin) {
             setCurrentTab('feed');
           } else {
             setCurrentTab(tab);
@@ -942,9 +1036,11 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <AuthProvider>
-          <MainContent />
-        </AuthProvider>
+        <FeedbackProvider>
+          <AuthProvider>
+            <MainContent />
+          </AuthProvider>
+        </FeedbackProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

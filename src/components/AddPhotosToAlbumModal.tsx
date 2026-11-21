@@ -463,9 +463,9 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-in fade-in duration-150"
+      className="scrim z-50"
     >
-      <div className="relative w-full max-w-xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl flex flex-col max-h-[90vh] playful-card overflow-hidden text-[var(--text-primary)]">
+      <div className="relative w-full max-w-xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[90vh] overflow-hidden text-[var(--text-primary)]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2.5">

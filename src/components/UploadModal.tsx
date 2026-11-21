@@ -763,14 +763,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150"
+      className="scrim z-50"
     >
       <div
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className="relative w-full max-w-lg bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] playful-card"
+        className="relative w-full max-w-lg bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Full modal drag-over overlay when user drops more files onto an existing queue */}
         {isDragOver && queue.length > 0 && (
@@ -785,7 +785,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <Upload className="w-8 h-8" />
             </div>
             <h3 className="text-base font-bold text-white mb-1">Drop to add photos</h3>
-            <p className="text-xs text-neutral-300">Files will be added to your current memory upload queue</p>
+            <p className="text-xs text-[var(--text-secondary)]">Files will be added to your current memory upload queue</p>
           </div>
         )}
 
@@ -1122,7 +1122,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       key={idx}
                       type="button"
                       onClick={() => setCaption(s.text)}
-                      className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 text-[11px] text-neutral-300 hover:text-white transition text-left flex items-start gap-2 group cursor-pointer"
+                      className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-amber-500/20 border border-white/5 hover:border-amber-500/30 text-[11px] text-[var(--text-secondary)] hover:text-white transition text-left flex items-start gap-2 group cursor-pointer"
                     >
                       <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
                         {s.tone}
@@ -1185,7 +1185,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               </label>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
                 selectedGroupIds.length === 0
-                  ? 'bg-neutral-800 text-neutral-400 border border-neutral-700'
+                  ? 'bg-neutral-800 text-[var(--text-muted)] border border-neutral-700'
                   : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
               }`}>
                 {selectedGroupIds.length === 0 ? 'Personal (Only You & Admins)' : `Sharing to ${selectedGroupIds.length} circle(s)`}

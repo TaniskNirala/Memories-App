@@ -235,12 +235,12 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150"
+      className="scrim z-50"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl flex flex-col max-h-[88vh] h-[80vh] playful-card overflow-hidden">
+      <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[88vh] h-[80vh] overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -302,7 +302,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                               setShowDeleteModal(true);
                             }}
                             title={`Delete ${g.name}`}
-                            className="p-1 text-neutral-500 hover:text-rose-400 hover:bg-rose-500/15 rounded transition"
+                            className="p-1 text-[var(--text-muted)] hover:text-rose-400 hover:bg-rose-500/15 rounded transition"
                           >
                             <Trash2 className="w-3 h-3" />
                           </span>
@@ -531,7 +531,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
               if (e.target === e.currentTarget) setShowCreateModal(false);
             }}
           >
-            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl playful-card">
+            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="font-display font-bold text-sm text-[var(--text-primary)]">
                   Create Private Circle
@@ -633,7 +633,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
               if (e.target === e.currentTarget && !deleteLoading) setShowDeleteModal(false);
             }}
           >
-            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
               <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
                 <AlertTriangle className="w-4 h-4" />
                 <span>Delete Circle</span>
@@ -685,7 +685,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
               if (e.target === e.currentTarget && !leaveLoading) setShowLeaveModal(false);
             }}
           >
-            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
               <div className="flex items-center gap-2 text-amber-500 font-bold text-sm">
                 <LogOut className="w-4 h-4" />
                 <span>Leave Circle</span>

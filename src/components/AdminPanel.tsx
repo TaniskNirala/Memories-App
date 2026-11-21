@@ -23,6 +23,7 @@ import {
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
 import { StorageCapabilitiesResponse } from '../utils/uploadWithProgress.ts';
+import { PageHero, StatTile } from './ui/kit.tsx';
 
 export const AdminPanel: React.FC = () => {
   const { user, isAdmin } = useAuth();
@@ -456,198 +457,146 @@ export const AdminPanel: React.FC = () => {
     } catch (e) {}
   };
 
+  const TABS: { id: typeof activeTab; label: string; count: () => number | undefined }[] = [
+    { id: 'signups', label: 'Signups', count: () => pendingSignups.length },
+    { id: 'proposals', label: 'Proposals', count: () => proposals.length },
+    { id: 'users', label: 'People', count: () => users.length },
+    { id: 'circles', label: 'Circles', count: () => circles.length },
+    { id: 'reports', label: 'Reports', count: () => reports.filter((r) => r.status === 'pending').length },
+    { id: 'audit', label: 'Audit log', count: () => undefined },
+  ];
+
   return (
-    <div className="w-full max-w-4xl mx-auto p-4 space-y-4">
-      {/* Admin Title & Actions */}
-      <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Shield className="w-5 h-5 text-amber-500" />
-          <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">
-            Admin Portal
-          </h2>
-          {dbStatus && (
+    <div className="w-full space-y-4">
+      <PageHero
+        eyebrow="Control room"
+        title="Admin studio"
+        subtitle="Approve people, moderate reports, manage circles and keep the database healthy."
+        accent="amber"
+        actions={
+          <>
             <button
               type="button"
-              onClick={() => setShowDbModal(true)}
-              className={`text-[10px] px-2.5 py-0.5 rounded-full font-medium border flex items-center gap-1.5 transition cursor-pointer hover:opacity-85 ${
-                dbStatus.isTursoSynced
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                  : dbStatus.tursoConfigured
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                  : 'bg-neutral-800 border-neutral-700 text-neutral-400'
-              }`}
-              title="Click to view Neon database diagnostics & trigger sync"
+              onClick={handleSyncStorage}
+              disabled={syncLoading || purgeLoading || clearFeedLoading}
+              className="btn btn-soft btn-sm"
+              title="Scan storage and restore uploaded photos into the feed"
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.isTursoSynced ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <span>{dbStatus.isTursoSynced ? 'Neon Synced' : dbStatus.tursoConfigured ? 'Neon Sync Status' : 'Local only (no DATABASE_URL)'}</span>
+              <RefreshCw className={`h-3.5 w-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
+              {syncLoading ? 'Scanning…' : 'Scan storage'}
             </button>
-          )}
-          {storageStatus && (
             <button
               type="button"
-              onClick={() => {
-                setStorageTestResult(null);
-                setShowStorageModal(true);
-                fetchStorageStatus();
-              }}
-              className={`text-[10px] px-2.5 py-0.5 rounded-full font-medium border flex items-center gap-1.5 transition cursor-pointer hover:opacity-85 ${
-                storageStatus.backend === 'telegram'
-                  ? 'bg-sky-500/10 border-sky-500/30 text-sky-400'
-                  : storageStatus.backend === 's3'
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                  : 'bg-neutral-800 border-neutral-700 text-neutral-400'
-              }`}
-              title="Click to view media storage diagnostics & run live connection test"
+              onClick={() => setShowClearFeedConfirm(true)}
+              disabled={syncLoading || purgeLoading || clearFeedLoading}
+              className="btn btn-soft btn-sm"
+              title="Clear all memories and collections from the feed"
             >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  storageStatus.backend === 'telegram'
-                    ? 'bg-sky-400 animate-pulse'
-                    : storageStatus.backend === 's3'
-                    ? 'bg-emerald-400'
-                    : 'bg-neutral-400'
-                }`}
-              />
-              <span>
-                {storageStatus.backend === 'telegram'
-                  ? storageStatus.mtprotoEnabled && storageStatus.botApiEnabled
-                    ? `Telegram Dual-Lane (${storageStatus.maxFileSizeLabel})`
-                    : storageStatus.mtprotoEnabled
-                    ? `Telegram MTProto (${storageStatus.maxFileSizeLabel})`
-                    : `Telegram Bot API (${storageStatus.maxFileSizeLabel})`
-                  : storageStatus.backend === 's3'
-                  ? 'Backblaze B2'
-                  : 'Local Disk'}
-              </span>
+              <Trash2 className="h-3.5 w-3.5" /> Clear feed
             </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handleSyncStorage}
-            disabled={syncLoading || purgeLoading || clearFeedLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl text-xs font-semibold transition border border-amber-500/20 disabled:opacity-50 cursor-pointer"
-            title="Scan Backblaze B2 / local storage and restore past uploaded photos into feed"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
-            {syncLoading ? 'Syncing...' : 'Scan Storage'}
-          </button>
-          <button
-            onClick={() => setShowClearFeedConfirm(true)}
-            disabled={syncLoading || purgeLoading || clearFeedLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-xl text-xs font-semibold transition border border-amber-500/20 disabled:opacity-50 cursor-pointer"
-            title="Clear all memories and collections from feed (keeps users, circles, and storage files intact)"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear Feed Memories
-          </button>
-          <button
-            onClick={() => setShowPurgeConfirm(true)}
-            disabled={syncLoading || purgeLoading || clearFeedLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl text-xs font-semibold transition border border-rose-500/20 disabled:opacity-50 cursor-pointer"
-            title="Permanently delete all files from Backblaze B2/storage and clear all posts"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Wipe Bucket & Feed
-          </button>
-        </div>
-      </div>
-
-      {/* Action Feedback Toast */}
-      {actionToast && (
-        <div
-          className={`p-3 rounded-2xl flex items-center justify-between gap-2 text-xs transition animate-in fade-in duration-200 ${
-            actionToast.type === 'success'
-              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
-              : 'bg-rose-500/15 border border-rose-500/30 text-rose-300'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {actionToast.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <button
+              type="button"
+              onClick={() => setShowPurgeConfirm(true)}
+              disabled={syncLoading || purgeLoading || clearFeedLoading}
+              className="btn btn-danger btn-sm"
+              title="Permanently delete all files and posts"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Wipe bucket
+            </button>
+          </>
+        }
+        aside={
+          <div className="flex flex-col gap-1.5">
+            {dbStatus && (
+              <button
+                type="button"
+                onClick={() => setShowDbModal(true)}
+                className="flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-2.5 py-1 text-[10px] font-medium transition hover:border-[var(--accent-amber)]/40"
+                title="Neon database diagnostics & sync"
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    dbStatus.isTursoSynced ? 'bg-emerald-400' : dbStatus.tursoConfigured ? 'bg-amber-400' : 'bg-neutral-400'
+                  }`}
+                />
+                <Database className="h-3 w-3" />
+                <span className="text-[var(--text-secondary)]">
+                  {dbStatus.isTursoSynced ? 'Neon synced' : dbStatus.tursoConfigured ? 'Neon pending' : 'Local only'}
+                </span>
+              </button>
             )}
-            <span className="font-medium">{actionToast.message}</span>
+            {storageStatus && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStorageTestResult(null);
+                  setShowStorageModal(true);
+                  fetchStorageStatus();
+                }}
+                className="flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-2.5 py-1 text-[10px] font-medium transition hover:border-[var(--accent-amber)]/40"
+                title="Media storage diagnostics & connection test"
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    storageStatus.backend === 'telegram'
+                      ? 'bg-sky-400'
+                      : storageStatus.backend === 's3'
+                        ? 'bg-emerald-400'
+                        : 'bg-neutral-400'
+                  }`}
+                />
+                <HardDrive className="h-3 w-3" />
+                <span className="text-[var(--text-secondary)]">
+                  {storageStatus.backend === 'telegram'
+                    ? `Telegram · ${storageStatus.maxFileSizeLabel}`
+                    : storageStatus.backend === 's3'
+                      ? 'Backblaze B2'
+                      : 'Local disk'}
+                </span>
+              </button>
+            )}
           </div>
-          <button
-            onClick={() => setActionToast(null)}
-            className="text-neutral-400 hover:text-white p-1"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+        }
+      />
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1.5 p-1 bg-[var(--bg-surface)] rounded-2xl overflow-x-auto text-xs font-semibold">
-        <button
-          onClick={() => setActiveTab('signups')}
-          className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-            activeTab === 'signups'
-              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          Pending Signups ({pendingSignups.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('proposals')}
-          className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-            activeTab === 'proposals'
-              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          Proposals ({proposals.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-            activeTab === 'users'
-              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          User Directory ({users.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('circles')}
-          className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-            activeTab === 'circles'
-              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          Circles ({circles.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('reports')}
-          className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-            activeTab === 'reports'
-              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          Reports ({reports.filter((r) => r.status === 'pending').length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('audit')}
-          className={`px-3 py-1.5 rounded-xl transition shrink-0 ${
-            activeTab === 'audit'
-              ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
-              : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
-          }`}
-        >
-          Audit Log
-        </button>
+      {/* Quick stats */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <StatTile label="Awaiting you" value={pendingSignups.length} hint="signups to review" icon={<UserCheck className="h-4 w-4" />} />
+        <StatTile label="Proposals" value={proposals.length} hint="albums suggested" tone="coral" icon={<Sparkles className="h-4 w-4" />} />
+        <StatTile label="Open reports" value={reports.filter((r) => r.status === 'pending').length} hint="need a decision" tone="indigo" icon={<AlertTriangle className="h-4 w-4" />} />
+        <StatTile label="Members" value={users.length} hint="in the directory" tone="mint" icon={<Users className="h-4 w-4" />} />
       </div>
 
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 p-1">
+        {TABS.map((t) => {
+          const active = activeTab === t.id;
+          const count = t.count();
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setActiveTab(t.id)}
+              className={`flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                active
+                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-[0_2px_8px_-4px_rgba(0,0,0,0.7)]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+              }`}
+            >
+              {t.label}
+              {typeof count === 'number' && count > 0 && (
+                <span
+                  className={`flex h-4 min-w-4 items-center justify-center rounded-full px-1 font-mono text-[9px] ${
+                    active ? 'bg-[var(--accent-amber)]/20 text-[var(--accent-amber)]' : 'bg-[var(--bg-surface-elevated)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
       {/* Tab 1: Pending Signups */}
       {activeTab === 'signups' && (
         <div className="space-y-3">
@@ -659,7 +608,7 @@ export const AdminPanel: React.FC = () => {
             pendingSignups.map((u) => (
               <div
                 key={u.id}
-                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs playful-card"
+                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
               >
                 <div className="flex items-center gap-2.5">
                   <div
@@ -710,7 +659,7 @@ export const AdminPanel: React.FC = () => {
             proposals.map((p) => (
               <div
                 key={p.id}
-                className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-start justify-between gap-3 text-xs playful-card"
+                className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-start justify-between gap-3 text-xs"
               >
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -751,7 +700,7 @@ export const AdminPanel: React.FC = () => {
           {users.map((u) => (
             <div
               key={u.id}
-              className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs playful-card"
+              className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
             >
               <div className="flex items-center gap-2.5">
                 <div
@@ -862,7 +811,7 @@ export const AdminPanel: React.FC = () => {
             circles.map((c) => (
               <div
                 key={c.id}
-                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs playful-card"
+                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
               >
                 <div>
                   <div className="flex items-center gap-2">
@@ -931,7 +880,7 @@ export const AdminPanel: React.FC = () => {
                       </button>
                       <button
                         onClick={() => handleReportDecision(r.id, 'dismissed')}
-                        className="px-2.5 py-1 rounded-lg bg-neutral-800 text-neutral-400 text-[11px]"
+                        className="px-2.5 py-1 rounded-lg bg-neutral-800 text-[var(--text-muted)] text-[11px]"
                       >
                         Dismiss
                       </button>
@@ -969,8 +918,8 @@ export const AdminPanel: React.FC = () => {
 
       {/* Generated Reset Link Modal */}
       {generatedLink && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl playful-card">
+        <div className="scrim z-50">
+          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl">
             <h4 className="font-display font-bold text-sm text-[var(--text-primary)] mb-2 flex items-center gap-1.5">
               <Key className="w-4 h-4 text-amber-500" />
               One-Time Password Reset Link
@@ -1010,12 +959,12 @@ export const AdminPanel: React.FC = () => {
       {/* Delete User Confirmation Modal */}
       {userToDelete && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+          className="scrim z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget && !deleteUserLoading) setUserToDelete(null);
           }}
         >
-          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
             <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
               <AlertTriangle className="w-4 h-4" />
               <span>Delete User Account</span>
@@ -1056,12 +1005,12 @@ export const AdminPanel: React.FC = () => {
       {/* Delete Circle Confirmation Modal */}
       {circleToDelete && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+          className="scrim z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget && !deleteCircleLoading) setCircleToDelete(null);
           }}
         >
-          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
             <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
               <AlertTriangle className="w-4 h-4" />
               <span>Delete Circle</span>
@@ -1102,12 +1051,12 @@ export const AdminPanel: React.FC = () => {
       {/* Clear Feed Confirmation Modal */}
       {showClearFeedConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          className="scrim z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget && !clearFeedLoading) setShowClearFeedConfirm(false);
           }}
         >
-          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-amber-500/30 rounded-3xl shadow-2xl space-y-4">
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-amber-500/30 rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
             <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
               <AlertTriangle className="w-4 h-4" />
               <span>Clear Feed Memories</span>
@@ -1148,12 +1097,12 @@ export const AdminPanel: React.FC = () => {
       {/* Wipe Storage & Feed Confirmation Modal */}
       {showPurgeConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          className="scrim z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget && !purgeLoading) setShowPurgeConfirm(false);
           }}
         >
-          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-rose-500/30 rounded-3xl shadow-2xl space-y-4">
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-rose-500/30 rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
             <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
               <AlertTriangle className="w-4 h-4" />
               <span>Wipe Storage Bucket & Feed</span>
@@ -1204,12 +1153,12 @@ export const AdminPanel: React.FC = () => {
       {/* Neon Database Diagnostics Modal */}
       {showDbModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          className="scrim z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget && !dbSyncLoading) setShowDbModal(false);
           }}
         >
-          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4">
+          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
                 <Shield className="w-4 h-4 text-amber-500" />
@@ -1233,7 +1182,7 @@ export const AdminPanel: React.FC = () => {
                         ? 'text-emerald-400'
                         : dbStatus?.tursoConfigured
                         ? 'text-amber-400'
-                        : 'text-neutral-400'
+                        : 'text-[var(--text-muted)]'
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full ${dbStatus?.isTursoSynced ? 'bg-emerald-400' : 'bg-amber-400'}`} />
@@ -1269,7 +1218,7 @@ export const AdminPanel: React.FC = () => {
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>Sync Notice</span>
                   </div>
-                  <pre className="font-mono whitespace-pre-wrap break-all text-[10px] text-neutral-300">
+                  <pre className="font-mono whitespace-pre-wrap break-all text-[10px] text-[var(--text-secondary)]">
                     {dbStatus.error}
                   </pre>
                 </div>
@@ -1323,12 +1272,12 @@ export const AdminPanel: React.FC = () => {
       {/* Storage Backend Diagnostics Modal (Read-Only, Server Env Configured) */}
       {showStorageModal && storageStatus && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          className="scrim z-50"
           onClick={(e) => {
             if (e.target === e.currentTarget && !storageTestLoading) setShowStorageModal(false);
           }}
         >
-          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4">
+          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
                 <HardDrive className="w-4 h-4 text-sky-400" />
@@ -1363,7 +1312,7 @@ export const AdminPanel: React.FC = () => {
                   <>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[var(--text-muted)] font-medium">Bot API Lane (≤ 15 MB)</span>
-                      <span className={`font-semibold ${storageStatus.botApiEnabled ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                      <span className={`font-semibold ${storageStatus.botApiEnabled ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
                         {storageStatus.botApiEnabled
                           ? storageStatus.customBotApiUrl
                             ? 'Enabled (Custom Server)'
@@ -1374,7 +1323,7 @@ export const AdminPanel: React.FC = () => {
 
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[var(--text-muted)] font-medium">MTProto Lane (Up to 2 GB)</span>
-                      <span className={`font-semibold ${storageStatus.mtprotoEnabled ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                      <span className={`font-semibold ${storageStatus.mtprotoEnabled ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
                         {storageStatus.mtprotoEnabled
                           ? storageStatus.mtprotoMode === 'external'
                             ? 'External Server'
@@ -1405,7 +1354,7 @@ export const AdminPanel: React.FC = () => {
 
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[var(--text-muted)] font-medium">Backblaze B2 Fallback</span>
-                  <span className={`font-semibold ${storageStatus.b2FallbackEnabled ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                  <span className={`font-semibold ${storageStatus.b2FallbackEnabled ? 'text-emerald-400' : 'text-[var(--text-muted)]'}`}>
                     {storageStatus.b2FallbackEnabled ? 'Active (Legacy Reads)' : 'Inactive'}
                   </span>
                 </div>

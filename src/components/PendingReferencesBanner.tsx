@@ -47,36 +47,36 @@ export const PendingReferencesBanner: React.FC<{ onUpdated: () => void }> = ({ o
   if (requests.length === 0) return null;
 
   return (
-    <div className="w-full mb-4 space-y-2">
+    <div className="mb-4 space-y-2">
       {requests.map((req) => (
         <div
           key={req.placement_id}
-          className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-3 text-xs playful-card animate-in fade-in"
+          className="fade-in flex flex-col gap-3 rounded-2xl border border-[var(--accent-amber)]/30 bg-[var(--accent-amber)]/8 p-3.5 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex items-center gap-2.5">
-            <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
-            <div>
-              <span className="font-bold text-[var(--text-primary)] block">
-                Sharing Permission Request
-              </span>
-              <span className="text-[11px] text-[var(--text-secondary)]">
-                @{req.requester_username} wants to share your photo into "<strong>{req.group_name}</strong>".
-              </span>
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-[var(--accent-amber)]/35 bg-[var(--accent-amber)]/12 text-[var(--accent-amber)]">
+              <ShieldAlert className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--accent-amber)]">
+                Sharing request
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-[var(--text-secondary)]">
+                <strong className="font-semibold text-[var(--text-primary)]">@{req.requester_username}</strong> wants to
+                share your photo into <strong className="font-semibold text-[var(--text-primary)]">{req.group_name}</strong>.
+              </p>
+              {req.caption && (
+                <p className="mt-0.5 line-clamp-1 text-[10.5px] text-[var(--text-muted)]">“{req.caption}”</p>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={() => handleDecision(req.placement_id, 'approved')}
-              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 transition"
-            >
-              <Check className="w-3.5 h-3.5" /> Allow
+          <div className="flex shrink-0 items-center gap-1.5 pl-10 sm:pl-0">
+            <button onClick={() => handleDecision(req.placement_id, 'approved')} className="btn btn-primary btn-sm">
+              <Check className="h-3.5 w-3.5" /> Allow
             </button>
-            <button
-              onClick={() => handleDecision(req.placement_id, 'rejected')}
-              className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-rose-900/40 text-rose-400 font-semibold flex items-center gap-1 transition"
-            >
-              <X className="w-3.5 h-3.5" /> Decline
+            <button onClick={() => handleDecision(req.placement_id, 'rejected')} className="btn btn-ghost btn-sm">
+              <X className="h-3.5 w-3.5" /> Decline
             </button>
           </div>
         </div>

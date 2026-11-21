@@ -10,43 +10,55 @@ interface BottomNavProps {
   onOpenUpload: () => void;
 }
 
+const ICONS = {
+  feed: Home,
+  collections: CalendarDays,
+  groups: Users,
+  admin: Shield,
+  trash: Trash2,
+} as const;
+
 export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, onOpenUpload }) => {
   const { user, isAdmin, isPending } = useAuth();
 
   if (!user || isPending) return null;
 
-  const lastTab: { id: Tab; label: string; Icon: typeof Shield } = isAdmin
-    ? { id: 'admin', label: 'Admin', Icon: Shield }
-    : { id: 'trash', label: 'Trash', Icon: Trash2 };
+  const last: { id: Tab; label: string } = isAdmin
+    ? { id: 'admin', label: 'Admin' }
+    : { id: 'trash', label: 'Trash' };
 
-  const tabs: { id: Tab; label: string; Icon: typeof Home }[] = [
-    { id: 'feed', label: 'Stream', Icon: Home },
-    { id: 'collections', label: 'Events', Icon: CalendarDays },
+  const left: { id: Tab; label: string }[] = [
+    { id: 'feed', label: 'Timeline' },
+    { id: 'collections', label: 'Events' },
   ];
-  const rightTabs: { id: Tab; label: string; Icon: typeof Home }[] = [
-    { id: 'groups', label: 'Circles', Icon: Users },
-    lastTab,
-  ];
+  const right: { id: Tab; label: string }[] = [{ id: 'groups', label: 'Circles' }, last];
 
-  const renderTab = ({ id, label, Icon }: { id: Tab; label: string; Icon: typeof Home }) => {
+  const renderTab = ({ id, label }: { id: Tab; label: string }) => {
     const active = currentTab === id;
+    const Icon = ICONS[id];
     return (
       <button
         key={id}
+        type="button"
         onClick={() => onSelectTab(id)}
         aria-current={active ? 'page' : undefined}
-        className="group flex flex-col items-center justify-center w-full h-full gap-0.5 transition"
+        className="group relative flex h-full flex-col items-center justify-center gap-1"
       >
         <span
-          className={`flex items-center justify-center w-10 h-7 rounded-full transition-all ${
+          className={`relative flex h-7 w-11 items-center justify-center rounded-full transition-all duration-200 ${
             active
-              ? 'bg-[var(--accent-amber)] text-[#1e2142] shadow-sm scale-105'
+              ? 'text-[#1d1204] shadow-[0_6px_16px_-8px_rgba(246,169,43,0.9)]'
               : 'text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
           }`}
+          style={active ? { background: 'var(--gradient-ember)' } : undefined}
         >
-          <Icon className="w-[18px] h-[18px]" strokeWidth={active ? 2.5 : 2} />
+          <Icon className="h-[17px] w-[17px]" strokeWidth={active ? 2.6 : 2} />
         </span>
-        <span className={`text-[10px] tracking-tight ${active ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-muted)]'}`}>
+        <span
+          className={`text-[9.5px] leading-none tracking-tight transition ${
+            active ? 'font-bold text-[var(--text-primary)]' : 'text-[var(--text-muted)]'
+          }`}
+        >
           {label}
         </span>
       </button>
@@ -54,21 +66,30 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, o
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 pointer-events-none pb-safe px-3 sm:pb-4">
-      <div className="pointer-events-auto max-w-md mx-auto grid grid-cols-5 items-center h-16 px-2 rounded-[28px] border-2 border-[var(--border-color)] bg-[var(--bg-card)]/90 backdrop-blur-xl shadow-[0_10px_0_var(--sticker),0_18px_40px_-16px_rgba(0,0,0,0.5)]">
-        {tabs.map(renderTab)}
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-safe px-3 lg:hidden">
+      <div className="pointer-events-auto mx-auto mb-2 grid h-[62px] max-w-md grid-cols-5 items-center rounded-[26px] border border-[var(--border-color)] bg-[var(--bg-card)]/92 px-1.5 shadow-[0_18px_44px_-20px_rgba(0,0,0,0.85)] backdrop-blur-2xl">
+        {left.map(renderTab)}
 
-        <div className="flex items-center justify-center -mt-7">
+        <div className="flex items-center justify-center">
           <button
+            type="button"
             onClick={onOpenUpload}
-            aria-label="Upload Memory"
-            className="w-14 h-14 rounded-[20px] rotate-3 bg-gradient-to-tr from-amber-400 to-rose-500 text-white flex items-center justify-center border-4 border-[var(--bg-page)] playful-btn"
+            aria-label="Add a memory"
+            className="relative -mt-7 flex h-[54px] w-[54px] items-center justify-center rounded-[19px] text-[#1d1204] transition active:scale-95"
+            style={{
+              background: 'var(--gradient-ember)',
+              boxShadow: '0 10px 26px -12px rgba(246,169,43,0.95), 0 1px 0 rgba(255,255,255,0.5) inset',
+            }}
           >
-            <Plus className="w-7 h-7" strokeWidth={3} />
+            <span
+              aria-hidden
+              className="absolute inset-[3px] rounded-[16px] border border-white/25"
+            />
+            <Plus className="relative h-6 w-6" strokeWidth={3} />
           </button>
         </div>
 
-        {rightTabs.map(renderTab)}
+        {right.map(renderTab)}
       </div>
     </nav>
   );

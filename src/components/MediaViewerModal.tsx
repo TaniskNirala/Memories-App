@@ -356,7 +356,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-150 select-none">
+    <div className="scrim z-50 select-none">
       {/* Top action bar */}
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-3.5 sm:p-4 bg-gradient-to-b from-black/90 via-black/60 to-transparent">
         {/* Left: Author & Album info */}
@@ -377,7 +377,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 </span>
               )}
             </div>
-            <span className="text-[11px] text-neutral-400">@{item.owner.username}</span>
+            <span className="text-[11px] text-[var(--text-muted)]">@{item.owner.username}</span>
           </div>
         </div>
 
@@ -391,7 +391,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition ${
                   viewMode === 'grid'
                     ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                    : 'text-neutral-300 hover:text-white'
+                    : 'text-[var(--text-secondary)] hover:text-white'
                 }`}
                 title="View All Photos as Grid"
               >
@@ -404,7 +404,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition ${
                   viewMode === 'expanded'
                     ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                    : 'text-neutral-300 hover:text-white'
+                    : 'text-[var(--text-secondary)] hover:text-white'
                 }`}
                 title="Expanded Lightbox View"
               >
@@ -544,8 +544,8 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
       {/* Convert Memory/Album to Event Modal Dialog */}
       {showConvertPostToEvent && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-[#16162a] border border-[#2b2b52] rounded-3xl p-5 text-white space-y-4 shadow-2xl">
+        <div className="scrim z-60">
+          <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 text-white space-y-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center shadow-xs">
@@ -556,19 +556,19 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowConvertPostToEvent(false)}
-                className="text-neutral-400 hover:text-white text-xs cursor-pointer"
+                className="text-[var(--text-muted)] hover:text-white text-xs cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-neutral-300 leading-relaxed">
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
               Transform this memory into an official Event collection with attendee check-ins and shared guest memory notes.
             </p>
 
             <form onSubmit={handleConvertPostToEvent} className="space-y-3 text-xs">
               <div>
-                <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
+                <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">
                   Event Title
                 </label>
                 <input
@@ -583,7 +583,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-amber-400" /> Event Date
                   </label>
                   <input
@@ -596,7 +596,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-rose-400" /> Location / Venue
                   </label>
                   <input
@@ -613,7 +613,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowConvertPostToEvent(false)}
-                  className="px-3 py-1.5 rounded-xl bg-white/10 text-neutral-300 hover:text-white font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:text-white font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -645,11 +645,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     {item.caption}
                   </h2>
                 ) : (
-                  <h2 className="font-display font-bold text-lg sm:text-xl text-neutral-300 italic">
+                  <h2 className="font-display font-bold text-lg sm:text-xl text-[var(--text-secondary)] italic">
                     Event Photos
                   </h2>
                 )}
-                <div className="flex items-center gap-3 text-xs text-neutral-400 mt-1">
+                <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1">
                   <span className="flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5 text-amber-400" />
                     {new Date(item.takenAt).toLocaleDateString([], {
@@ -774,7 +774,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         setFileIndex(idx);
                         setIsEditorOpen(true);
                       }}
-                      className="absolute top-2 right-9 p-1.5 rounded-full bg-black/75 hover:bg-amber-500 text-neutral-300 hover:text-neutral-950 backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
+                      className="absolute top-2 right-9 p-1.5 rounded-full bg-black/75 hover:bg-amber-500 text-[var(--text-secondary)] hover:text-neutral-950 backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
                       title={`Crop & Rotate Photo #${idx + 1}`}
                     >
                       <Crop className="w-3.5 h-3.5" />
@@ -788,7 +788,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         e.stopPropagation();
                         setDeleteTargetPhoto({ id: file.id, index: idx });
                       }}
-                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/75 hover:bg-rose-600 text-neutral-300 hover:text-white backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/75 hover:bg-rose-600 text-[var(--text-secondary)] hover:text-white backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
                       title={`Delete Photo #${idx + 1}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -817,7 +817,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   <span className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">
                     Add Photos
                   </span>
-                  <span className="text-[10px] text-neutral-400 mt-0.5">to this event</span>
+                  <span className="text-[10px] text-[var(--text-muted)] mt-0.5">to this event</span>
                 </div>
               )}
             </div>
@@ -868,7 +868,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               {zoom > 1.05 && (
                 <button
                   onClick={resetZoom}
-                  className="p-1 rounded-full hover:bg-white/20 text-neutral-300 hover:text-amber-400 transition ml-0.5 active:scale-95"
+                  className="p-1 rounded-full hover:bg-white/20 text-[var(--text-secondary)] hover:text-amber-400 transition ml-0.5 active:scale-95"
                   title="Reset Zoom (1x)"
                 >
                   <RotateCcw className="w-3 h-3 text-amber-400" />
@@ -939,7 +939,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
               {/* Helpful pan hint when zoomed in */}
               {zoom > 1.1 && (
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-neutral-300 text-[11px] font-medium pointer-events-none shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/75 backdrop-blur-md border border-white/15 text-[var(--text-secondary)] text-[11px] font-medium pointer-events-none shadow-xl flex items-center gap-1.5 animate-in fade-in duration-150">
                   <span>Scroll to zoom</span>
                   <span>•</span>
                   <span>Drag to pan</span>
@@ -994,7 +994,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     {item.caption ? (
                       <p className="text-sm font-semibold truncate">{item.caption}</p>
                     ) : (
-                      <p className="text-sm italic text-neutral-400">No caption yet</p>
+                      <p className="text-sm italic text-[var(--text-muted)]">No caption yet</p>
                     )}
                     {(canDelete || isAdmin || item.owner?.id === user?.id) && item.type === 'single_post' && (
                       <button
@@ -1007,7 +1007,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                       </button>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-neutral-400">
+                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-amber-400" />
                       {new Date(item.takenAt).toLocaleDateString([], {
@@ -1119,7 +1119,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <AlertCircle className="w-4 h-4" />
               {hasMultiplePhotos ? 'Delete Memory Options' : 'Delete Memory'}
             </h4>
-            <p className="text-xs text-neutral-300 mb-4 leading-relaxed">
+            <p className="text-xs text-[var(--text-secondary)] mb-4 leading-relaxed">
               {hasMultiplePhotos
                 ? `This memory has ${files.length} photos. What would you like to delete?`
                 : 'Choose how you want to remove this memory:'}
@@ -1161,7 +1161,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 className="w-full py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-left transition flex items-center justify-between"
               >
                 <span>{hasMultiplePhotos ? 'Move Entire Memory to Trash' : 'Move to Trash'}</span>
-                <span className="text-[10px] text-neutral-400">Recoverable for 30 days</span>
+                <span className="text-[10px] text-[var(--text-muted)]">Recoverable for 30 days</span>
               </button>
 
               <button
@@ -1177,7 +1177,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white"
+                className="w-full py-2 text-center text-xs text-[var(--text-muted)] hover:text-white"
               >
                 Cancel
               </button>
@@ -1194,7 +1194,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <Trash2 className="w-4 h-4 text-amber-400" />
               Delete Photo #{deleteTargetPhoto.index + 1}?
             </h4>
-            <p className="text-xs text-neutral-300 mb-4 leading-relaxed">
+            <p className="text-xs text-[var(--text-secondary)] mb-4 leading-relaxed">
               Are you sure you want to remove this single photo from this memory? The remaining {files.length - 1} {files.length - 1 === 1 ? 'photo' : 'photos'} will stay safely in your memory.
             </p>
             <div className="space-y-2">
@@ -1219,7 +1219,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
 
               <button
                 onClick={() => setDeleteTargetPhoto(null)}
-                className="w-full py-2 text-center text-xs text-neutral-400 hover:text-white transition"
+                className="w-full py-2 text-center text-xs text-[var(--text-muted)] hover:text-white transition"
               >
                 Cancel
               </button>

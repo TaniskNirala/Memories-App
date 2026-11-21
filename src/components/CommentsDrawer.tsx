@@ -185,12 +185,12 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+      className="scrim z-50 !items-end sm:!items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full sm:max-w-lg bg-[var(--bg-card)] border-t sm:border border-[var(--border-color)] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[85vh] h-[75vh] playful-card overflow-hidden">
+      <div className="w-full sm:max-w-lg bg-[var(--bg-card)] border-t sm:border border-[var(--border-color)] rounded-t-3xl sm:rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[85vh] h-[75vh] overflow-hidden">
         {/* Grab bar affordance for mobile */}
         <div className="w-10 h-1 bg-[var(--border-color)] rounded-full mx-auto my-2 sm:hidden" />
 
@@ -403,7 +403,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
           {replyingTo && (
             <div className="flex items-center justify-between mb-1.5 px-2 py-1 rounded bg-[var(--bg-surface)] text-[11px] text-[var(--text-secondary)]">
               <span>Replying to <strong>@{replyingTo.author.username}</strong></span>
-              <button onClick={() => setReplyingTo(null)} className="text-neutral-400 hover:text-white">
+              <button onClick={() => setReplyingTo(null)} className="text-[var(--text-muted)] hover:text-white">
                 <X className="w-3 h-3" />
               </button>
             </div>

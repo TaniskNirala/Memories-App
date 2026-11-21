@@ -22,10 +22,11 @@ export default defineConfig(() => {
           display: 'standalone',
           start_url: '/',
           scope: '/',
+          /* One SVG for every surface: tab, installed app and in-app badges. */
           icons: [
             {
               src: '/icon.svg',
-              sizes: '192x192 512x512',
+              sizes: 'any',
               type: 'image/svg+xml',
               purpose: 'any',
             },

@@ -5,7 +5,7 @@ import fs from 'fs';
 import { PassThrough } from 'stream';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
-import { getDb } from './server/db.ts';
+import { getDb, queryOne } from './server/db.ts';
 import { flushNeonWrites, closeNeon } from './server/neon.ts';
 import { seedDatabase } from './server/seed.ts';
 import { authMiddleware } from './server/middleware/auth.ts';
@@ -92,11 +92,14 @@ export async function createApp() {
     (req: express.Request, res: express.Response, next: express.NextFunction) => {
       const u = (req as any).user as { id: string; role: string; status: string } | undefined;
       const key = opts.key?.(req);
+      const msgId = opts.msgId?.(req);
 
-      if (u && u.status !== 'suspended' && u.role !== 'pending') {
-        const msgId = opts.msgId?.(req);
+      if (u && u.status !== 'suspended') {
         const ok = msgId ? canAccessTelegramMessage(u, msgId) : key ? canAccessStorageKey(u, key) : false;
         if (ok) return next();
+        if (u.role === 'pending') {
+          return res.status(401).json({ error: 'Authentication required' });
+        }
         return res.status(403).json({ error: 'You do not have access to this file' });
       }
 
@@ -227,9 +230,16 @@ export async function createApp() {
 
       // 0. Route Telegram keys (tg:<file_id>/... and tgmsg:<msg_id>/...) with full HTTP 206 Range support
       const storage = getStorageAdapter();
-      if (isTelegramKey(cleanKey) && storage.streamToResponse) {
-        const handled = await storage.streamToResponse(cleanKey, req, res);
-        if (handled) return;
+      if (isTelegramKey(cleanKey)) {
+        if (storage.streamToResponse) {
+          const handled = await storage.streamToResponse(cleanKey, req, res);
+          if (handled) return;
+        }
+        // If this Telegram key is a user avatar and failed to stream, 404 so UI falls back to initials
+        if (queryOne<{ id: string }>('SELECT id FROM users WHERE avatar_url = ?', [cleanKey])) {
+          res.setHeader('Cache-Control', 'no-store');
+          return res.status(404).json({ error: 'Not found' });
+        }
       }
 
       // 1. Try local disk paths

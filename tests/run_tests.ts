@@ -638,6 +638,91 @@ async function runTests() {
     }
 
     // -------------------------------------------------------------
+    // Test 13: Admin password reset key & full reset URL redemption + Telegram-style avatar key access
+    // -------------------------------------------------------------
+    console.log('\n[Test 13] Admin reset key & link redemption + Telegram-style avatar key access:');
+    try {
+      const adminToken = await loginUser(baseUrl, 'admin', 'admin123');
+      const adminAuth = { Authorization: `Bearer ${adminToken}` };
+
+      // 1. Generate reset link for Leo and redeem by pasting the FULL URL (common admin copy-paste)
+      const gen1 = await fetch(`${baseUrl}/api/admin/generate-reset-link/u-leo`, {
+        method: 'POST',
+        headers: adminAuth,
+      });
+      const genData1: any = await gen1.json();
+      if (gen1.status !== 200 || !genData1.token || !genData1.resetUrl) {
+        throw new Error(`generate-reset-link failed: ${gen1.status}`);
+      }
+      if (!genData1.resetUrl.includes(`/#token=${genData1.token}`)) {
+        throw new Error(`unexpected resetUrl format: ${genData1.resetUrl}`);
+      }
+
+      const redeemUrlRes = await fetch(`${baseUrl}/api/auth/redeem-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: genData1.resetUrl,
+          newPassword: 'NewStrongPassword!123',
+        }),
+      });
+      const redeemUrlBody: any = await redeemUrlRes.json();
+      if (redeemUrlRes.status !== 200) {
+        throw new Error(`redeeming full resetUrl failed (${redeemUrlRes.status}): ${redeemUrlBody.error}`);
+      }
+
+      // Verify Leo can log in with the new password
+      const leoNewToken = await loginUser(baseUrl, 'leo', 'NewStrongPassword!123');
+      if (!leoNewToken) throw new Error('Leo could not log in with new password');
+
+      // Re-using the same reset link must fail
+      const reuseRes = await fetch(`${baseUrl}/api/auth/redeem-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: genData1.token,
+          newPassword: 'AnotherStrongPassword!456',
+        }),
+      });
+      if (reuseRes.status !== 400) throw new Error('used reset token was accepted a second time');
+
+      // 2. Generate another reset link and redeem using raw token
+      const gen2 = await fetch(`${baseUrl}/api/admin/generate-reset-link/u-leo`, {
+        method: 'POST',
+        headers: adminAuth,
+      });
+      const genData2: any = await gen2.json();
+      const redeemRawRes = await fetch(`${baseUrl}/api/auth/redeem-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: genData2.token,
+          newPassword: 'ResetBackPassword!789',
+        }),
+      });
+      if (redeemRawRes.status !== 200) throw new Error('redeeming raw token failed');
+
+      // 3. Verify non-admin member can view a Telegram-style avatar key (`tg:...`) stored in users.avatar_url
+      const fakeTgAvatarKey = 'tg:FAKEFILEID@42/avatar.png';
+      run('UPDATE users SET avatar_url = ? WHERE id = ?', [fakeTgAvatarKey, 'u-maya']);
+      const leoCheckToken = await loginUser(baseUrl, 'leo', 'ResetBackPassword!789');
+      const tgAvatarRes = await fetch(
+        `${baseUrl}/api/storage/view?key=${encodeURIComponent(fakeTgAvatarKey)}`,
+        { headers: { Authorization: `Bearer ${leoCheckToken}` } }
+      );
+      // Should NOT be 403 Forbidden! (404 because fake Telegram file does not exist locally, proving access guard passed)
+      if (tgAvatarRes.status === 403 || tgAvatarRes.status === 401) {
+        throw new Error(`Telegram-backed avatar key was blocked by media access guard (${tgAvatarRes.status})`);
+      }
+      run('UPDATE users SET avatar_url = NULL WHERE id = ?', ['u-maya']);
+
+      results.push({ name: 'Admin reset key & link redemption + Telegram avatar access', passed: true });
+    } catch (err: any) {
+      console.error('✗ FAIL: Test 13 failed:', err.message);
+      results.push({ name: 'Admin reset key & link redemption + Telegram avatar access', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
     // Summary
     // -------------------------------------------------------------
     console.log('\n=======================================');

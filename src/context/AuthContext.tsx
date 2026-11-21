@@ -194,7 +194,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const res = await apiFetch('/api/auth/avatar', { method: 'POST', body });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { success: false, error: data.error || 'Could not upload that image' };
-      setUser((prev) => (prev ? { ...prev, avatarUrl: data.avatarUrl } : prev));
+      if (data.user) {
+        setUser(data.user);
+      } else {
+        setUser((prev) => (prev ? { ...prev, avatarUrl: data.avatarUrl } : prev));
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Could not upload that image' };
@@ -210,7 +214,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { success: false, error: data.error || 'Could not remove your photo' };
-      setUser((prev) => (prev ? { ...prev, avatarUrl: undefined } : prev));
+      if (data.user) {
+        setUser(data.user);
+      } else {
+        setUser((prev) => (prev ? { ...prev, avatarUrl: undefined } : prev));
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Could not remove your photo' };

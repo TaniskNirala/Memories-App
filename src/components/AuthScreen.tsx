@@ -14,17 +14,25 @@ import {
 import { useAuth } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 
+export function extractResetTokenFromText(raw?: string | null): string {
+  const input = String(raw || '').trim();
+  if (!input) return '';
+  const paramMatch = /(?:^|[#?&])token=([A-Za-z0-9_-]+)/i.exec(input);
+  if (paramMatch) return paramMatch[1];
+  return input;
+}
+
 /* ---------------------------------------------------------------------------
    Auth / onboarding screen
 
    Layout follows the reference style: one soft floating card on a patterned
    page, split into an illustrated banner (art + promise) and a focused form.
    On phones the banner collapses to a slim header so the form stays above the
-   fold. All copy, tabs, validation and endpoints are unchanged.
+   fold.
    --------------------------------------------------------------------------- */
 
-export const AuthScreen: React.FC = () => {
-  const { login, register } = useAuth();
+export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onResetComplete }) => {
+  const { user, logout, login, register } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
   /* `.auth-page` holds the softer pattern tokens, but `body::after` reads them
@@ -37,10 +45,10 @@ export const AuthScreen: React.FC = () => {
 
   const initialResetToken = (() => {
     try {
-      const m =
-        /(?:^#|&)token=([A-Za-z0-9]+)/.exec(window.location.hash) ||
-        /[?&]token=([A-Za-z0-9]+)/.exec(window.location.search);
-      return m ? m[1] : '';
+      return (
+        extractResetTokenFromText(window.location.hash) ||
+        extractResetTokenFromText(window.location.search)
+      );
     } catch {
       return '';
     }
@@ -55,6 +63,28 @@ export const AuthScreen: React.FC = () => {
   const [resetToken, setResetToken] = useState(initialResetToken);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Sync reset token if the URL hash/query changes while already on the auth screen
+  useEffect(() => {
+    const syncFromUrl = () => {
+      try {
+        const tok =
+          extractResetTokenFromText(window.location.hash) ||
+          extractResetTokenFromText(window.location.search);
+        if (tok) {
+          setResetToken(tok);
+          setMode('redeem_reset');
+          setError(null);
+        }
+      } catch {}
+    };
+    window.addEventListener('hashchange', syncFromUrl);
+    window.addEventListener('popstate', syncFromUrl);
+    return () => {
+      window.removeEventListener('hashchange', syncFromUrl);
+      window.removeEventListener('popstate', syncFromUrl);
+    };
+  }, []);
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -74,16 +104,23 @@ export const AuthScreen: React.FC = () => {
         const res = await register(username, password, displayName);
         if (!res.success) setError(res.error || 'Registration failed');
       } else {
+        const cleanToken = extractResetTokenFromText(resetToken);
         const res = await fetch('/api/auth/redeem-reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: resetToken.trim(), newPassword }),
+          body: JSON.stringify({ token: cleanToken, newPassword }),
         });
         const data = await res.json();
         if (res.ok) {
+          if (user) {
+            await logout();
+          }
           setSuccessMsg(data.message || 'Password reset. You can sign in now.');
+          setResetToken('');
+          setNewPassword('');
           setMode('login');
-          if (initialResetToken) window.history.replaceState(null, '', '/');
+          window.history.replaceState(null, '', '/');
+          onResetComplete?.();
         } else {
           setError(data.error || 'That reset link is not valid');
         }
@@ -113,7 +150,7 @@ export const AuthScreen: React.FC = () => {
       ? 'Your session stays on this device until you sign out.'
       : mode === 'register'
         ? 'New accounts are reviewed by an admin before any memory is visible.'
-        : 'Paste the one-time token an admin shared with you.';
+        : 'Paste the one-time reset link or token an admin shared with you.';
 
   return (
     <div className="auth-page relative z-0 min-h-dvh lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
@@ -291,7 +328,7 @@ export const AuthScreen: React.FC = () => {
                   <>
                     <div>
                       <label className="label" htmlFor="reset-token">
-                        One-time reset token
+                        Reset link or key
                       </label>
                       <div className="relative">
                         <Key className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
@@ -299,8 +336,8 @@ export const AuthScreen: React.FC = () => {
                           id="reset-token"
                           required
                           value={resetToken}
-                          onChange={(e) => setResetToken(e.target.value)}
-                          placeholder="Paste the token"
+                          onChange={(e) => setResetToken(extractResetTokenFromText(e.target.value))}
+                          placeholder="Paste reset link or key"
                           className="field pl-9 font-mono text-[11px]"
                         />
                       </div>

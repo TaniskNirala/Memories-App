@@ -472,7 +472,7 @@ adminRouter.post('/generate-reset-link/:id', (req: AuthenticatedRequest, res) =>
   );
 
   // Token goes in the URL fragment so it is never sent to servers, proxies or Referer headers
-  const resetUrl = `${getAppBaseUrl(req)}/reset-password#token=${token}`;
+  const resetUrl = `${getAppBaseUrl(req)}/#token=${token}`;
 
   res.json({
     success: true,

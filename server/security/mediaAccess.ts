@@ -37,20 +37,26 @@ function alternateKeys(key: string): string[] {
  *  - admins can read everything
  *  - owners can read anything under posts/<their id>/
  *  - profile photos are public to signed-in members (they appear beside every
- *    comment, member list and timeline card)
+ *    comment, member list and timeline card), including Telegram-backed avatar keys
  *  - everyone else needs a post that references this file AND that they may view
  */
 export function canAccessStorageKey(viewer: Viewer, rawKey: string): boolean {
-  if (viewer.status === 'suspended' || viewer.role === 'pending') return false;
+  if (viewer.status === 'suspended') return false;
   if (viewer.role === 'admin') return true;
 
   const key = normaliseKey(rawKey);
   if (!key || key.includes('..')) return false;
 
-  if (key.startsWith(`posts/${viewer.id}/`)) return true;
+  // Profile photos: readable by any non-suspended signed-in user (including a
+  // pending user viewing their own profile card, or members seeing Telegram-stored avatars)
+  const isUserAvatar =
+    key.startsWith('avatars/') ||
+    queryAll<{ id: string }>('SELECT id FROM users WHERE avatar_url = ? LIMIT 1', [key]).length > 0;
+  if (isUserAvatar) return true;
 
-  // Profile photos: readable by any active member, writable only via /api/auth/avatar
-  if (key.startsWith('avatars/')) return true;
+  if (viewer.role === 'pending') return false;
+
+  if (key.startsWith(`posts/${viewer.id}/`)) return true;
 
   const candidates = alternateKeys(key);
   const placeholders = candidates.map(() => '?').join(',');

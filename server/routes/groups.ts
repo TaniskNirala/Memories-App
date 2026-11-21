@@ -84,10 +84,16 @@ groupsRouter.get('/available-users', (req: AuthenticatedRequest, res) => {
     username: string;
     display_name: string;
     avatar_color: string;
+    avatar_url: string | null;
     role: string;
   }>(
-    "SELECT id, username, display_name, avatar_color, role FROM users WHERE status = 'active' AND role != 'pending' ORDER BY display_name ASC"
-  );
+    "SELECT id, username, display_name, avatar_color, avatar_url, role FROM users WHERE status = 'active' AND role != 'pending' ORDER BY display_name ASC"
+  ).map((u) => ({
+    ...u,
+    displayName: u.display_name,
+    avatarColor: u.avatar_color,
+    avatarUrl: avatarUrlFor(u.avatar_url),
+  }));
   res.json({ users });
 });
 
@@ -169,16 +175,23 @@ groupsRouter.get('/:id', (req: AuthenticatedRequest, res) => {
     username: string;
     display_name: string;
     avatar_color: string;
+    avatar_url: string | null;
     role: string;
     joined_at: string;
   }>(
-    `SELECT u.id, u.username, u.display_name, u.avatar_color, u.role, gm.joined_at
+    `SELECT u.id, u.username, u.display_name, u.avatar_color, u.avatar_url, u.role, gm.joined_at
      FROM group_members gm
      JOIN users u ON gm.user_id = u.id
      WHERE gm.group_id = ?
      ORDER BY u.display_name ASC`,
     [groupId]
-  );
+  ).map((m) => ({
+    ...m,
+    displayName: m.display_name,
+    avatarColor: m.avatar_color,
+    avatarUrl: avatarUrlFor(m.avatar_url),
+    joinedAt: m.joined_at,
+  }));
 
   res.json({
     group: {

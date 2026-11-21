@@ -51,8 +51,9 @@ export const AdminPanel: React.FC = () => {
   const [deleteCircleLoading, setDeleteCircleLoading] = useState(false);
 
   // Generated reset link modal
-  const [generatedLink, setGeneratedLink] = useState<{ username: string; link: string } | null>(null);
+  const [generatedLink, setGeneratedLink] = useState<{ username: string; link: string; token: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [purgeLoading, setPurgeLoading] = useState(false);
@@ -423,12 +424,19 @@ export const AdminPanel: React.FC = () => {
   const handleGenerateReset = async (userId: string) => {
     try {
       const res = await apiFetch(`/api/admin/generate-reset-link/${userId}`, { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setGeneratedLink({ username: data.username, link: data.resetUrl });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+        const link = origin ? `${origin}/#token=${data.token}` : data.resetUrl;
+        setGeneratedLink({ username: data.username, link, token: data.token });
         setCopied(false);
+        setCopiedToken(false);
+      } else {
+        setActionToast({ message: data.error || 'Failed to generate reset key', type: 'error' });
       }
-    } catch (e) {}
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Failed to generate reset key', type: 'error' });
+    }
   };
 
   const handleProposalDecision = async (proposalId: string, decision: 'approved' | 'rejected') => {
@@ -920,36 +928,71 @@ export const AdminPanel: React.FC = () => {
 
       {/* Generated Reset Link Modal */}
       {generatedLink && (
-        <div className="scrim z-50">
-          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl">
-            <h4 className="font-display font-bold text-sm text-[var(--text-primary)] mb-2 flex items-center gap-1.5">
+        <div
+          className="scrim z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setGeneratedLink(null);
+          }}
+        >
+          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl space-y-3">
+            <h4 className="font-display font-bold text-sm text-[var(--text-primary)] flex items-center gap-1.5">
               <Key className="w-4 h-4 text-amber-500" />
-              One-Time Password Reset Link
+              One-Time Password Reset Key &amp; Link
             </h4>
-            <p className="text-xs text-[var(--text-secondary)] mb-3 leading-relaxed">
-              Send this single-use link to <strong>@{generatedLink.username}</strong>. It expires in 24 hours and can only be used once.
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              Send this single-use reset key or link to <strong>@{generatedLink.username}</strong>. It expires in 24 hours and can only be used once.
             </p>
 
-            <div className="p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] font-mono text-xs text-[var(--accent-amber)] break-all select-all mb-4">
-              {generatedLink.link}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                  One-time reset key
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedLink.token);
+                    setCopiedToken(true);
+                    setTimeout(() => setCopiedToken(false), 2000);
+                  }}
+                  className="text-[11px] font-semibold text-[var(--accent-amber)] hover:opacity-85 flex items-center gap-1 cursor-pointer"
+                >
+                  {copiedToken ? <CheckCheck className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedToken ? 'Copied key' : 'Copy key'}</span>
+                </button>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] font-mono text-xs text-[var(--accent-amber)] break-all select-all">
+                {generatedLink.token}
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2">
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                Direct reset link
+              </span>
+              <div className="p-2.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] font-mono text-[11px] text-[var(--text-secondary)] break-all select-all">
+                {generatedLink.link}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(generatedLink.link);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}
-                className="px-4 py-2 text-xs font-semibold rounded-xl bg-[var(--accent-amber)] text-black flex items-center gap-1.5 playful-btn"
+                className="px-4 py-2 text-xs font-semibold rounded-xl bg-[var(--accent-amber)] text-black flex items-center gap-1.5 playful-btn cursor-pointer"
               >
                 {copied ? <CheckCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copied Link' : 'Copy Link'}</span>
               </button>
 
               <button
+                type="button"
                 onClick={() => setGeneratedLink(null)}
-                className="px-4 py-2 text-xs text-[var(--text-secondary)]"
+                className="px-4 py-2 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
               >
                 Close
               </button>
@@ -1434,6 +1477,24 @@ export const AdminPanel: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {actionToast && (
+        <div
+          role="status"
+          className={`fixed bottom-20 right-4 z-50 flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-semibold shadow-xl backdrop-blur-xl lg:bottom-6 ${
+            actionToast.type === 'success'
+              ? 'border-emerald-500/35 bg-emerald-950/90 text-emerald-200'
+              : 'border-rose-500/35 bg-rose-950/90 text-rose-200'
+          }`}
+        >
+          {actionToast.type === 'success' ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0 text-rose-400" />
+          )}
+          <span>{actionToast.message}</span>
         </div>
       )}
     </div>

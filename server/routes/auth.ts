@@ -363,7 +363,7 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     const row = queryOne<{ avatar_url: string | null }>('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
     removedKey = row?.avatar_url || null;
     run('UPDATE users SET avatar_url = NULL WHERE id = ?', [req.user.id]);
-    if (removedKey && removedKey.startsWith('avatars/')) {
+    if (removedKey) {
       try {
         await getStorageAdapter().deleteObject(removedKey);
       } catch {}
@@ -424,6 +424,9 @@ authRouter.post('/avatar', handleAvatarUpload, async (req: AuthenticatedRequest,
       });
       if (typeof returned === 'string' && returned.length > 0) finalKey = returned;
     }
+    if (finalKey !== storageKey && (finalKey.startsWith('tg:') || finalKey.startsWith('tgmsg:'))) {
+      fs.unlink(file.path, () => {});
+    }
   } catch (err: any) {
     try {
       fs.unlink(file.path, () => {});
@@ -433,13 +436,40 @@ authRouter.post('/avatar', handleAvatarUpload, async (req: AuthenticatedRequest,
 
   const previous = queryOne<{ avatar_url: string | null }>('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
   run('UPDATE users SET avatar_url = ? WHERE id = ?', [finalKey, req.user.id]);
-  if (previous?.avatar_url && previous.avatar_url !== finalKey && previous.avatar_url.startsWith('avatars/')) {
+  if (previous?.avatar_url && previous.avatar_url !== finalKey) {
     try {
       await getStorageAdapter().deleteObject(previous.avatar_url);
     } catch {}
   }
 
-  return res.json({ success: true, avatarUrl: avatarUrlFor(finalKey) });
+  const fresh = queryOne<{
+    id: string;
+    username: string;
+    display_name: string;
+    role: string;
+    status: string;
+    avatar_color: string;
+    avatar_url: string | null;
+    theme_preference: string | null;
+  }>('SELECT * FROM users WHERE id = ?', [req.user.id]);
+
+  const avatarUrl = avatarUrlFor(finalKey);
+  return res.json({
+    success: true,
+    avatarUrl,
+    user: fresh
+      ? {
+          id: fresh.id,
+          username: fresh.username,
+          displayName: fresh.display_name,
+          role: fresh.role,
+          status: fresh.status,
+          avatarColor: fresh.avatar_color,
+          avatarUrl: avatarUrlFor(fresh.avatar_url),
+          themePreference: normaliseTheme(fresh.theme_preference),
+        }
+      : undefined,
+  });
 });
 
 // Change own password (requires current password; signs out all other sessions)
@@ -558,11 +588,21 @@ authRouter.get('/me', (req: AuthenticatedRequest, res) => {
   });
 });
 
+function extractResetToken(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const input = raw.trim();
+  if (!input) return '';
+  const paramMatch = /(?:^|[#?&])token=([A-Za-z0-9_-]+)/i.exec(input);
+  if (paramMatch) return paramMatch[1];
+  return input;
+}
+
 // Redeem one-time password reset link
 authRouter.post('/redeem-reset', redeemLimiter, async (req, res) => {
-  const { token, newPassword } = req.body || {};
+  const { token: rawToken, newPassword } = req.body || {};
+  const token = extractResetToken(rawToken);
 
-  if (typeof token !== 'string' || !token || typeof newPassword !== 'string') {
+  if (!token || typeof newPassword !== 'string') {
     return res.status(400).json({ error: 'Valid reset token and new password required' });
   }
 

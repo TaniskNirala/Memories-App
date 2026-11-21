@@ -425,6 +425,23 @@ export const PageHero: React.FC<{
     [accent]
   );
 
+  const text = (
+    <div className="min-w-0">
+      {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
+      <h1 className="font-display text-[1.6rem] leading-[1.12] tracking-tight sm:text-[2rem]">{title}</h1>
+      {subtitle && (
+        <p className="mt-1.5 max-w-xl text-[12px] leading-relaxed text-[var(--text-secondary)]">{subtitle}</p>
+      )}
+    </div>
+  );
+
+  const cluster = (
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
+      {aside}
+      {actions}
+    </div>
+  );
+
   return (
     <header className="relative overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--bg-card)]/70 px-5 py-5 backdrop-blur-xl sm:px-6 sm:py-6">
       <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: gradient }} />
@@ -434,17 +451,8 @@ export const PageHero: React.FC<{
         style={{ background: 'linear-gradient(90deg, transparent, var(--border-color), transparent)' }}
       />
       <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
-          <h1 className="font-display text-[1.6rem] leading-[1.12] tracking-tight sm:text-[2rem]">{title}</h1>
-          {subtitle && (
-            <p className="mt-1.5 max-w-xl text-[12px] leading-relaxed text-[var(--text-secondary)]">{subtitle}</p>
-          )}
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {aside}
-          {actions}
-        </div>
+        {text}
+        {cluster}
       </div>
     </header>
   );

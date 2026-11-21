@@ -4,6 +4,7 @@ import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
 import { Header } from './components/Header.tsx';
 import { BottomNav } from './components/BottomNav.tsx';
 import { SideNav } from './components/SideNav.tsx';
+import { HeroRail } from './components/HeroRail.tsx';
 import { TimelineFeed } from './components/TimelineFeed.tsx';
 import { FeedSearchBar, FeedFilterState } from './components/FeedSearchBar.tsx';
 import { AuthScreen } from './components/AuthScreen.tsx';
@@ -33,83 +34,6 @@ import { accentFromName, greeting } from './lib/format.ts';
 /* ---------------------------------------------------------------------------
    Hero band: the "where am I" moment at the top of the timeline
    --------------------------------------------------------------------------- */
-
-const HeroBand: React.FC<{
-  user: any;
-  groupsCount: number;
-  memories: number;
-  contributors: number;
-  selectedGroupName?: string;
-  selectedGroupDescription?: string;
-  selectedGroupMembers?: number;
-  onOpenUpload: () => void;
-  onOpenGroupsManager: () => void;
-}> = ({
-  user,
-  groupsCount,
-  memories,
-  contributors,
-  selectedGroupName,
-  selectedGroupDescription,
-  selectedGroupMembers,
-  onOpenUpload,
-  onOpenGroupsManager,
-}) => (
-  <PageHero
-    eyebrow={`${greeting()} · ${new Date().toLocaleDateString([], { weekday: 'long' })}`}
-    title={
-      selectedGroupName ? (
-        <>
-          Inside <span className="glow-text">{selectedGroupName}</span>
-        </>
-      ) : (
-        <>
-          Hello, <span className="glow-text">{user?.displayName?.split(' ')[0] || 'friend'}</span>
-        </>
-      )
-    }
-    subtitle={
-      selectedGroupName
-        ? selectedGroupDescription ||
-          `${selectedGroupMembers || 0} people in this circle — everything below is only visible to them.`
-        : 'Your memories, stacked by the day they happened. Pick a circle on the left to narrow the view.'
-    }
-    aside={
-      <div className="flex items-center gap-2">
-        <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} size={36} ring />
-        <div className="hidden leading-tight sm:block">
-          <p className="text-[11px] font-bold">@{user?.username}</p>
-          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">{user?.role}</p>
-        </div>
-      </div>
-    }
-    actions={
-      <>
-        <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 px-3 py-1.5">
-          {[
-            { label: 'memories', value: memories },
-            { label: 'circles', value: groupsCount },
-            { label: 'people', value: contributors },
-          ].map((s, i) => (
-            <div key={s.label} className={i > 0 ? 'border-l border-[var(--border-subtle)] pl-3' : ''}>
-              <p className="font-display text-[15px] leading-none tabular-nums">{s.value}</p>
-              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                {s.label}
-              </p>
-            </div>
-          ))}
-        </div>
-        <button type="button" onClick={onOpenUpload} className="btn btn-primary">
-          Add memory
-        </button>
-        <button type="button" onClick={onOpenGroupsManager} className="btn btn-soft hidden sm:inline-flex">
-          Circles
-        </button>
-      </>
-    }
-  />
-);
-
 
 const MainContent: React.FC = () => {
   const { user, loading, isPending, isAdmin } = useAuth();
@@ -681,12 +605,14 @@ const MainContent: React.FC = () => {
           eventCount={feedItems.filter((i) => i.type === 'collection_card').length}
         />
 
-        <main className="min-w-0 flex-1">
-          {/* Feed pages ride a centred column beside the nav; other tabs stay full width */}
-          <div className={currentTab === 'feed' ? 'mx-auto w-full max-w-[820px]' : ''}>
+        <main className="min-w-0 flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_236px] lg:items-start lg:gap-6 xl:grid-cols-[minmax(0,1fr)_264px]">
+          {/* Feed pages ride a centred column between nav and hero controls */}
+          <div className={currentTab === 'feed' ? 'mx-auto w-full min-w-0 max-w-[880px]' : 'min-w-0 lg:col-span-2'}>
+          {/* Phones keep the greeting inline; desktop moves it to the right rail */}
           {currentTab === 'feed' && (
-            <div className="mb-4">
-              <HeroBand
+            <div className="mb-4 lg:hidden">
+              <HeroRail
+                compact
                 user={user}
                 groupsCount={groups.length}
                 memories={feedItems.length}
@@ -701,6 +627,7 @@ const MainContent: React.FC = () => {
                   setIsCreateGroupMode(false);
                   setIsGroupsModalOpen(true);
                 }}
+                onClearGroup={() => setSelectedGroupId(undefined)}
               />
             </div>
           )}
@@ -757,7 +684,6 @@ const MainContent: React.FC = () => {
               )}
             </div>
           )}
-          </div>
 
           {/* TAB: EVENTS */}
           {currentTab === 'collections' && (
@@ -797,6 +723,30 @@ const MainContent: React.FC = () => {
 
           {/* TAB: TRASH BIN */}
           {currentTab === 'trash' && <TrashView />}
+          </div>
+
+          {/* Right hand rail — mirrors the nav so the timeline reads centred */}
+          {currentTab === 'feed' && (
+            <div className="hidden lg:block">
+              <HeroRail
+                user={user}
+                groupsCount={groups.length}
+                memories={feedItems.length}
+                contributors={
+                  new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size
+                }
+                selectedGroupName={selectedGroup?.name}
+                selectedGroupDescription={selectedGroup?.description}
+                selectedGroupMembers={selectedGroup?.members?.length || selectedGroup?.memberCount}
+                onOpenUpload={() => setIsUploadOpen(true)}
+                onOpenGroupsManager={() => {
+                  setIsCreateGroupMode(false);
+                  setIsGroupsModalOpen(true);
+                }}
+                onClearGroup={() => setSelectedGroupId(undefined)}
+              />
+            </div>
+          )}
         </main>
       </div>
 

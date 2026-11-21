@@ -19,6 +19,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     const root = document.documentElement;
+    const meta = document.querySelector('meta[name="theme-color"]:not([media])');
+    if (meta) {
+      meta.setAttribute('content', isDark ? '#0a0c14' : '#f7f2e9');
+    } else {
+      const el = document.createElement('meta');
+      el.name = 'theme-color';
+      el.content = isDark ? '#0a0c14' : '#f7f2e9';
+      document.head.appendChild(el);
+    }
     if (isDark) {
       root.classList.remove('light');
       root.classList.add('dark');

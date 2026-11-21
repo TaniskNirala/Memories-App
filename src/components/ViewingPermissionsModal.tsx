@@ -183,10 +183,10 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
   const isEveryoneSelected = everyoneGroup ? selectedGroupIds.includes(everyoneGroup.id) : false;
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="w-full max-w-md bg-[#16162a] border border-[#2b2b52] rounded-3xl shadow-2xl p-5 text-white playful-card relative flex flex-col max-h-[90vh]">
+    <div className="scrim z-60">
+      <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] p-5 text-white relative flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#2b2b52]">
+        <div className="flex items-center justify-between pb-3 border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-sky-500/20 border border-sky-500/30 text-sky-400 flex items-center justify-center shadow-xs">
               <Shield className="w-4 h-4" />
@@ -195,14 +195,14 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
               <h3 className="font-display font-bold text-base text-white flex items-center gap-2">
                 Viewing Permissions
               </h3>
-              <p className="text-[11px] text-neutral-400">
+              <p className="text-[11px] text-[var(--text-muted)]">
                 Control which friend circles can see this memory
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition"
+            className="p-1.5 rounded-full hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition"
           >
             <X className="w-4 h-4" />
           </button>
@@ -229,11 +229,11 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
         {/* Scrollable Body */}
         <div className="flex-1 overflow-y-auto py-3 space-y-4 pr-1">
           {/* Active Audience Summary */}
-          <div className="p-3 rounded-2xl bg-[#1e1e38] border border-[#2b2b52] text-xs space-y-1">
+          <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-xs space-y-1">
             <span className="text-[10px] uppercase font-bold text-sky-400 tracking-wider block">
               Current Audience
             </span>
-            <div className="flex items-center justify-between text-neutral-200">
+            <div className="flex items-center justify-between text-[var(--text-secondary)]">
               <span>
                 {selectedGroupIds.length === 0
                   ? 'Private (Visible to creator and admins only)'
@@ -241,7 +241,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                   ? 'Visible to Everyone (All Approved Members)'
                   : `Visible to ${selectedGroupIds.length} circle(s)`}
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold text-neutral-300 font-mono">
+              <span className="px-2 py-0.5 rounded-full bg-white/10 text-[10px] font-semibold text-[var(--text-secondary)] font-mono">
                 {selectedGroupIds.length} / {availableGroups.length} circles
               </span>
             </div>
@@ -249,7 +249,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
 
           {/* Quick Presets */}
           <div>
-            <span className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider block mb-1.5">
+            <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block mb-1.5">
               Quick Audience Presets
             </span>
             <div className="grid grid-cols-3 gap-2 text-xs">
@@ -259,14 +259,14 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                 className={`p-2 rounded-xl border text-left flex flex-col justify-between transition ${
                   isEveryoneSelected
                     ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 font-semibold'
-                    : 'bg-[#1e1e38] border-[#2b2b52] text-neutral-300 hover:border-neutral-500'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-neutral-500'
                 }`}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                   <span className="font-semibold text-[11px]">Everyone</span>
                 </div>
-                <span className="text-[10px] text-neutral-400 block">Close family & friends</span>
+                <span className="text-[10px] text-[var(--text-muted)] block">Close family & friends</span>
               </button>
 
               <button
@@ -275,14 +275,14 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                 className={`p-2 rounded-xl border text-left flex flex-col justify-between transition ${
                   selectedGroupIds.length === availableGroups.length && availableGroups.length > 0
                     ? 'bg-amber-500/15 border-amber-500/40 text-amber-300 font-semibold'
-                    : 'bg-[#1e1e38] border-[#2b2b52] text-neutral-300 hover:border-neutral-500'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-neutral-500'
                 }`}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                   <span className="font-semibold text-[11px]">All Circles</span>
                 </div>
-                <span className="text-[10px] text-neutral-400 block">Select all circles</span>
+                <span className="text-[10px] text-[var(--text-muted)] block">Select all circles</span>
               </button>
 
               <button
@@ -291,14 +291,14 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                 className={`p-2 rounded-xl border text-left flex flex-col justify-between transition ${
                   selectedGroupIds.length === 0
                     ? 'bg-sky-500/20 border-sky-400 text-sky-300 font-semibold shadow-xs'
-                    : 'bg-[#1e1e38] border-[#2b2b52] text-neutral-300 hover:border-neutral-500'
+                    : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-neutral-500'
                 }`}
               >
                 <div className="flex items-center gap-1.5 mb-1">
                   <Lock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                   <span className="font-semibold text-[11px]">Personal Only</span>
                 </div>
-                <span className="text-[10px] text-neutral-400 block">Remove from circles</span>
+                <span className="text-[10px] text-[var(--text-muted)] block">Remove from circles</span>
               </button>
             </div>
           </div>
@@ -306,17 +306,17 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
           {/* Circle Checklist */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider">
+              <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">
                 Select Circles with Viewing Permission
               </span>
-              <span className="text-[10px] text-neutral-400">
+              <span className="text-[10px] text-[var(--text-muted)]">
                 Checked circles can view
               </span>
             </div>
 
-            <div className="space-y-1.5 max-h-52 overflow-y-auto p-1 bg-[#1e1e38] border border-[#2b2b52] rounded-2xl">
+            <div className="space-y-1.5 max-h-52 overflow-y-auto p-1 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl">
               {availableGroups.length === 0 ? (
-                <div className="p-4 text-center text-xs text-neutral-400">
+                <div className="p-4 text-center text-xs text-[var(--text-muted)]">
                   No friend circles found.
                 </div>
               ) : (
@@ -329,7 +329,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                       className={`flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition select-none ${
                         isChecked
                           ? 'bg-sky-500/15 border border-sky-500/30 text-white font-medium'
-                          : 'bg-[#16162a]/60 hover:bg-[#16162a] text-neutral-300 border border-transparent'
+                          : 'bg-[var(--bg-card)]/60 hover:bg-[var(--bg-card)] text-[var(--text-secondary)] border border-transparent'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
@@ -337,7 +337,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                           className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold ${
                             isChecked
                               ? 'bg-sky-500 text-white'
-                              : 'bg-white/10 text-neutral-400'
+                              : 'bg-white/10 text-[var(--text-muted)]'
                           }`}
                         >
                           {isChecked ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : null}
@@ -352,14 +352,14 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                             ) : null}
                           </div>
                           {g.description && (
-                            <p className="text-[10px] text-neutral-400 line-clamp-1">
+                            <p className="text-[10px] text-[var(--text-muted)] line-clamp-1">
                               {g.description}
                             </p>
                           )}
                         </div>
                       </div>
 
-                      <span className="text-[10px] font-mono text-neutral-400">
+                      <span className="text-[10px] font-mono text-[var(--text-muted)]">
                         {isChecked ? (
                           <span className="text-sky-400 font-semibold">Can View</span>
                         ) : (
@@ -375,10 +375,10 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
 
           {/* Visibility Override (for Admins or Owner) */}
           {item.type === 'single_post' && (isAdmin || isOwner) && (
-            <div className="p-3 rounded-2xl bg-[#1e1e38] border border-[#2b2b52] space-y-2">
+            <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] space-y-2">
               <div className="flex items-center gap-1.5">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-[11px] font-bold text-neutral-200">
+                <span className="text-[11px] font-bold text-[var(--text-secondary)]">
                   Special Visibility Overrides
                 </span>
                 {isAdmin && (
@@ -395,7 +395,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                   className={`py-1.5 px-2 rounded-xl text-center transition border ${
                     visibilityOverride === null
                       ? 'bg-sky-500/20 border-sky-400 text-sky-300 font-semibold'
-                      : 'bg-white/5 border-transparent text-neutral-400 hover:text-white'
+                      : 'bg-white/5 border-transparent text-[var(--text-muted)] hover:text-white'
                   }`}
                 >
                   Standard Circles
@@ -407,7 +407,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                   className={`py-1.5 px-2 rounded-xl text-center transition border ${
                     visibilityOverride === 'public_all'
                       ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 font-semibold'
-                      : 'bg-white/5 border-transparent text-neutral-400 hover:text-white'
+                      : 'bg-white/5 border-transparent text-[var(--text-muted)] hover:text-white'
                   }`}
                   title="Make visible to all members regardless of circle"
                 >
@@ -420,7 +420,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
                   className={`py-1.5 px-2 rounded-xl text-center transition border ${
                     visibilityOverride === 'hidden'
                       ? 'bg-rose-500/20 border-rose-400 text-rose-300 font-semibold'
-                      : 'bg-white/5 border-transparent text-neutral-400 hover:text-white'
+                      : 'bg-white/5 border-transparent text-[var(--text-muted)] hover:text-white'
                   }`}
                   title="Hide from all circle feeds"
                 >
@@ -432,11 +432,11 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
         </div>
 
         {/* Footer actions */}
-        <div className="pt-3 border-t border-[#2b2b52] flex items-center justify-between gap-3">
+        <div className="pt-3 border-t border-[var(--border-color)] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-neutral-300 transition"
+            className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-[var(--text-secondary)] transition"
           >
             Cancel
           </button>

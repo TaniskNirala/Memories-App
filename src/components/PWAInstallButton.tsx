@@ -68,22 +68,22 @@ export const PWAInstallButton: React.FC = () => {
       </button>
 
       {showIOSGuide && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="w-full max-w-xs p-5 bg-neutral-900 border border-neutral-700 rounded-2xl shadow-xl text-neutral-100">
+        <div className="scrim z-50">
+          <div className="modal-panel max-w-xs p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-sm">Install Nest on iOS</h3>
-              <button onClick={() => setShowIOSGuide(false)} className="text-neutral-400 hover:text-white">
+              <button onClick={() => setShowIOSGuide(false)} className="btn-icon !h-7 !w-7">
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-xs text-neutral-300 leading-relaxed mb-4">
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed mb-4">
               1. Tap the <Share2 className="w-3.5 h-3.5 inline mx-1 text-sky-400" /> <strong>Share</strong> button at the bottom of Safari.<br />
               2. Scroll down and tap <strong>Add to Home Screen</strong>.<br />
               3. Open Nest from your home screen for full-screen memory sharing!
             </p>
             <button
               onClick={() => setShowIOSGuide(false)}
-              className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 rounded-xl text-xs font-medium"
+              className="btn btn-primary btn-block btn-sm"
             >
               Got it
             </button>

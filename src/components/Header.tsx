@@ -1,9 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Bell, LogOut, CheckCircle2, Copy, Trash2, AlertTriangle, RefreshCw, ChevronDown, KeyRound } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  Moon,
+  Sun,
+  Bell,
+  LogOut,
+  CheckCircle2,
+  Copy,
+  Trash2,
+  AlertTriangle,
+  RefreshCw,
+  ChevronDown,
+  KeyRound,
+  Sparkles,
+  Check,
+  Command,
+} from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
 import { NotificationItem } from '../types/index.ts';
+import { Avatar, Modal, ModalHeader, MenuItem } from './ui/kit.tsx';
+import { relativeTime } from '../lib/format.ts';
 
 interface HeaderProps {
   onOpenNotifications?: () => void;
@@ -12,14 +29,20 @@ interface HeaderProps {
   onUserSwitched?: () => void;
   onNotificationClick?: (notification: NotificationItem) => void;
   onOpenDuplicates?: () => void;
+  onOpenPalette?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificationClick, onOpenDuplicates }) => {
+export const Header: React.FC<HeaderProps> = ({
+  selectedGroupName,
+  onNotificationClick,
+  onOpenDuplicates,
+  onOpenPalette,
+}) => {
   const { user, logout, isPending } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -94,7 +117,7 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
         setNotifications(data.notifications || []);
         setUnreadCount(data.unreadCount || 0);
       }
-    } catch (e) {}
+    } catch {}
   };
 
   useEffect(() => {
@@ -103,365 +126,423 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
     return () => clearInterval(interval);
   }, [user, isPending]);
 
+  // Close any open popover when a click lands outside of it
+  useEffect(() => {
+    const close = () => {
+      setShowUserMenu(false);
+      setShowNotif(false);
+    };
+    if (!showUserMenu && !showNotif) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showUserMenu, showNotif]);
+
   const markAllRead = async () => {
     try {
       await apiFetch('/api/notifications/mark-all-read', { method: 'POST' });
       setUnreadCount(0);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
-    } catch (e) {}
+    } catch {}
   };
 
   const handleNotificationClick = async (n: NotificationItem) => {
     if (!n.read) {
       try {
         await apiFetch(`/api/notifications/${n.id}/read`, { method: 'POST' });
-        setNotifications((prev) =>
-          prev.map((item) => (item.id === n.id ? { ...item, read: 1 } : item))
-        );
+        setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: 1 } : item)));
         setUnreadCount((prev) => Math.max(0, prev - 1));
-      } catch (e) {}
+      } catch {}
     }
-    setShowNotifDropdown(false);
-    if (onNotificationClick) {
-      onNotificationClick(n);
-    }
+    setShowNotif(false);
+    if (onNotificationClick) onNotificationClick(n);
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b-2 border-[var(--border-color)] bg-[var(--bg-card)]/90 backdrop-blur-xl px-4 sm:px-6 py-3 transition-colors">
-      <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-        {/* Left: Title matching user screenshot */}
-        <div className="flex items-center gap-2">
-          <a
-            href="/"
-            className="flex items-center gap-2 font-display text-xl sm:text-2xl font-bold tracking-tight text-[var(--text-primary)] hover:opacity-90 transition"
-          >
-            <img src="/icon.svg" alt="" className="w-7 h-7 rounded-lg" />
-            Nest
-          </a>
-          {selectedGroupName && (
-            <span className="text-xs text-[var(--accent-coral)] font-medium truncate max-w-[130px] sm:max-w-[200px]">
-              / {selectedGroupName}
-            </span>
-          )}
-        </div>
-
-        {/* Right Controls: User Badge & Light/Dark mode */}
-        <div className="flex items-center gap-2.5 sm:gap-4">
-          {/* Current User Badge & Menu */}
-          {user && !isPending && (
-            <div className="relative">
-              <button
-                onClick={() => setShowUserMenu((prev) => !prev)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-xs transition cursor-pointer select-none"
-              >
-                <div
-                  className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase shrink-0"
-                  style={{ backgroundColor: user.avatarColor || '#f59e0b' }}
-                >
-                  {user.displayName?.charAt(0) || user.username?.charAt(0)}
-                </div>
-                <span className="font-semibold text-[var(--text-primary)]">{user.displayName || user.username}</span>
-                {user.role === 'admin' && (
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 font-bold uppercase tracking-wider">
-                    Admin
-                  </span>
-                )}
-                <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" />
-              </button>
-
-              {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-56 p-2 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl z-50 text-xs animate-in fade-in duration-100">
-                  <div className="px-3 py-2 border-b border-[var(--border-subtle)] mb-1">
-                    <p className="font-bold text-[var(--text-primary)] truncate">{user.displayName}</p>
-                    <p className="text-[10px] text-[var(--text-muted)] font-mono truncate">@{user.username}</p>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      setPasswordMsg(null);
-                      setShowPasswordModal(true);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] flex items-center gap-2 font-medium transition cursor-pointer"
-                  >
-                    <KeyRound className="w-3.5 h-3.5" />
-                    <span>Change Password</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      handleLogoutEverywhere();
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] flex items-center gap-2 font-medium transition cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out Everywhere</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      setDeletePassword('');
-                      setDeleteError(null);
-                      setShowDeleteModal(true);
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 font-medium transition cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete My Account</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowUserMenu(false);
-                      logout();
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] flex items-center gap-2 font-medium transition cursor-pointer"
-                  >
-                    <LogOut className="w-3.5 h-3.5" />
-                    <span>Sign Out</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Light/Dark mode toggle button */}
-          <button
-            onClick={toggleTheme}
-            title={isDark ? 'Switch to Light mode' : 'Switch to Dark mode'}
-            className="px-3 py-1.5 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-xs font-medium text-[var(--text-primary)] transition flex items-center gap-1.5 shrink-0"
-          >
-            {isDark ? (
-              <>
-                <Moon className="w-3.5 h-3.5 text-amber-400" />
-                <span>Dark mode</span>
-              </>
-            ) : (
-              <>
-                <Sun className="w-3.5 h-3.5 text-amber-600" />
-                <span>Light mode</span>
-              </>
-            )}
-          </button>
-
-          {/* Duplicate Photo Cleaner Button */}
-          {user && !isPending && onOpenDuplicates && (
-            <button
-              onClick={onOpenDuplicates}
-              title="Duplicate Photo Cleaner"
-              className="px-3 py-1.5 rounded-full bg-[var(--bg-surface)] hover:bg-amber-500/20 border border-[var(--border-color)] hover:border-amber-500/30 text-xs font-medium text-[var(--text-primary)] hover:text-amber-400 transition flex items-center gap-1.5 shrink-0"
+    <>
+      <header className="sticky top-0 z-50 w-full border-b border-[var(--border-color)] bg-[var(--bg-page)]/72 backdrop-blur-2xl">
+        <div className="page-wrap flex h-[60px] items-center justify-between gap-3">
+          {/* Brand */}
+          <div className="flex min-w-0 items-center gap-2.5">
+            <a
+              href="/"
+              className="group flex items-center gap-2.5 text-[var(--text-primary)] transition hover:opacity-95"
+              aria-label="Nest home"
             >
-              <Copy className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Duplicates</span>
-            </button>
-          )}
+              <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-[13px] border border-[var(--border-color)] bg-[var(--bg-card)] shadow-[0_6px_18px_-12px_rgba(0,0,0,0.9)]">
+                <span
+                  aria-hidden
+                  className="absolute inset-0 opacity-80"
+                  style={{ background: 'var(--gradient-ember)' }}
+                />
+                <img src="/icon.svg" alt="" className="relative z-10 h-5 w-5 drop-shadow" />
+              </span>
+              <span className="flex flex-col leading-none">
+                <span className="font-display text-[1.15rem] font-bold tracking-tight">Nest</span>
+                <span className="eyebrow mt-1 hidden text-[9px] sm:block">private memories</span>
+              </span>
+            </a>
 
-          {/* Notifications Trigger */}
-          {user && !isPending && (
-            <div className="relative">
+            {selectedGroupName && (
+              <span className="flex max-w-[42vw] items-center gap-1.5 truncate rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-mint,var(--accent-teal))]" />
+                <span className="truncate">{selectedGroupName}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {onOpenPalette && (
               <button
-                onClick={() => setShowNotifDropdown((prev) => !prev)}
-                aria-label="Notifications"
-                className="relative w-8 h-8 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition shrink-0"
+                type="button"
+                onClick={onOpenPalette}
+                title="Command palette"
+                className="hidden h-9 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-3 text-[11px] font-medium text-[var(--text-muted)] transition hover:text-[var(--text-primary)] md:flex"
               >
-                <Bell className="w-4 h-4" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
+                <Command className="h-3.5 w-3.5" />
+                <span>Jump to…</span>
+                <kbd className="rounded border border-[var(--border-color)] bg-[var(--bg-card)] px-1 font-mono text-[9px]">
+                  ⌘K
+                </kbd>
               </button>
+            )}
 
-              {/* Notifications Dropdown */}
-              {showNotifDropdown && (
-                <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] p-3 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl z-50 text-[var(--text-primary)] animate-in fade-in zoom-in-95 duration-100">
-                  <div className="flex items-center justify-between pb-2 mb-2 border-b border-[var(--border-color)]">
-                    <span className="text-xs font-bold">Notifications</span>
-                    {unreadCount > 0 && (
-                      <button
-                        onClick={markAllRead}
-                        className="text-[11px] text-amber-400 hover:underline flex items-center gap-1 font-medium"
-                      >
-                        <CheckCircle2 className="w-3 h-3" /> Mark all read
-                      </button>
-                    )}
-                  </div>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label="Toggle theme"
+              className="btn-icon !h-9 !w-9"
+            >
+              {isDark ? <Sun className="h-4 w-4 text-[var(--accent-amber)]" /> : <Moon className="h-4 w-4 text-[var(--accent-indigo)]" />}
+            </button>
 
-                  <div className="max-h-72 overflow-y-auto space-y-2">
-                    {notifications.length === 0 ? (
-                      <p className="text-xs text-[var(--text-muted)] text-center py-4">No notifications yet</p>
-                    ) : (
-                      notifications.map((n) => (
-                        <div
-                          key={n.id}
-                          onClick={() => handleNotificationClick(n)}
-                          className={`p-2.5 rounded-xl text-xs transition cursor-pointer text-left w-full hover:scale-[1.01] active:scale-[0.99] select-none ${
-                            n.read
-                              ? 'bg-transparent hover:bg-[var(--bg-surface)]/60 text-[var(--text-muted)]'
-                              : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-primary)] font-medium border border-amber-500/20 shadow-xs'
-                          }`}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          <div className="flex items-start justify-between gap-1">
-                            <div className="flex items-center gap-1.5">
-                              {!n.read && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
-                              <span className="text-[11px] font-semibold text-amber-400">{n.title}</span>
-                            </div>
-                            <span className="text-[9px] text-[var(--text-muted)] shrink-0">
-                              {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <p className="text-[11px] mt-1 leading-snug line-clamp-2">{n.body}</p>
-                          {n.link && (
-                            <span className="text-[10px] text-[var(--accent-coral)] font-semibold mt-1 inline-flex items-center gap-0.5 hover:underline">
-                              View details →
+            {user && !isPending && onOpenDuplicates && (
+              <button
+                type="button"
+                onClick={onOpenDuplicates}
+                title="Duplicate photo cleaner"
+                className="btn-icon !h-9 !w-9"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+            )}
+
+            <PWAInstallButton />
+
+            {/* Notifications */}
+            {user && !isPending && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNotif((v) => !v);
+                    setShowUserMenu(false);
+                  }}
+                  aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
+                  className="btn-icon relative !h-9 !w-9"
+                >
+                  <Bell className="h-4 w-4" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--bg-page)] bg-rose-500 px-1 text-[9px] font-bold text-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {showNotif && (
+                  <>
+                    <div className="fixed inset-0 z-[55]" onClick={() => setShowNotif(false)} />
+                    <div className="absolute right-0 z-[60] mt-2 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
+                      <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-display text-sm">Notifications</span>
+                          {unreadCount > 0 && (
+                            <span className="rounded-full bg-[var(--accent-amber)]/18 px-1.5 py-0.5 text-[9px] font-bold text-[var(--accent-amber)]">
+                              {unreadCount} new
                             </span>
                           )}
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+                        {unreadCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllRead}
+                            className="flex items-center gap-1 text-[10.5px] font-semibold text-[var(--accent-amber)] transition hover:underline"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Mark all read
+                          </button>
+                        )}
+                      </div>
 
-          {/* User Sign out */}
-          {user && (
-            <button
-              onClick={logout}
-              title="Sign Out"
-              className="w-8 h-8 rounded-full bg-[var(--bg-surface)] hover:bg-rose-900/40 border border-[var(--border-color)] flex items-center justify-center text-[var(--text-muted)] hover:text-rose-400 transition shrink-0"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
-          )}
+                      <div className="max-h-[62vh] overflow-y-auto p-1.5">
+                        {notifications.length === 0 ? (
+                          <div className="px-4 py-10 text-center">
+                            <Bell className="mx-auto mb-2 h-5 w-5 text-[var(--text-muted)]" />
+                            <p className="text-[11px] text-[var(--text-muted)]">You're all caught up.</p>
+                          </div>
+                        ) : (
+                          notifications.map((n) => (
+                            <button
+                              key={n.id}
+                              type="button"
+                              onClick={() => handleNotificationClick(n)}
+                              className={`w-full rounded-xl px-3 py-2.5 text-left transition ${
+                                n.read
+                                  ? 'hover:bg-[var(--bg-surface)]/70'
+                                  : 'bg-[var(--bg-surface)]/80 hover:bg-[var(--bg-surface-elevated)]'
+                              }`}
+                            >
+                              <div className="flex items-start gap-2">
+                                {!n.read ? (
+                                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-amber)]" />
+                                ) : (
+                                  <Check className="mt-1 h-3 w-3 shrink-0 text-[var(--text-muted)]/60" />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span
+                                      className={`truncate text-[11.5px] ${
+                                        n.read ? 'font-medium text-[var(--text-secondary)]' : 'font-bold text-[var(--text-primary)]'
+                                      }`}
+                                    >
+                                      {n.title}
+                                    </span>
+                                    <span className="shrink-0 font-mono text-[9px] text-[var(--text-muted)]">
+                                      {relativeTime(n.created_at)}
+                                    </span>
+                                  </div>
+                                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-[var(--text-muted)]">
+                                    {n.body}
+                                  </p>
+                                </div>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
-          <PWAInstallButton />
+            {/* User menu */}
+            {user && !isPending && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUserMenu((v) => !v);
+                    setShowNotif(false);
+                  }}
+                  className="flex h-9 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 pl-1 pr-2 transition hover:border-[var(--accent-amber)]/45 hover:bg-[var(--bg-surface-elevated)]"
+                >
+                  <Avatar name={user.displayName || user.username} color={user.avatarColor} size={26} />
+                  <span className="hidden max-w-[110px] truncate text-[11.5px] font-semibold sm:block">
+                    {user.displayName || user.username}
+                  </span>
+                  {user.role === 'admin' && (
+                    <span className="hidden rounded-full bg-[var(--accent-amber)]/18 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider text-[var(--accent-amber)] sm:block">
+                      Admin
+                    </span>
+                  )}
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {showUserMenu && (
+                  <>
+                    <div className="fixed inset-0 z-[55]" onClick={() => setShowUserMenu(false)} />
+                    <div className="absolute right-0 z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
+                      <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-3.5 py-3">
+                        <Avatar name={user.displayName || user.username} color={user.avatarColor} size={38} ring />
+                        <div className="min-w-0">
+                          <p className="truncate text-[12.5px] font-bold">{user.displayName}</p>
+                          <p className="truncate font-mono text-[10px] text-[var(--text-muted)]">@{user.username}</p>
+                        </div>
+                      </div>
+
+                      <div className="p-1.5">
+                        <MenuItem
+                          icon={<KeyRound className="h-3.5 w-3.5" />}
+                          label="Change password"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setPasswordMsg(null);
+                            setShowPasswordModal(true);
+                          }}
+                        />
+                        <MenuItem
+                          icon={<LogOut className="h-3.5 w-3.5" />}
+                          label="Sign out everywhere"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            handleLogoutEverywhere();
+                          }}
+                        />
+                        <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                        <MenuItem
+                          icon={<Trash2 className="h-3.5 w-3.5" />}
+                          label="Delete my account"
+                          tone="danger"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            setDeletePassword('');
+                            setDeleteError(null);
+                            setShowDeleteModal(true);
+                          }}
+                        />
+                        <MenuItem
+                          icon={<LogOut className="h-3.5 w-3.5" />}
+                          label="Sign out"
+                          onClick={() => {
+                            setShowUserMenu(false);
+                            logout();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* Delete Own Account Modal */}
-      {showDeleteModal && (
+        {/* Progress hairline that reacts to the theme switch */}
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !deleteLoading) setShowDeleteModal(false);
+          aria-hidden
+          className="h-px w-full"
+          style={{
+            background:
+              'linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent-amber) 55%, transparent) 22%, color-mix(in oklab, var(--accent-coral) 45%, transparent) 55%, transparent)',
           }}
-        >
-          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4 playful-card">
-            <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
-              <AlertTriangle className="w-4 h-4" />
-              <span>Delete My Account</span>
-            </div>
+        />
+      </header>
 
-            <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
-              <p>
-                Are you sure you want to permanently delete your account (<strong>@{user?.username}</strong>)?
-              </p>
-              <p className="text-[11px] text-[var(--text-muted)] bg-[var(--bg-surface)] p-2.5 rounded-xl border border-[var(--border-subtle)]">
-                All your uploaded memories, albums, comments, and circle memberships will be completely removed. This action cannot be undone.
-              </p>
-            </div>
-
+      {/* ---------------------------------------------------------- Account deletion */}
+      <Modal open={showDeleteModal} onClose={() => !deleteLoading && setShowDeleteModal(false)} size="sm" label="Delete account">
+        <ModalHeader
+          icon={<AlertTriangle className="h-4 w-4" />}
+          eyebrow="Danger zone"
+          title="Delete my account"
+          onClose={() => !deleteLoading && setShowDeleteModal(false)}
+        />
+        <div className="space-y-3 p-5">
+          <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+            This permanently removes <strong>@{user?.username}</strong> along with every memory, album, comment and circle
+            membership attached to it.
+          </p>
+          <p className="rounded-xl border border-rose-500/25 bg-rose-500/8 px-3 py-2.5 text-[11px] leading-relaxed text-rose-300">
+            This cannot be undone and there is no recovery window.
+          </p>
+          <div>
+            <label className="label" htmlFor="delete-account-password">
+              Confirm with your password
+            </label>
             <input
+              id="delete-account-password"
               type="password"
               value={deletePassword}
               onChange={(e) => setDeletePassword(e.target.value)}
-              placeholder="Enter your password to confirm"
+              placeholder="Password"
               autoComplete="current-password"
-              className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
+              className="field"
             />
-
-            {deleteError && (
-              <p className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-xl font-medium">
-                {deleteError}
-              </p>
-            )}
-
-            <div className="pt-2 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                disabled={deleteLoading}
-                onClick={() => setShowDeleteModal(false)}
-                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleteLoading || !deletePassword}
-                onClick={handleDeleteOwnAccount}
-                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
-              >
-                {deleteLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>{deleteLoading ? 'Deleting...' : 'Yes, Delete My Account'}</span>
-              </button>
-            </div>
+          </div>
+          {deleteError && (
+            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] font-medium text-rose-300">
+              {deleteError}
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" disabled={deleteLoading} onClick={() => setShowDeleteModal(false)} className="btn btn-ghost btn-sm">
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={deleteLoading || !deletePassword}
+              onClick={handleDeleteOwnAccount}
+              className="btn btn-danger btn-sm"
+            >
+              {deleteLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+              {deleteLoading ? 'Deleting…' : 'Delete permanently'}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* Change Password Modal */}
-      {showPasswordModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
-          onClick={(e) => {
-            if (e.target === e.currentTarget && !passwordLoading) setShowPasswordModal(false);
-          }}
-        >
-          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-3 playful-card">
-            <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
-              <KeyRound className="w-4 h-4" />
-              <span>Change Password</span>
-            </div>
+      {/* ---------------------------------------------------------- Password change */}
+      <Modal
+        open={showPasswordModal}
+        onClose={() => !passwordLoading && setShowPasswordModal(false)}
+        size="sm"
+        label="Change password"
+      >
+        <ModalHeader
+          icon={<KeyRound className="h-4 w-4" />}
+          eyebrow="Security"
+          title="Change password"
+          subtitle="Use at least 10 characters"
+          onClose={() => !passwordLoading && setShowPasswordModal(false)}
+        />
+        <div className="space-y-3 p-5">
+          <div>
+            <label className="label" htmlFor="current-password">
+              Current password
+            </label>
             <input
+              id="current-password"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              placeholder="Current password"
               autoComplete="current-password"
-              className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
+              className="field"
             />
+          </div>
+          <div>
+            <label className="label" htmlFor="new-password">
+              New password
+            </label>
             <input
+              id="new-password"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="New password (at least 10 characters)"
               autoComplete="new-password"
-              className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
+              className="field"
             />
-            {passwordMsg && (
-              <p className={`text-xs p-2.5 rounded-xl font-medium ${passwordMsg.ok ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'}`}>
-                {passwordMsg.text}
-              </p>
-            )}
-            <div className="pt-1 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                disabled={passwordLoading}
-                onClick={() => setShowPasswordModal(false)}
-                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                disabled={passwordLoading || !currentPassword || !newPassword}
-                onClick={handleChangePassword}
-                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
-              >
-                {passwordLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>{passwordLoading ? 'Saving...' : 'Save'}</span>
-              </button>
-            </div>
+          </div>
+          {passwordMsg && (
+            <p
+              className={`rounded-xl border px-3 py-2 text-[11px] font-medium ${
+                passwordMsg.ok
+                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                  : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+              }`}
+            >
+              {passwordMsg.text}
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" disabled={passwordLoading} onClick={() => setShowPasswordModal(false)} className="btn btn-ghost btn-sm">
+              Close
+            </button>
+            <button
+              type="button"
+              disabled={passwordLoading || !currentPassword || !newPassword}
+              onClick={handleChangePassword}
+              className="btn btn-primary btn-sm"
+            >
+              {passwordLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+              {passwordLoading ? 'Saving…' : 'Save password'}
+            </button>
           </div>
         </div>
-      )}
-    </header>
+      </Modal>
+    </>
   );
 };

@@ -17,8 +17,8 @@ export default defineConfig(() => {
           name: 'Nest',
           short_name: 'Nest',
           description: 'A private, zero-quota memory and photo sharing web app for close friends.',
-          theme_color: '#0f172a',
-          background_color: '#0f172a',
+          theme_color: '#0a0c14',
+          background_color: '#0a0c14',
           display: 'standalone',
           start_url: '/',
           scope: '/',
@@ -42,6 +42,10 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // Vite is mounted as middleware inside the Express server and the app is also served
+      // from proxied preview hosts (e.g. *.e2b.app). Accept those hosts instead of the
+      // default localhost-only allowlist, otherwise every preview request is rejected with 403.
+      allowedHosts: true as unknown as string[],
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

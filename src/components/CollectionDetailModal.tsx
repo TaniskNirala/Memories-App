@@ -251,8 +251,8 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl flex flex-col max-h-[92vh] h-[90vh] playful-card overflow-hidden">
+    <div className="scrim z-50">
+      <div className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[92vh] h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-[var(--border-color)] flex items-start justify-between gap-3">
           <div>
@@ -344,16 +344,16 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowConvertToEvent(false)}
-                  className="text-neutral-400 hover:text-white text-xs cursor-pointer"
+                  className="text-[var(--text-muted)] hover:text-white text-xs cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-[11px] text-neutral-300 leading-relaxed">
+              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
                 Unlock guest attendee tagging and a shared board for guest notes and memories.
               </p>
               <div>
-                <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Event Title
                 </label>
                 <input
@@ -366,7 +366,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5 text-amber-400" /> Event Date
                   </label>
                   <input
@@ -377,7 +377,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
+                  <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-rose-400" /> Event Location / Place
                   </label>
                   <input
@@ -393,7 +393,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowConvertToEvent(false)}
-                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 text-xs font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -719,8 +719,8 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
 
       {/* Delete Event Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-sm bg-[var(--bg-card)] border border-rose-500/30 rounded-3xl p-5 text-center shadow-2xl space-y-4 playful-card">
+        <div className="scrim z-60">
+          <div className="w-full max-w-sm bg-[var(--bg-card)] border border-rose-500/30 rounded-3xl p-5 text-center shadow-2xl space-y-4">
             <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-500 flex items-center justify-center mx-auto shadow-sm">
               <Trash2 className="w-6 h-6" />
             </div>

@@ -340,8 +340,8 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
     : `${imageSize.width} / ${imageSize.height}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-md animate-in fade-in duration-150 select-none">
-      <div className="relative w-full max-w-4xl max-h-[94vh] bg-neutral-900 border border-neutral-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-white">
+    <div className="scrim z-50 select-none">
+      <div className="relative w-full max-w-4xl max-h-[94vh] bg-neutral-900 border border-neutral-800 rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden text-white">
         {/* Top Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-800 bg-neutral-900/80 backdrop-blur-xs">
           <div className="flex items-center gap-2">
@@ -355,7 +355,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={handleReset}
-              className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 hover:text-white transition flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs text-[var(--text-secondary)] hover:text-white transition flex items-center gap-1.5"
               title="Reset all edits"
             >
               <Undo2 className="w-3.5 h-3.5" />
@@ -364,7 +364,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
             <button
               onClick={onClose}
               disabled={isSaving}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:bg-neutral-800 transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -374,7 +374,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
         {/* Interactive Workspace */}
         <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-neutral-950/70 relative">
           {!imageLoaded ? (
-            <div className="flex flex-col items-center justify-center text-neutral-400 gap-2">
+            <div className="flex flex-col items-center justify-center text-[var(--text-muted)] gap-2">
               <RefreshCw className="w-6 h-6 animate-spin text-amber-400" />
               <span className="text-xs">Loading photo...</span>
             </div>
@@ -465,11 +465,11 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Rotation Controls */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-semibold text-neutral-400 mr-1 hidden sm:inline">Rotate:</span>
+              <span className="text-[11px] font-semibold text-[var(--text-muted)] mr-1 hidden sm:inline">Rotate:</span>
               <button
                 type="button"
                 onClick={handleRotateCcw}
-                className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-200 flex items-center gap-1 transition"
+                className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs text-[var(--text-secondary)] flex items-center gap-1 transition"
                 title="Rotate 90° Counter-Clockwise"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
@@ -479,7 +479,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
               <button
                 type="button"
                 onClick={handleRotateCw}
-                className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-200 flex items-center gap-1 transition"
+                className="px-2.5 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs text-[var(--text-secondary)] flex items-center gap-1 transition"
                 title="Rotate 90° Clockwise"
               >
                 <RotateCw className="w-3.5 h-3.5 text-amber-400" />
@@ -492,7 +492,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
                 className={`px-2.5 py-1.5 rounded-xl text-xs flex items-center gap-1 transition ${
                   flipH
                     ? 'bg-amber-500 text-neutral-950 font-semibold'
-                    : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
+                    : 'bg-neutral-800 hover:bg-neutral-700 text-[var(--text-secondary)]'
                 }`}
                 title="Flip Horizontally"
               >
@@ -503,7 +503,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
 
             {/* Aspect Ratio Presets */}
             <div className="flex items-center gap-1 overflow-x-auto max-w-full">
-              <span className="text-[11px] font-semibold text-neutral-400 mr-1 hidden sm:inline">Ratio:</span>
+              <span className="text-[11px] font-semibold text-[var(--text-muted)] mr-1 hidden sm:inline">Ratio:</span>
               {(['free', '1:1', '4:3', '3:4', '16:9', '9:16'] as AspectRatioOption[]).map((r) => (
                 <button
                   key={r}
@@ -512,7 +512,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
                     aspectRatio === r
                       ? 'bg-amber-500 text-neutral-950 font-semibold shadow-xs'
-                      : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300'
+                      : 'bg-neutral-800 hover:bg-neutral-700 text-[var(--text-secondary)]'
                   }`}
                 >
                   {r === 'free' ? 'Free' : r}
@@ -527,7 +527,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white transition"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-white transition"
             >
               Cancel
             </button>

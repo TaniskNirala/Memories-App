@@ -8,7 +8,7 @@ interface LockedPlaceholderProps {
 
 export const LockedPlaceholder: React.FC<LockedPlaceholderProps> = ({ reason, ownerUsername }) => {
   return (
-    <div className="w-full rounded-2xl p-6 bg-[var(--bg-surface)]/70 border border-amber-500/30 flex flex-col items-center text-center playful-card my-2">
+    <div className="w-full rounded-2xl p-6 bg-[var(--bg-surface)]/70 border border-amber-500/30 flex flex-col items-center text-center my-2">
       <div className="w-12 h-12 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 mb-3">
         <Lock className="w-6 h-6" />
       </div>

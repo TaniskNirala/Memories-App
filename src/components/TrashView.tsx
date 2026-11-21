@@ -1,19 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { Trash2, RotateCcw, AlertTriangle, Image as ImageIcon, ShieldAlert } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Trash2, RotateCcw, Image as ImageIcon, ShieldAlert, AlertTriangle, Clock, Search } from 'lucide-react';
 import { apiFetch } from '../context/AuthContext.tsx';
+import { EmptyState, Modal, ModalHeader, SearchBox, StatTile, PageHero } from './ui/kit.tsx';
+import { relativeTime, shortDate } from '../lib/format.ts';
+
+interface TrashItem {
+  id: string;
+  caption?: string | null;
+  deleted_at: string;
+  files?: { thumbUrl?: string; viewUrl?: string }[];
+}
 
 export const TrashView: React.FC = () => {
-  const [trashItems, setTrashItems] = useState<any[]>([]);
+  const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDeleteProtected, setIsDeleteProtected] = useState(true);
+  const [query, setQuery] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<TrashItem | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch('/api/config')
       .then((r) => r.json())
       .then((cfg) => {
-        if (typeof cfg.isDeleteProtected === 'boolean') {
-          setIsDeleteProtected(cfg.isDeleteProtected);
-        }
+        if (typeof cfg.isDeleteProtected === 'boolean') setIsDeleteProtected(cfg.isDeleteProtected);
       })
       .catch(() => {});
   }, []);
@@ -26,8 +36,8 @@ export const TrashView: React.FC = () => {
         const data = await res.json();
         setTrashItems(data.trash || []);
       }
-    } catch (e) {}
-    finally {
+    } catch {
+    } finally {
       setLoading(false);
     }
   };
@@ -37,88 +47,181 @@ export const TrashView: React.FC = () => {
   }, []);
 
   const handleRestore = async (postId: string) => {
+    setBusyId(postId);
     try {
       const res = await apiFetch(`/api/posts/${postId}/restore`, { method: 'POST' });
-      if (res.ok) {
-        fetchTrash();
-      }
-    } catch (e) {}
+      if (res.ok) fetchTrash();
+    } catch {
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const handleDeleteForever = async (postId: string) => {
-    if (!confirm('Permanently delete this photo forever? This cannot be undone.')) return;
+  const handleDeleteForever = async () => {
+    if (!pendingDelete) return;
+    setBusyId(pendingDelete.id);
     try {
-      const res = await apiFetch(`/api/posts/${postId}`, {
+      const res = await apiFetch(`/api/posts/${pendingDelete.id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permanent: true }),
       });
       if (res.ok) {
+        setPendingDelete(null);
         fetchTrash();
       }
-    } catch (e) {}
+    } catch {
+    } finally {
+      setBusyId(null);
+    }
   };
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return trashItems;
+    return trashItems.filter((i) => (i.caption || '').toLowerCase().includes(q));
+  }, [trashItems, query]);
+
+  const expiringSoon = trashItems.filter((i) => {
+    const t = new Date(i.deleted_at).getTime();
+    const days = (Date.now() - t) / 86400000;
+    return days > 23;
+  }).length;
+
   return (
-    <div className="w-full max-w-2xl mx-auto p-4 space-y-4">
-      <div className="flex items-center justify-between pb-3 border-b border-[var(--border-color)]">
-        <div className="flex items-center gap-2">
-          <Trash2 className="w-5 h-5 text-rose-500" />
-          <h2 className="font-display font-bold text-lg text-[var(--text-primary)]">
-            Trash Bin
-          </h2>
-        </div>
-        <span className="text-xs text-[var(--text-muted)] font-mono">
-          Recoverable for 30 days
-        </span>
+    <div className="space-y-4">
+      <PageHero
+        eyebrow="Safety net"
+        title="Deleted, not gone"
+        subtitle="Anything you move to trash waits here for 30 days before it disappears for good."
+        accent="coral"
+        actions={
+          <button type="button" onClick={fetchTrash} className="btn btn-soft">
+            <RotateCcw className="h-3.5 w-3.5" /> Refresh
+          </button>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+        <StatTile label="In trash" value={trashItems.length} hint="recoverable" icon={<Trash2 className="h-4 w-4" />} tone="coral" />
+        <StatTile label="Window" value="30d" hint="then auto-purge" icon={<Clock className="h-4 w-4" />} />
+        <StatTile label="Expiring" value={expiringSoon} hint="within a week" tone="indigo" icon={<AlertTriangle className="h-4 w-4" />} />
+        <StatTile label="Protected" value={isDeleteProtected ? 'Yes' : 'No'} hint="preview lock" tone="mint" icon={<ShieldAlert className="h-4 w-4" />} />
       </div>
 
       {isDeleteProtected && (
-        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
-          <span><strong>Protected Preview:</strong> Permanent purging is locked in this preview to safeguard live memories. Delete is fully operational on Render.</span>
+        <div className="flex items-start gap-2.5 rounded-2xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-3">
+          <ShieldAlert className="mt-px h-4 w-4 shrink-0 text-[var(--accent-amber)]" />
+          <p className="text-[11px] leading-relaxed text-amber-200/90">
+            <strong className="font-bold">Preview protection is on.</strong> Permanent purging is disabled here so live
+            memories stay safe. It's fully operational on the Render deployment.
+          </p>
         </div>
       )}
 
-      {loading ? (
-        <div className="text-center py-12 text-xs text-[var(--text-muted)]">Loading trash...</div>
-      ) : trashItems.length === 0 ? (
-        <div className="p-8 text-center text-xs text-[var(--text-muted)] bg-[var(--bg-card)] rounded-2xl border border-[var(--border-subtle)]">
-          Trash bin is empty. No deleted memories.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {trashItems.map((item) => (
-            <div
-              key={item.id}
-              className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs playful-card"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[var(--bg-surface)] flex items-center justify-center text-[var(--text-muted)]">
-                  <ImageIcon className="w-5 h-5 opacity-60" />
-                </div>
-                <div>
-                  <span className="font-bold text-[var(--text-primary)] block line-clamp-1">
-                    {item.caption || 'Untitled photo'}
-                  </span>
-                  <span className="text-[10px] text-[var(--text-muted)]">
-                    Deleted on {new Date(item.deleted_at).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
+      <div className="surface p-2.5">
+        <SearchBox value={query} onChange={setQuery} placeholder="Search deleted memories…" />
+      </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleRestore(item.id)}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600/20 text-emerald-400 font-semibold hover:bg-emerald-600/30 transition flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Restore
-                </button>
+      {loading ? (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="surface flex items-center gap-3 p-3">
+              <div className="shimmer h-12 w-12 rounded-xl" />
+              <div className="flex-1 space-y-2">
+                <div className="shimmer h-2.5 w-1/3 rounded-full" />
+                <div className="shimmer h-2 w-1/4 rounded-full" />
               </div>
             </div>
           ))}
         </div>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<Trash2 className="h-6 w-6" />}
+          title={trashItems.length === 0 ? 'Trash is empty' : 'Nothing matches that'}
+          body={
+            trashItems.length === 0
+              ? 'Deleted memories land here first — nothing is removed instantly.'
+              : 'Try another word, or clear the search.'
+          }
+        />
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((item) => {
+            const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - new Date(item.deleted_at).getTime()) / 86400000));
+            const thumb = item.files?.[0]?.thumbUrl;
+            return (
+              <div key={item.id} className="surface group flex items-center gap-3 p-2.5 transition hover:border-[var(--accent-amber)]/35">
+                <div className="shot h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[var(--border-subtle)]">
+                  {thumb ? (
+                    <img src={thumb} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-[var(--bg-surface)] text-[var(--text-muted)]">
+                      <ImageIcon className="h-4 w-4 opacity-60" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-semibold">{item.caption || 'Untitled memory'}</p>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
+                    <span>Deleted {relativeTime(item.deleted_at)}</span>
+                    <span aria-hidden>·</span>
+                    <span className={daysLeft <= 7 ? 'font-semibold text-rose-400' : ''}>
+                      {daysLeft} day{daysLeft === 1 ? '' : 's'} left
+                    </span>
+                    <span aria-hidden>·</span>
+                    <span className="font-mono">{shortDate(item.deleted_at)}</span>
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleRestore(item.id)}
+                    disabled={busyId === item.id}
+                    className="btn btn-soft btn-sm"
+                  >
+                    <RotateCcw className={`h-3 w-3 ${busyId === item.id ? 'animate-spin' : ''}`} /> Restore
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(item)}
+                    disabled={isDeleteProtected || busyId === item.id}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-rose-500/12 hover:text-rose-400 disabled:opacity-40"
+                    title={isDeleteProtected ? 'Locked in preview' : 'Delete forever'}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
+
+      <Modal open={Boolean(pendingDelete)} onClose={() => setPendingDelete(null)} size="sm" label="Delete forever">
+        <ModalHeader
+          icon={<AlertTriangle className="h-4 w-4" />}
+          eyebrow="Final step"
+          title="Delete forever?"
+          onClose={() => setPendingDelete(null)}
+        />
+        <div className="space-y-3 p-5">
+          <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+            “{pendingDelete?.caption || 'This memory'}” and its files will be removed from storage immediately. There is
+            no recovery after this.
+          </p>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPendingDelete(null)}>
+              Keep it
+            </button>
+            <button type="button" className="btn btn-danger btn-sm" onClick={handleDeleteForever}>
+              <Trash2 className="h-3.5 w-3.5" /> Delete forever
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

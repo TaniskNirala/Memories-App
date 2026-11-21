@@ -2,19 +2,16 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { FeedItem, SinglePostFeedItem, Group } from '../types/index.ts';
 import {
   Lock,
-  ChevronDown,
   Check,
   Sparkles,
   MessageSquare,
   Layers,
   Trash2,
-  MoreVertical,
+  MoreHorizontal,
   Calendar,
-  AlertTriangle,
   X,
   Flag,
   Share2,
-  Grid,
   Images,
   MapPin,
   ShieldAlert,
@@ -23,11 +20,19 @@ import {
   RefreshCw,
   Play,
   Maximize2,
+  PencilLine,
+  Users,
+  ArrowUpRight,
+  Eye,
+  Plus,
+  Grid,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 import { TgDeletedBadge } from './TgDeletedBadge.tsx';
+import { Avatar, Badge, Modal, ModalHeader, Dropdown, MenuItem, EmptyState, Dot } from './ui/kit.tsx';
+import { dayNumber, monthShort, monthYearLabel, relativeTime, accentFromName, plural } from '../lib/format.ts';
 
 interface TimelineFeedProps {
   items: FeedItem[];
@@ -376,6 +381,614 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
     </div>
   );
 };
+/* ---------------------------------------------------------------------------
+   Month rail marker — the anchor for each timeline block
+   --------------------------------------------------------------------------- */
+
+const MonthMarker: React.FC<{ label: string; count: number; people: number }> = ({ label, count, people }) => (
+  <div className="tl-month">
+    <span className="tl-month-pill">
+      <Calendar className="!h-6 !w-6" />
+      <span className="font-display text-[13px] leading-none">{label}</span>
+      <span className="ml-1 flex items-center gap-1.5 border-l border-[var(--border-subtle)] pl-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
+        {count} {count === 1 ? 'memory' : 'memories'}
+        <Dot />
+        {people} {people === 1 ? 'person' : 'people'}
+      </span>
+    </span>
+  </div>
+);
+
+/* ---------------------------------------------------------------------------
+   Day node that sits on the vertical rail
+   --------------------------------------------------------------------------- */
+
+const DayNode: React.FC<{ date?: string; color: string }> = ({ date, color }) => (
+  <div className="tl-dot" style={{ background: color, color }}>
+    <span className="sr-only">{date || 'memory'}</span>
+  </div>
+);
+
+/* ---------------------------------------------------------------------------
+   Post media area
+   --------------------------------------------------------------------------- */
+
+const MediaFrame: React.FC<{
+  item: SinglePostFeedItem;
+  onOpenViewer: TimelineFeedProps['onOpenViewer'];
+  onOpenComments: (item: FeedItem) => void;
+}> = ({ item, onOpenViewer, onOpenComments }) => (
+  <div className="group/media relative">
+    <PostCollage item={item} onOpenViewer={onOpenViewer} />
+
+    {/* hover affordance */}
+    <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-within/media:opacity-100">
+      <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
+        <Eye className="h-3 w-3" /> Tap to open
+      </span>
+      {item.files.length > 1 && (
+        <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
+          <Images className="h-3 w-3" /> {item.files.length}
+        </span>
+      )}
+    </div>
+
+    {/* quick actions */}
+    <div className="absolute bottom-3 left-3 flex items-center gap-1.5 opacity-0 transition-all duration-200 group-hover/media:translate-y-0 group-hover/media:opacity-100">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenComments(item);
+        }}
+        className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1.5 text-[10px] font-semibold text-white backdrop-blur-md transition hover:bg-black/70"
+      >
+        <MessageSquare className="h-3 w-3" /> {item.commentsCount || 'Comment'}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenViewer(item, 0, item.files.length > 1 ? 'grid' : 'expanded');
+        }}
+        className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1.5 text-[10px] font-semibold text-white backdrop-blur-md transition hover:bg-black/70"
+      >
+        <Maximize2 className="h-3 w-3" /> View
+      </button>
+    </div>
+  </div>
+);
+
+/* ---------------------------------------------------------------------------
+   Memory card (post)
+   --------------------------------------------------------------------------- */
+
+const MemoryCard: React.FC<{
+  item: SinglePostFeedItem;
+  groups: Group[];
+  selectedGroupId?: string;
+  open: boolean;
+  onToggleOptions: () => void;
+  onOpenViewer: TimelineFeedProps['onOpenViewer'];
+  onOpenComments: (item: FeedItem) => void;
+  onOpenCollection: (id: string) => void;
+  onShare: (item: FeedItem, groupId: string) => void;
+  sharing: boolean;
+  onEdit: () => void;
+  onConvert: () => void;
+  onPermissions: () => void;
+  onDelete: () => void;
+  onReport: () => void;
+  onRemoveFromCircle: (groupId: string) => void;
+  isDeleteProtected: boolean;
+  closeOptions: () => void;
+}> = ({
+  item,
+  groups,
+  selectedGroupId,
+  open,
+  onToggleOptions,
+  onOpenViewer,
+  onOpenComments,
+  onShare,
+  sharing,
+  onEdit,
+  onConvert,
+  onPermissions,
+  onDelete,
+  onReport,
+  onRemoveFromCircle,
+  isDeleteProtected,
+  closeOptions,
+}) => {
+  const { user } = useAuth();
+  const isOwner = user?.id === item.owner.id || item.isOwner;
+  const isAdmin = user?.role === 'admin';
+  const canManage = isOwner || isAdmin;
+  const accent = accentFromName(item.owner.displayName);
+  const placementNames = item.placements?.length
+    ? item.placements.map((p) => p.groupName).join(', ')
+    : 'Only me';
+
+  return (
+    <article className="tl-card card overflow-hidden">
+      {/* header */}
+      <div className="flex items-start justify-between gap-3 px-4 pt-4">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Avatar name={item.owner.displayName} color={item.owner.avatarColor} size={34} />
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-[12.5px] font-bold leading-tight">{item.owner.displayName}</span>
+              {item.isOwner && <Badge tone="amber">You</Badge>}
+            </div>
+            <div className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px] text-[var(--text-muted)]">
+              <span className="font-mono">@{item.owner.username}</span>
+              <Dot />
+              <span>{relativeTime(item.takenAt)}</span>
+              <Dot />
+              <span className="truncate font-medium" style={{ color: 'var(--accent-cyan)' }}>
+                {placementNames}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <Dropdown
+          width={252}
+          trigger={({ toggle }) => (
+            <button
+              type="button"
+              onClick={() => {
+                onToggleOptions();
+                toggle();
+              }}
+              aria-label="Memory options"
+              aria-expanded={open}
+              className="btn-icon !h-8 !w-8 shrink-0"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          )}
+        >
+          {({ close }) => (
+            <div className="space-y-0.5">
+              <MenuItem
+                icon={<Maximize2 className="h-3.5 w-3.5" />}
+                label="Open full view"
+                onClick={() => {
+                  close();
+                  closeOptions();
+                  onOpenViewer(item, 0, item.files.length > 1 ? 'grid' : 'expanded');
+                }}
+              />
+              <MenuItem
+                icon={<MessageSquare className="h-3.5 w-3.5" />}
+                label="Read comments"
+                hint={String(item.commentsCount || '')}
+                onClick={() => {
+                  close();
+                  closeOptions();
+                  onOpenComments(item);
+                }}
+              />
+              {canManage && (
+                <>
+                  <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                  <MenuItem
+                    icon={<PencilLine className="h-3.5 w-3.5" />}
+                    label="Edit date & caption"
+                    onClick={() => {
+                      close();
+                      closeOptions();
+                      onEdit();
+                    }}
+                  />
+                  <MenuItem
+                    icon={<Sparkles className="h-3.5 w-3.5" />}
+                    label="Convert to event"
+                    tone="accent"
+                    onClick={() => {
+                      close();
+                      closeOptions();
+                      onConvert();
+                    }}
+                  />
+                  <MenuItem
+                    icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
+                    label="Circles & permissions"
+                    onClick={() => {
+                      close();
+                      closeOptions();
+                      onPermissions();
+                    }}
+                  />
+                </>
+              )}
+              {canManage && (
+                <>
+                  <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                  <p className="px-2.5 pb-1 pt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                    Remove from circle
+                  </p>
+                  {item.placements?.length ? (
+                    item.placements.map((pl) => (
+                      <MenuItem
+                        key={pl.id || pl.groupId}
+                        icon={<X className="h-3.5 w-3.5" />}
+                        label={pl.groupName}
+                        onClick={() => {
+                          close();
+                          closeOptions();
+                          onRemoveFromCircle(pl.groupId);
+                        }}
+                      />
+                    ))
+                  ) : selectedGroupId ? (
+                    <MenuItem
+                      icon={<X className="h-3.5 w-3.5" />}
+                      label="This circle"
+                      onClick={() => {
+                        close();
+                        closeOptions();
+                        onRemoveFromCircle(selectedGroupId);
+                      }}
+                    />
+                  ) : (
+                    <p className="px-2.5 py-1 text-[10.5px] text-[var(--text-muted)]">Not shared with a circle</p>
+                  )}
+                </>
+              )}
+              {!isOwner && (
+                <MenuItem
+                  icon={<Flag className="h-3.5 w-3.5" />}
+                  label="Report this memory"
+                  onClick={() => {
+                    close();
+                    closeOptions();
+                    onReport();
+                  }}
+                />
+              )}
+              {canManage && (
+                <>
+                  <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                  {isDeleteProtected ? (
+                    <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
+                      <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> Delete is locked in preview
+                    </div>
+                  ) : (
+                    <MenuItem
+                      icon={<Trash2 className="h-3.5 w-3.5" />}
+                      label="Delete memory"
+                      tone="danger"
+                      onClick={() => {
+                        close();
+                        closeOptions();
+                        onDelete();
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </Dropdown>
+      </div>
+
+      {/* body */}
+      <div className="px-4 pb-1 pt-3">
+        {item.caption && (
+          <p className="mb-2.5 text-[13px] leading-relaxed text-[var(--text-primary)]">{item.caption}</p>
+        )}
+        <MediaFrame item={item} onOpenViewer={onOpenViewer} onOpenComments={onOpenComments} />
+      </div>
+
+      {/* footer */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-1">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onOpenComments(item)}
+            className="chip hover:text-[var(--text-primary)]"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-cyan)]" />
+            {item.commentsCount > 0 ? `${item.commentsCount} ${item.commentsCount === 1 ? 'comment' : 'comments'}` : 'Add a comment'}
+          </button>
+
+          <Dropdown
+            width={236}
+            align="left"
+            trigger={({ toggle }) => (
+              <button type="button" onClick={toggle} className="chip" disabled={sharing}>
+                {sharing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5 text-[var(--accent-amber)]" />}
+                {sharing ? 'Sharing…' : 'Share'}
+              </button>
+            )}
+          >
+            {({ close }) => (
+              <div className="space-y-0.5">
+                <p className="px-2.5 pb-1 pt-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                  Share into circle
+                </p>
+                {groups.length === 0 && (
+                  <p className="px-2.5 py-2 text-[11px] text-[var(--text-muted)]">No circles yet</p>
+                )}
+                {groups.map((g) => {
+                  const already = item.placements?.some((p) => p.groupId === g.id);
+                  return (
+                    <MenuItem
+                      key={g.id}
+                      icon={<Users className="h-3.5 w-3.5" />}
+                      label={g.name}
+                      hint={already ? '✓' : undefined}
+                      onClick={() => {
+                        close();
+                        onShare(item, g.id);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </Dropdown>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onOpenViewer(item, 0, item.files.length > 1 ? 'grid' : 'expanded')}
+          className="group flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[var(--text-muted)] transition hover:text-[var(--accent-amber)]"
+        >
+          Open
+          <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        </button>
+      </div>
+    </article>
+  );
+};
+
+/* ---------------------------------------------------------------------------
+   Event card (album)
+   --------------------------------------------------------------------------- */
+
+const EventCard: React.FC<{
+  item: Extract<FeedItem, { type: 'collection_card' }>;
+  onOpenCollection: (id: string) => void;
+  onOpenComments: (item: FeedItem) => void;
+  onConvert: () => void;
+  onPermissions: () => void;
+  onDelete: () => void;
+  onEditEvent: () => void;
+  open: boolean;
+  onToggleOptions: () => void;
+  closeOptions: () => void;
+  isDeleteProtected: boolean;
+  canManage: boolean;
+}> = ({
+  item,
+  onOpenCollection,
+  onOpenComments,
+  onConvert,
+  onPermissions,
+  onDelete,
+  onEditEvent,
+  open,
+  onToggleOptions,
+  closeOptions,
+  isDeleteProtected,
+  canManage,
+}) => {
+  const mosaic = item.mosaicUrls || [];
+  const layout =
+    mosaic.length <= 1
+      ? 'grid-cols-1'
+      : mosaic.length === 2
+        ? 'grid-cols-2'
+        : mosaic.length === 3
+          ? 'grid-cols-3'
+          : 'grid-cols-2';
+
+  return (
+    <article className="tl-card card overflow-hidden">
+      <div
+        onClick={() => onOpenCollection(item.id)}
+        className={`shot relative aspect-16/9 w-full cursor-pointer border-b border-[var(--border-subtle)] ${''}`}
+      >
+        <div className={`grid h-full w-full gap-1 ${layout}`}>
+          {mosaic.length > 0 ? (
+            mosaic.slice(0, 4).map((url, idx) => (
+              <div key={idx} className="relative h-full w-full overflow-hidden bg-[#0a0a12]">
+                <img
+                  src={url}
+                  alt={`${item.title} ${idx + 1}`}
+                  referrerPolicy="no-referrer"
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    if (!target.dataset.tried && url.includes('key=')) {
+                      target.dataset.tried = 'true';
+                      try {
+                        const key = new URL(url, window.location.origin).searchParams.get('key');
+                        if (key) target.src = `/api/storage/view?key=${encodeURIComponent(key)}`;
+                      } catch {}
+                    }
+                  }}
+                />
+                {idx === 3 && item.itemCount > 4 && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm font-bold text-white backdrop-blur-[1px]">
+                    +{item.itemCount - 3}
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="flex h-full w-full items-center justify-center gap-2 text-[11px] text-[var(--text-muted)]">
+              <Layers className="h-5 w-5 opacity-60" /> Event preview
+            </div>
+          )}
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between">
+          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md">
+            <Sparkles className="h-3 w-3 text-[var(--accent-amber)]" />
+            {item.isEvent ? 'Event' : 'Collection'}
+          </span>
+          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md">
+            <Images className="h-3 w-3" /> {item.itemCount}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <h3
+            onClick={() => onOpenCollection(item.id)}
+            className="group cursor-pointer font-display text-[15px] leading-snug transition hover:text-[var(--accent-amber)]"
+          >
+            {item.title}
+          </h3>
+
+          <Dropdown
+            width={244}
+            trigger={({ toggle }) => (
+              <button
+                type="button"
+                onClick={() => {
+                  onToggleOptions();
+                  toggle();
+                }}
+                aria-label="Event options"
+                aria-expanded={open}
+                className="btn-icon !h-8 !w-8 shrink-0"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            )}
+          >
+            {({ close }) => (
+              <div className="space-y-0.5">
+                <MenuItem
+                  icon={<Layers className="h-3.5 w-3.5" />}
+                  label="Open event"
+                  onClick={() => {
+                    close();
+                    closeOptions();
+                    onOpenCollection(item.id);
+                  }}
+                />
+                <MenuItem
+                  icon={<MessageSquare className="h-3.5 w-3.5" />}
+                  label="Event conversation"
+                  onClick={() => {
+                    close();
+                    closeOptions();
+                    onOpenComments(item);
+                  }}
+                />
+                {canManage && (
+                  <>
+                    <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                    <MenuItem
+                      icon={<PencilLine className="h-3.5 w-3.5" />}
+                      label="Edit event details"
+                      onClick={() => {
+                        close();
+                        closeOptions();
+                        onEditEvent();
+                      }}
+                    />
+                    {!item.isEvent && (
+                      <MenuItem
+                        icon={<Sparkles className="h-3.5 w-3.5" />}
+                        label="Convert to event"
+                        tone="accent"
+                        onClick={() => {
+                          close();
+                          closeOptions();
+                          onConvert();
+                        }}
+                      />
+                    )}
+                    <MenuItem
+                      icon={<SlidersHorizontal className="h-3.5 w-3.5" />}
+                      label="Circles & permissions"
+                      onClick={() => {
+                        close();
+                        closeOptions();
+                        onPermissions();
+                      }}
+                    />
+                    <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                    {isDeleteProtected ? (
+                      <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0" /> Delete is locked in preview
+                      </div>
+                    ) : (
+                      <MenuItem
+                        icon={<Trash2 className="h-3.5 w-3.5" />}
+                        label="Delete event"
+                        tone="danger"
+                        onClick={() => {
+                          close();
+                          closeOptions();
+                          onDelete();
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </Dropdown>
+        </div>
+
+        {item.description && (
+          <p className="mt-1.5 line-clamp-2 text-[11.5px] leading-relaxed text-[var(--text-secondary)]">
+            {item.description}
+          </p>
+        )}
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10.5px] text-[var(--text-muted)]">
+          {item.eventDate && (
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> {monthShort(item.eventDate)} {dayNumber(item.eventDate)}
+            </span>
+          )}
+          {item.eventPlace && (
+            <span className="flex items-center gap-1">
+              <MapPin className="h-3 w-3" /> {item.eventPlace}
+            </span>
+          )}
+          {item.attendeesCount > 0 && (
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3" /> {item.attendeesCount} attended
+            </span>
+          )}
+          <span className="flex items-center gap-1">
+            <Dot /> by {item.creator.displayName}
+          </span>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3">
+          <button type="button" onClick={() => onOpenComments(item)} className="chip">
+            <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-cyan)]" /> Conversation
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenCollection(item.id)}
+            className="group flex items-center gap-1 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[var(--text-muted)] transition hover:text-[var(--accent-amber)]"
+          >
+            View event
+            <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+};
+
+/* ---------------------------------------------------------------------------
+   Main timeline
+   --------------------------------------------------------------------------- */
 
 export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   items,
@@ -393,11 +1006,9 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   onResetFilters,
 }) => {
   const { user } = useAuth();
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [openOptionsMenuId, setOpenOptionsMenuId] = useState<string | null>(null);
   const [sharingLoadingId, setSharingLoadingId] = useState<string | null>(null);
 
-  // Modals state
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<FeedItem | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -417,77 +1028,59 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   const [permissionsItem, setPermissionsItem] = useState<FeedItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Delete protection capability
   const [isDeleteProtected, setIsDeleteProtected] = useState(true);
 
   useEffect(() => {
     apiFetch('/api/config')
       .then((r) => r.json())
       .then((cfg) => {
-        if (typeof cfg.isDeleteProtected === 'boolean') {
-          setIsDeleteProtected(cfg.isDeleteProtected);
-        }
+        if (typeof cfg.isDeleteProtected === 'boolean') setIsDeleteProtected(cfg.isDeleteProtected);
       })
       .catch(() => {});
   }, []);
 
-  // Dynamic Month & Year Grouping based on actual memory dates
-  const groupedSections = useMemo(() => {
-    const groupsMap = new Map<string, FeedItem[]>();
+  useEffect(() => {
+    if (!toastMessage) return;
+    const t = setTimeout(() => setToastMessage(null), 3200);
+    return () => clearTimeout(t);
+  }, [toastMessage]);
+
+  const dateOf = (item: FeedItem) =>
+    item.type === 'single_post' ? item.takenAt : item.eventDate || item.sortDate;
+
+  /* month sections, newest month first */
+  const sections = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; sort: number; items: FeedItem[] }>();
 
     for (const item of items) {
-      const rawDate = item.type === 'single_post' ? item.takenAt : (item.eventDate || item.sortDate);
-      let monthYear = 'Recent Memories';
-      if (rawDate) {
-        const d = new Date(rawDate);
-        if (!isNaN(d.getTime())) {
-          monthYear = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-        }
-      }
-
-      if (!groupsMap.has(monthYear)) {
-        groupsMap.set(monthYear, []);
-      }
-      groupsMap.get(monthYear)!.push(item);
+      const raw = item.type === 'single_post' ? item.takenAt : item.eventDate || item.sortDate;
+      const d = raw ? new Date(raw) : null;
+      const valid = d && !Number.isNaN(d.getTime());
+      const key = valid ? `${d!.getFullYear()}-${String(d!.getMonth()).padStart(2, '0')}` : 'undated';
+      const label = valid ? monthYearLabel(d) : 'Undated memories';
+      const sort = valid ? d!.getFullYear() * 12 + d!.getMonth() : -1;
+      if (!map.has(key)) map.set(key, { key, label, sort, items: [] });
+      map.get(key)!.items.push(item);
     }
 
-    return Array.from(groupsMap.entries()).map(([monthYear, groupItems]) => ({
-      monthYear,
-      items: groupItems,
-    }));
+    return Array.from(map.values()).sort((a, b) => b.sort - a.sort);
   }, [items]);
 
-  const formatTimelineDate = (dateStr?: string) => {
-    if (!dateStr) return '';
+  const quote = useMemo(() => {
+    const total = items.length;
+    const authors = new Set(
+      items.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))
+    );
+    return { total, authors: authors.size };
+  }, [items]);
+
+  const handleShareClick = async (item: FeedItem, targetGroupId: string) => {
+    setSharingLoadingId(item.id);
     try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return dateStr;
-      const day = d.getDate();
-      const month = d.toLocaleString('en-US', { month: 'short' });
-      const year = d.getFullYear();
-      const currentYear = new Date().getFullYear();
-      if (year !== currentYear) {
-        return `${day} ${month} ${year}`;
-      }
-      return `${day} ${month}`;
+      await onShareToGroup(item.id, item.type === 'single_post' ? 'post' : 'album', targetGroupId);
+      setToastMessage('Shared with the circle');
     } catch {
-      return dateStr;
-    }
-  };
-
-  const getDotColor = (authorName: string) => {
-    const name = authorName.toLowerCase();
-    if (name.includes('aarav')) return 'bg-sky-400 ring-sky-400/30';
-    if (name.includes('riya')) return 'bg-rose-400 ring-rose-400/30';
-    if (name.includes('kabir')) return 'bg-emerald-400 ring-emerald-400/30';
-    return 'bg-amber-400 ring-amber-400/30';
-  };
-
-  const handleShareClick = async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
-    setSharingLoadingId(itemId);
-    setOpenDropdownId(null);
-    try {
-      await onShareToGroup(itemId, itemType, targetGroupId);
+      setToastMessage('Could not share to that circle');
     } finally {
       setSharingLoadingId(null);
     }
@@ -498,15 +1091,12 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     setDeleteLoading(true);
     try {
       if (deleteConfirmItem.type === 'single_post') {
-        if (onDeletePost) {
-          await onDeletePost(deleteConfirmItem.id, permanent);
-        }
+        await onDeletePost?.(deleteConfirmItem.id, permanent);
       } else {
-        if (onDeleteAlbum) {
-          await onDeleteAlbum(deleteConfirmItem.id, permanent);
-        }
+        await onDeleteAlbum?.(deleteConfirmItem.id, permanent);
       }
       setDeleteConfirmItem(null);
+      setToastMessage(permanent ? 'Deleted permanently' : 'Moved to trash');
     } finally {
       setDeleteLoading(false);
     }
@@ -519,14 +1109,12 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
       const res = await apiFetch(`/api/posts/${editItem.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caption: editItem.caption,
-          takenAt: new Date(editItem.takenAt).toISOString(),
-        }),
+        body: JSON.stringify({ caption: editItem.caption, takenAt: new Date(editItem.takenAt).toISOString() }),
       });
       if (res.ok) {
         setEditItem(null);
-        if (onMemoryUpdated) onMemoryUpdated();
+        onMemoryUpdated?.();
+        setToastMessage('Memory updated');
       }
     } finally {
       setEditLoading(false);
@@ -552,7 +1140,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
           setReportItem(null);
           setReportSuccess(false);
           setReportReason('');
-        }, 1200);
+        }, 1400);
       }
     } finally {
       setReportLoading(false);
@@ -562,41 +1150,41 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   const handleRemoveFromCircle = async (item: FeedItem, groupId: string) => {
     const placement = item.placements?.find((p) => p.groupId === groupId);
     const circleName = placement?.groupName || groups.find((g) => g.id === groupId)?.name || 'circle';
-
-    // Optimistically update placement list locally
-    if (item.placements) {
-      item.placements = item.placements.filter((p) => p.groupId !== groupId);
-    }
+    if (item.placements) item.placements = item.placements.filter((p) => p.groupId !== groupId);
 
     try {
-      let res;
-      if (placement && placement.id) {
-        res = await apiFetch(`/api/placements/${placement.id}`, { method: 'DELETE' });
+      let res: Response | undefined;
+      if (placement && (placement as any).id) {
+        res = await apiFetch(`/api/placements/${(placement as any).id}`, { method: 'DELETE' });
       } else {
-        const itemType = item.type === 'single_post' ? 'post' : 'album';
         res = await apiFetch('/api/placements/remove-by-item', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ itemId: item.id, itemType, groupId }),
+          body: JSON.stringify({
+            itemId: item.id,
+            itemType: item.type === 'single_post' ? 'post' : 'album',
+            groupId,
+          }),
         });
       }
-
-      if (res && res.ok) {
-        setToastMessage(`Removed from "${circleName}"`);
-        setTimeout(() => setToastMessage(null), 3000);
-        if (onMemoryUpdated) {
-          onMemoryUpdated();
-        }
+      if (res?.ok) {
+        setToastMessage(`Removed from “${circleName}”`);
+        onMemoryUpdated?.();
       } else {
-        const errData = await res?.json().catch(() => ({}));
-        setToastMessage(errData?.error || `Failed to remove from "${circleName}"`);
-        setTimeout(() => setToastMessage(null), 3000);
+        const err = await res?.json().catch(() => ({}));
+        setToastMessage(err?.error || `Could not remove from “${circleName}”`);
       }
-    } catch (e: any) {
-      console.error('Failed to remove from circle', e);
-      setToastMessage('Error removing from circle');
-      setTimeout(() => setToastMessage(null), 3000);
+    } catch {
+      setToastMessage('Something went wrong removing that circle');
     }
+  };
+
+  const openConvert = (item: FeedItem) => {
+    const raw = item.type === 'single_post' ? item.takenAt : item.eventDate || item.sortDate;
+    setEventTitle(item.type === 'single_post' ? item.caption || 'Event memory' : item.title);
+    setEventDate(raw ? new Date(raw).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+    setEventPlace(item.type === 'collection_card' ? item.eventPlace || '' : '');
+    setConvertToEventItem(item);
   };
 
   const executeConvertToEvent = async (e: React.FormEvent) => {
@@ -604,753 +1192,416 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     if (!convertToEventItem) return;
     setConvertingLoading(true);
     try {
-      if (convertToEventItem.type === 'collection_card') {
-        const res = await apiFetch(`/api/albums/${convertToEventItem.id}/convert-to-event`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: eventTitle.trim() || convertToEventItem.title,
-            eventDate,
-            eventPlace,
-          }),
-        });
-        if (res.ok) {
-          setConvertToEventItem(null);
-          if (onMemoryUpdated) onMemoryUpdated();
-        }
-      } else {
-        const res = await apiFetch(`/api/posts/${convertToEventItem.id}/convert-to-event`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: eventTitle,
-            eventDate,
-            eventPlace,
-          }),
-        });
-        if (res.ok) {
-          setConvertToEventItem(null);
-          if (onMemoryUpdated) onMemoryUpdated();
-        }
+      const res =
+        convertToEventItem.type === 'collection_card'
+          ? await apiFetch(`/api/albums/${convertToEventItem.id}/convert-to-event`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title: eventTitle.trim() || convertToEventItem.title, eventDate, eventPlace }),
+            })
+          : await apiFetch(`/api/posts/${convertToEventItem.id}/convert-to-event`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title: eventTitle, eventDate, eventPlace }),
+            });
+      if (res.ok) {
+        setConvertToEventItem(null);
+        onMemoryUpdated?.();
+        setToastMessage('Memory turned into an event');
       }
-    } catch (err) {
-      console.error('Failed to convert to event:', err);
+    } catch {
+      setToastMessage('Could not convert this memory');
     } finally {
       setConvertingLoading(false);
     }
   };
 
   return (
-    <div className="tl-root">
-      {/* Floating Action Toast Notification */}
+    <div className="relative">
+      {/* toast */}
       {toastMessage && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-black/90 border border-amber-500/40 text-amber-300 text-xs font-semibold shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
+        <div className="fixed left-1/2 top-[74px] z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-card)]/95 px-4 py-2 text-[11.5px] font-semibold shadow-[var(--shadow-float)] backdrop-blur-xl fade-in">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+          {toastMessage}
         </div>
       )}
 
-      {/* Continuous vertical timeline rail line */}
-      <div className="tl-rail" aria-hidden="true" />
-
-      {/* Empty State */}
-      {items.length === 0 && (
-        <div className="p-8 text-center bg-[var(--bg-card)] rounded-2xl border border-[var(--border-color)] space-y-3 shadow-md">
-          {isFiltered ? (
-            <>
-              <p className="text-xs text-[var(--text-muted)] font-medium">
-                No memories match your search query or active filters.
-              </p>
-              {onResetFilters && (
-                <button
-                  onClick={onResetFilters}
-                  className="px-4 py-2 rounded-xl bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 transition active:scale-95 shadow-xs"
-                >
-                  Clear Filters
+      {items.length === 0 ? (
+        isFiltered ? (
+          <EmptyState
+            icon={<X className="h-6 w-6" />}
+            title="Nothing matches those filters"
+            body="Try a different person, tag or date window — or clear everything and go back to the full timeline."
+            action={
+              onResetFilters && (
+                <button type="button" onClick={onResetFilters} className="btn btn-primary btn-sm">
+                  Clear filters
                 </button>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="text-xs text-[var(--text-muted)] font-medium">No memories in this circle yet.</p>
-              <button
-                onClick={onOpenUpload}
-                className="px-4 py-2 rounded-xl bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 transition active:scale-95 shadow-xs"
-              >
-                Upload a Memory
+              )
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={<Sparkles className="h-6 w-6" />}
+            title="The timeline starts with you"
+            body="Drop in the first photo or clip. Once it lands, it takes its place on the rail with the date it was taken."
+            action={
+              <button type="button" onClick={onOpenUpload} className="btn btn-primary btn-sm">
+                <Plus className="h-3.5 w-3.5" /> Add a memory
               </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Grouped Month Sections */}
-      {groupedSections.map((section) => (
-        <div key={section.monthYear} className="space-y-6 mb-8">
-          {/* Dynamic Month Year Section Header */}
-          <div className="tl-month">
-            <span className="tl-month-pill font-display text-sm">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>
-              {section.monthYear}
+            }
+          />
+        )
+      ) : (
+        <>
+          {/* Timeline summary strip */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40 px-3.5 py-2">
+            <span className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+              <Layers className="h-3.5 w-3.5 text-[var(--accent-amber)]" />
+              {plural(quote.total, 'memory', 'memories')}
+              <Dot />
+              {plural(quote.authors, 'contributor')}
+              <Dot />
+              {plural(sections.length, 'chapter')}
+            </span>
+            <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
+              newest → oldest
             </span>
           </div>
 
-          {/* Items in this Month */}
-          <div className="space-y-6 tl-items">
-            {section.items.map((item) => {
-              const dateStr = item.type === 'single_post' ? item.takenAt : (item.eventDate || item.sortDate);
-              const author = item.type === 'single_post' ? item.owner : item.creator;
-              const authorName = author?.displayName || author?.username || 'User';
-              const mainFile = item.type === 'single_post' ? item.files[0] : null;
+          <div className="tl-root">
+            <div className="tl-rail" aria-hidden="true" />
 
-              const isOwner =
-                user?.id === author?.id ||
-                user?.id === (item as any)?.owner_id ||
-                user?.id === (item as any)?.creator_id;
-              const isAdmin = user?.role === 'admin';
-              const canDelete = isOwner || isAdmin;
-
-              // Resolve group name for header tag
-              const hasPlacements = item.placements && item.placements.length > 0;
-              const placementNames = hasPlacements
-                ? item.placements.map((p) => p.groupName).join(', ')
-                : 'Personal (Only You)';
+            {sections.map((section) => {
+              const people = new Set(
+                section.items.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))
+              ).size;
 
               return (
-                <div key={item.id} className="tl-item group">
-                  {/* Timeline Connector Dot */}
-                  <div
-                    className={`tl-dot ${getDotColor(authorName).split(" ")[0]}`}
-                  />
+                <section key={section.key} className="mb-9">
+                  <MonthMarker label={section.label} count={section.items.length} people={people} />
 
-                  {/* Card Container */}
-                  <div className="tl-card w-full rounded-3xl bg-[var(--bg-card)] border-2 border-[var(--border-color)] hover:border-[var(--accent-amber)] p-4 text-[var(--text-primary)] relative">
-                    {/* Header Meta & Options */}
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] font-medium truncate">
-                        <span>{formatTimelineDate(dateStr)}</span>
-                        <span className="font-semibold text-[var(--text-secondary)]">{authorName}</span>
-                        <span>in</span>
-                        <span className={hasPlacements ? "text-[var(--accent-cyan)] font-semibold truncate max-w-[150px] sm:max-w-[220px]" : "text-neutral-400 font-medium truncate max-w-[150px] sm:max-w-[220px]"}>
-                          {placementNames}
-                        </span>
-                      </div>
+                  <div className="tl-items space-y-6">
+                    {section.items.map((item) => {
+                      const accent =
+                        item.type === 'single_post'
+                          ? accentFromName(item.owner.displayName)
+                          : 'var(--accent-coral)';
+                      const dateStr = dateOf(item);
+                      const ownerId = item.type === 'single_post' ? item.owner.id : item.creator.id;
+                      const canManage = user?.id === ownerId || user?.role === 'admin';
 
-                      {/* Card Options Menu (Three Dots) */}
-                      <div className="relative shrink-0">
-                        <button
-                          onClick={() =>
-                            setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
-                          }
-                          aria-label="Memory options"
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
+                      return (
+                        <div key={item.id} className="tl-item">
+                          <DayNode date={dateStr} color={accent} />
 
-                        {openOptionsMenuId === item.id && (
-                          <div className="absolute right-0 top-8 w-52 p-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-2xl z-30 space-y-1 animate-in fade-in zoom-in-95 duration-100 text-xs">
-                            {/* Edit Date / Caption (for author or admin) */}
-                            {canDelete && item.type === 'single_post' && (
-                              <button
-                                onClick={() => {
-                                  setOpenOptionsMenuId(null);
+                          {/* Day chip above card — gives the rail a real rhythm */}
+                          <div className="mb-1.5 flex items-center gap-2 pl-0.5">
+                            <span
+                              className="inline-flex items-baseline gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold"
+                              style={{
+                                color: accent,
+                                borderColor: `color-mix(in oklab, ${accent} 32%, transparent)`,
+                                background: `color-mix(in oklab, ${accent} 10%, transparent)`,
+                              }}
+                            >
+                              <span className="text-[11px] font-bold">{dayNumber(dateStr)}</span>
+                              <span className="uppercase tracking-[0.1em]">{monthShort(dateStr)}</span>
+                            </span>
+                            {item.type === 'single_post' && item.files.length > 1 && (
+                              <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
+                                {item.files.length} media
+                              </span>
+                            )}
+                          </div>
+
+                          {item.type === 'single_post' ? (
+                            item.isLockedPlaceholder ? (
+                              <div className="card relative overflow-hidden p-5 text-center">
+                                <div className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-500/35 bg-amber-500/12 text-[var(--accent-amber)]">
+                                  <Lock className="h-5 w-5" />
+                                </div>
+                                <p className="font-display text-sm">Locked memory</p>
+                                <p className="mx-auto mt-1 max-w-xs text-[11px] leading-relaxed text-[var(--text-muted)]">
+                                  {item.lockedReason ||
+                                    `${item.owner.displayName} hasn’t approved sharing this into this circle yet.`}
+                                </p>
+                              </div>
+                            ) : (
+                              <MemoryCard
+                                item={item}
+                                groups={groups}
+                                selectedGroupId={selectedGroupId}
+                                open={openOptionsMenuId === item.id}
+                                onToggleOptions={() =>
+                                  setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
+                                }
+                                closeOptions={() => setOpenOptionsMenuId(null)}
+                                onOpenViewer={onOpenViewer}
+                                onOpenComments={onOpenComments}
+                                onOpenCollection={onOpenCollection}
+                                onShare={handleShareClick}
+                                sharing={sharingLoadingId === item.id}
+                                onEdit={() =>
                                   setEditItem({
                                     id: item.id,
                                     caption: item.caption || '',
                                     takenAt: item.takenAt
                                       ? new Date(item.takenAt).toISOString().slice(0, 10)
                                       : new Date().toISOString().slice(0, 10),
-                                  });
-                                }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-2 text-[var(--text-primary)]"
-                              >
-                                <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Edit Date & Caption</span>
-                              </button>
-                            )}
-
-                            {/* Convert Album or Post to Event */}
-                            {canDelete && (item.type === 'single_post' || (item.type === 'collection_card' && !item.isEvent)) && (
-                              <button
-                                onClick={() => {
-                                  setOpenOptionsMenuId(null);
-                                  const defaultTitle = item.type === 'single_post' ? (item.caption || 'Event Memory') : item.title;
-                                  const rawDate = item.type === 'single_post' ? item.takenAt : (item.eventDate || item.sortDate);
-                                  setEventTitle(defaultTitle);
-                                  setEventDate(rawDate ? new Date(rawDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
-                                  setEventPlace(item.type === 'collection_card' ? (item.eventPlace || '') : '');
-                                  setConvertToEventItem(item);
-                                }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-2 text-amber-300"
-                              >
-                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Convert to Event</span>
-                              </button>
-                            )}
-
-                            {/* Circles & Permissions Management */}
-                            {canDelete && (
-                              <button
-                                onClick={() => {
-                                  setOpenOptionsMenuId(null);
-                                  setPermissionsItem(item);
-                                }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] transition flex items-center gap-2 text-[var(--text-primary)]"
-                              >
-                                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Circles & Permissions</span>
-                              </button>
-                            )}
-
-                            {/* Direct Remove from Circle options */}
-                            {canDelete && (
-                              <div className="pt-1 mt-1 border-t border-[var(--border-color)] space-y-0.5">
-                                {item.placements && item.placements.length > 0 ? (
-                                  <>
-                                    <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] px-2 py-0.5 block tracking-wider">
-                                      Remove from Circle:
-                                    </span>
-                                    {item.placements.map((pl) => (
-                                      <button
-                                        key={pl.id || pl.groupId}
-                                        onClick={() => {
-                                          setOpenOptionsMenuId(null);
-                                          handleRemoveFromCircle(item, pl.groupId);
-                                        }}
-                                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/15 text-rose-400 transition flex items-center justify-between text-xs"
-                                        title={`Remove memory from ${pl.groupName}`}
-                                      >
-                                        <span className="truncate">Remove from {pl.groupName}</span>
-                                        <X className="w-3.5 h-3.5 shrink-0 ml-1.5 opacity-80" />
-                                      </button>
-                                    ))}
-                                  </>
-                                ) : selectedGroupId ? (
-                                  <button
-                                    onClick={() => {
-                                      setOpenOptionsMenuId(null);
-                                      handleRemoveFromCircle(item, selectedGroupId);
-                                    }}
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/15 text-rose-400 transition flex items-center justify-between text-xs"
-                                  >
-                                    <span className="truncate">Remove from this Circle</span>
-                                    <X className="w-3.5 h-3.5 shrink-0 ml-1.5 opacity-80" />
-                                  </button>
-                                ) : null}
-                              </div>
-                            )}
-
-                            {/* Deletion: Protected in preview; active on Render */}
-                            {canDelete && (
-                              isDeleteProtected ? (
-                                <div
-                                  className="px-2.5 py-1.5 text-[10px] text-amber-400 font-medium flex items-center gap-1.5 bg-amber-500/10 rounded-lg border border-amber-500/20"
-                                  title="Deletion is locked in AI Studio preview to safeguard your uploaded photos. Delete is fully operational on Render."
-                                >
-                                  <ShieldAlert className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                                  <span>Delete locked in preview</span>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => {
-                                    setOpenOptionsMenuId(null);
-                                    setDeleteConfirmItem(item);
-                                  }}
-                                  className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-400 transition flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  <span>{item.type === 'collection_card' ? 'Delete Event' : 'Delete Memory'}</span>
-                                </button>
-                              )
-                            )}
-
-                            {/* Report memory (for other circle members) */}
-                            {!isOwner && (
-                              <button
-                                onClick={() => {
-                                  setOpenOptionsMenuId(null);
-                                  setReportItem(item);
-                                }}
-                                className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[var(--bg-surface-elevated)] text-[var(--text-muted)] hover:text-amber-400 transition flex items-center gap-2"
-                              >
-                                <Flag className="w-3.5 h-3.5" />
-                                <span>Report inappropriate</span>
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Title */}
-                    <h3
-                      onClick={() => {
-                        if (item.type === 'single_post' && item.isLockedPlaceholder) return;
-                        if (item.type === 'collection_card') onOpenCollection(item.id);
-                        else if (item.type === 'single_post' && item.files.length > 1) onOpenViewer(item, 0, 'grid');
-                        else onOpenViewer(item, 0, 'expanded');
-                      }}
-                      className={`font-display font-bold text-base sm:text-lg text-[var(--text-primary)] mb-3 ${
-                        item.type === 'single_post' && item.isLockedPlaceholder
-                          ? 'cursor-default'
-                          : 'hover:text-amber-400 transition cursor-pointer'
-                      }`}
-                    >
-                      {item.type === 'single_post' ? item.caption || 'Memory' : item.title}
-                    </h3>
-
-                    {/* LOCKED PLACEHOLDER CASE */}
-                    {item.type === 'single_post' && item.isLockedPlaceholder ? (
-                      <div className="relative w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden bg-[#121226] border border-amber-500/40 p-6 flex flex-col items-center justify-center text-center space-y-2.5 mb-3 shadow-inner">
-                        <div className="w-11 h-11 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-sm">
-                          <Lock className="w-5 h-5" />
-                        </div>
-                        <div className="space-y-1 max-w-sm px-2">
-                          <span className="font-display font-bold text-sm text-amber-400 block">
-                            Locked Memory
-                          </span>
-                          <p className="text-xs text-neutral-300 leading-relaxed font-sans">
-                            {item.lockedReason || `${authorName} hasn't approved sharing this to this circle yet.`}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Media Display: Responsive Collage for Multi-Photos or Cover Mosaic */}
-                        {item.type === 'single_post' ? (
-                          <PostCollage item={item} onOpenViewer={onOpenViewer} />
-                        ) : (
-                          /* Collection cover collage / mosaic grid */
-                          <div
-                            onClick={() => onOpenCollection(item.id)}
-                            className={`w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden cursor-pointer mb-3 bg-neutral-950 border border-[var(--border-color)] relative ${
-                              !item.mosaicUrls || item.mosaicUrls.length <= 1
-                                ? 'flex'
-                                : item.mosaicUrls.length === 2
-                                ? 'grid grid-cols-2 gap-1.5'
-                                : item.mosaicUrls.length === 3
-                                ? 'grid grid-cols-3 gap-1.5'
-                                : 'grid grid-cols-2 gap-1.5'
-                            }`}
-                          >
-                            {item.mosaicUrls && item.mosaicUrls.length > 0 ? (
-                              item.mosaicUrls.slice(0, 4).map((mUrl, idx) => (
-                                <div key={idx} className="relative w-full h-full overflow-hidden bg-neutral-900 group/mosaic">
-                                  <img
-                                    src={mUrl}
-                                    alt={`Preview ${idx + 1}`}
-                                    referrerPolicy="no-referrer"
-                                    onError={(e) => {
-                                      const target = e.currentTarget;
-                                      if (!target.dataset.triedFallback && mUrl.includes('key=')) {
-                                        target.dataset.triedFallback = 'true';
-                                        try {
-                                          const keyParam = new URL(mUrl, window.location.origin).searchParams.get('key');
-                                          if (keyParam) target.src = `/api/storage/view?key=${encodeURIComponent(keyParam)}`;
-                                        } catch {}
-                                      }
-                                    }}
-                                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                                  />
-                                  {idx === 3 && item.itemCount > 4 && (
-                                    <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center font-bold text-white text-xs sm:text-sm">
-                                      +{item.itemCount - 3} photos
-                                    </div>
-                                  )}
-                                </div>
-                              ))
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-xs text-[var(--text-muted)]">
-                                <Calendar className="w-6 h-6 mr-1" />
-                                <span>Event Preview</span>
-                              </div>
-                            )}
-                            {item.itemCount > 1 && item.mosaicUrls && item.mosaicUrls.length === 1 && (
-                              <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur-md text-[11px] font-semibold text-white border border-white/10 flex items-center gap-1 shadow-md">
-                                <Images className="w-3.5 h-3.5 text-amber-400" />
-                                <span>{item.itemCount} Photos</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-
-                    {/* Footer Action Pills */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* Comments pill */}
-                        <button
-                          onClick={() => onOpenComments(item)}
-                          className="px-3 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium flex items-center gap-1.5 transition"
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 text-sky-400" />
-                          <span>Comments ({item.type === 'single_post' ? item.commentsCount : 0})</span>
-                        </button>
-
-                        {/* Open button for collections */}
-                        {item.type === 'collection_card' && (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => onOpenCollection(item.id)}
-                              className="px-3 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium transition cursor-pointer"
-                            >
-                              View Event
-                            </button>
-
-                            {!item.isEvent && (
-                              <button
-                                onClick={() => onOpenCollection(item.id)}
-                                className="px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500/15 to-rose-500/15 hover:from-amber-500/25 hover:to-rose-500/25 border border-amber-500/30 text-amber-300 font-medium transition flex items-center gap-1 cursor-pointer text-xs"
-                                title="Convert into an interactive event"
-                              >
-                                <Sparkles className="w-3 h-3 text-amber-400" />
-                                <span>Convert to Event</span>
-                              </button>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Share to a group dropdown button */}
-                        <div className="relative">
-                          <button
-                            onClick={() =>
-                              setOpenDropdownId(openDropdownId === item.id ? null : item.id)
-                            }
-                            disabled={sharingLoadingId === item.id}
-                            className="px-3 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-medium flex items-center gap-1 transition"
-                          >
-                            <Share2 className="w-3.5 h-3.5 text-amber-400" />
-                            <span>{sharingLoadingId === item.id ? 'Sharing...' : 'Share to a group'}</span>
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Dropdown Menu */}
-                          {openDropdownId === item.id && (
-                            <div className="absolute left-0 bottom-full mb-1 w-52 p-1.5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-xl shadow-2xl z-30 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)] px-2 py-1 block">
-                                Share into Circle:
-                              </span>
-                              {groups.map((g) => {
-                                const alreadyInGroup = item.placements?.some((p) => p.groupId === g.id);
-                                return (
-                                  <button
-                                    key={g.id}
-                                    onClick={() =>
-                                      handleShareClick(item.id, item.type === 'single_post' ? 'post' : 'album', g.id)
-                                    }
-                                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-[var(--bg-surface-elevated)] transition flex items-center justify-between text-[var(--text-primary)]"
-                                  >
-                                    <span className="truncate">{g.name}</span>
-                                    {alreadyInGroup && (
-                                      <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                                  })
+                                }
+                                onConvert={() => openConvert(item)}
+                                onPermissions={() => setPermissionsItem(item)}
+                                onDelete={() => setDeleteConfirmItem(item)}
+                                onReport={() => setReportItem(item)}
+                                onRemoveFromCircle={(gid) => handleRemoveFromCircle(item, gid)}
+                                isDeleteProtected={isDeleteProtected}
+                              />
+                            )
+                          ) : (
+                            <EventCard
+                              item={item}
+                              onOpenCollection={onOpenCollection}
+                              onOpenComments={onOpenComments}
+                              onConvert={() => openConvert(item)}
+                              onPermissions={() => setPermissionsItem(item)}
+                              onDelete={() => setDeleteConfirmItem(item)}
+                              onEditEvent={() => openConvert(item)}
+                              open={openOptionsMenuId === item.id}
+                              onToggleOptions={() =>
+                                setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
+                              }
+                              closeOptions={() => setOpenOptionsMenuId(null)}
+                              isDeleteProtected={isDeleteProtected}
+                              canManage={canManage}
+                            />
                           )}
                         </div>
-                      </div>
-
-                      {/* Direct Delete Button on Card (if owner or admin) */}
-                      {canDelete && (
-                        <button
-                          onClick={() => setDeleteConfirmItem(item)}
-                          title="Delete memory"
-                          className="px-2.5 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-rose-500/20 border border-[var(--border-color)] text-[var(--text-muted)] hover:text-rose-400 font-medium flex items-center gap-1 transition shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Delete</span>
-                        </button>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
-                </div>
+                </section>
               );
             })}
           </div>
-        </div>
-      ))}
-
-      {/* --- Delete Confirmation Modal --- */}
-      {deleteConfirmItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100">
-          <div className="w-full max-w-sm bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
-              <div className="flex items-center gap-2 text-rose-500 font-bold text-sm">
-                <Trash2 className="w-4 h-4" />
-                <span>Delete Memory</span>
-              </div>
-              <button
-                onClick={() => setDeleteConfirmItem(null)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-              How would you like to delete{' '}
-              <strong>"{deleteConfirmItem.type === 'single_post' ? deleteConfirmItem.caption || 'this memory' : deleteConfirmItem.title}"</strong>?
-            </p>
-
-            <div className="space-y-2 pt-1">
-              <button
-                onClick={() => executeDelete(false)}
-                disabled={deleteLoading}
-                className="w-full py-2.5 px-3 rounded-xl bg-[var(--bg-surface)] hover:bg-amber-500/20 border border-[var(--border-color)] text-xs text-left font-medium text-[var(--text-primary)] transition flex items-center justify-between"
-              >
-                <div>
-                  <span className="font-bold block text-amber-400">Move to Trash</span>
-                  <span className="text-[10px] text-[var(--text-muted)]">
-                    Safely recoverable for 30 days from your Trash Bin
-                  </span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => executeDelete(true)}
-                disabled={deleteLoading}
-                className="w-full py-2.5 px-3 rounded-xl bg-rose-600/15 hover:bg-rose-600/25 border border-rose-500/30 text-xs text-left font-medium text-rose-400 transition flex items-center justify-between"
-              >
-                <div>
-                  <span className="font-bold block text-rose-400">Delete Forever</span>
-                  <span className="text-[10px] text-rose-300/70">
-                    Permanently delete and remove photo files immediately
-                  </span>
-                </div>
-              </button>
-            </div>
-
-            <div className="pt-1 flex justify-end">
-              <button
-                onClick={() => setDeleteConfirmItem(null)}
-                className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
+        </>
       )}
 
-      {/* --- Edit Date & Caption Modal --- */}
-      {editItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100">
-          <div className="w-full max-w-sm bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
-              <div className="flex items-center gap-2 text-amber-500 font-bold text-sm">
-                <Calendar className="w-4 h-4" />
-                <span>Edit Memory Date & Caption</span>
-              </div>
-              <button
-                onClick={() => setEditItem(null)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* ------------------------------------------------------------ delete */}
+      <Modal
+        open={Boolean(deleteConfirmItem)}
+        onClose={() => !deleteLoading && setDeleteConfirmItem(null)}
+        size="sm"
+        label="Delete memory"
+      >
+        <ModalHeader
+          icon={<Trash2 className="h-4 w-4" />}
+          eyebrow="Remove"
+          title={deleteConfirmItem?.type === 'collection_card' ? 'Delete this event?' : 'Delete this memory?'}
+          onClose={() => !deleteLoading && setDeleteConfirmItem(null)}
+        />
+        <div className="space-y-2.5 p-5">
+          <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
+            “{deleteConfirmItem?.type === 'collection_card' ? deleteConfirmItem.title : deleteConfirmItem?.caption || 'This memory'}”
+          </p>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                  Date Taken
-                </label>
-                <input
-                  type="date"
-                  value={editItem.takenAt}
-                  onChange={(e) => setEditItem({ ...editItem, takenAt: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
-                />
-              </div>
+          <button
+            type="button"
+            onClick={() => executeDelete(false)}
+            disabled={deleteLoading}
+            className="flex w-full items-start gap-3 rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] px-3.5 py-3 text-left transition hover:border-[var(--accent-amber)]/50"
+          >
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--accent-amber)]" />
+            <span>
+              <span className="block text-[12px] font-bold">Move to trash</span>
+              <span className="block text-[10.5px] text-[var(--text-muted)]">Recoverable for 30 days</span>
+            </span>
+          </button>
 
-              <div>
-                <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                  Caption / Title
-                </label>
-                <textarea
-                  rows={2}
-                  value={editItem.caption}
-                  onChange={(e) => setEditItem({ ...editItem, caption: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
-                />
-              </div>
-            </div>
+          <button
+            type="button"
+            onClick={() => executeDelete(true)}
+            disabled={deleteLoading || isDeleteProtected}
+            className="flex w-full items-start gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/8 px-3.5 py-3 text-left transition hover:border-rose-500/45 disabled:opacity-50"
+          >
+            <X className="mt-0.5 h-4 w-4 shrink-0 text-rose-400" />
+            <span>
+              <span className="block text-[12px] font-bold text-rose-300">Delete forever</span>
+              <span className="block text-[10.5px] text-rose-300/70">
+                {isDeleteProtected ? 'Locked in preview' : 'Removes the files immediately'}
+              </span>
+            </span>
+          </button>
 
-            <div className="pt-2 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setEditItem(null)}
-                className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={executeEdit}
-                disabled={editLoading}
-                className="px-4 py-1.5 rounded-xl bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition"
-              >
-                {editLoading ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
+          <div className="flex justify-end pt-1">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDeleteConfirmItem(null)}>
+              Cancel
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* --- Report Inappropriate Modal --- */}
-      {reportItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100">
-          <div className="w-full max-w-sm bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
-              <div className="flex items-center gap-2 text-amber-500 font-bold text-sm">
-                <Flag className="w-4 h-4" />
-                <span>Report Memory</span>
-              </div>
-              <button
-                onClick={() => setReportItem(null)}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {reportSuccess ? (
-              <div className="py-4 text-center text-xs text-emerald-400 font-semibold space-y-1">
-                <Check className="w-6 h-6 mx-auto mb-1" />
-                <p>Report submitted to administrators. Thank you.</p>
-              </div>
-            ) : (
-              <>
-                <p className="text-xs text-[var(--text-secondary)]">
-                  Why should admins review this memory?
-                </p>
-                <textarea
-                  rows={3}
-                  value={reportReason}
-                  onChange={(e) => setReportReason(e.target.value)}
-                  placeholder="Inappropriate content, offensive, privacy concern..."
-                  className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
-                />
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => setReportItem(null)}
-                    className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={executeReport}
-                    disabled={reportLoading || !reportReason.trim()}
-                    className="px-4 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition"
-                  >
-                    {reportLoading ? 'Submitting...' : 'Submit Report'}
-                  </button>
-                </div>
-              </>
-            )}
+      {/* -------------------------------------------------------------- edit */}
+      <Modal open={Boolean(editItem)} onClose={() => !editLoading && setEditItem(null)} size="sm" label="Edit memory">
+        <ModalHeader
+          icon={<PencilLine className="h-4 w-4" />}
+          eyebrow="Edit"
+          title="Date & caption"
+          onClose={() => !editLoading && setEditItem(null)}
+        />
+        <div className="space-y-3 p-5">
+          <div>
+            <label className="label" htmlFor="memory-date">
+              Date taken
+            </label>
+            <input
+              id="memory-date"
+              type="date"
+              value={editItem?.takenAt || ''}
+              onChange={(e) => editItem && setEditItem({ ...editItem, takenAt: e.target.value })}
+              className="field"
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="memory-caption">
+              Caption
+            </label>
+            <textarea
+              id="memory-caption"
+              rows={3}
+              value={editItem?.caption || ''}
+              onChange={(e) => editItem && setEditItem({ ...editItem, caption: e.target.value })}
+              className="field resize-none"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditItem(null)} disabled={editLoading}>
+              Cancel
+            </button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={executeEdit} disabled={editLoading}>
+              {editLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+              {editLoading ? 'Saving…' : 'Save changes'}
+            </button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* --- Convert Memory / Album to Event Modal --- */}
-      {convertToEventItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-100">
-          <div className="w-full max-w-md bg-[#16162a] border border-[#2b2b52] rounded-3xl p-5 shadow-2xl space-y-4 text-white">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-              <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <span>
-                  {convertToEventItem.type === 'collection_card' ? 'Convert Album to Event' : 'Convert Memory to Event'}
-                </span>
-              </div>
-              <button
-                onClick={() => setConvertToEventItem(null)}
-                className="text-neutral-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
+      {/* ------------------------------------------------------------ report */}
+      <Modal open={Boolean(reportItem)} onClose={() => setReportItem(null)} size="sm" label="Report memory">
+        <ModalHeader
+          icon={<Flag className="h-4 w-4" />}
+          eyebrow="Trust & safety"
+          title="Report to admins"
+          onClose={() => setReportItem(null)}
+        />
+        <div className="p-5">
+          {reportSuccess ? (
+            <div className="py-6 text-center">
+              <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-400" />
+              <p className="text-[12px] font-semibold text-emerald-300">Report submitted. Thank you.</p>
             </div>
-
-            <p className="text-xs text-neutral-300 leading-relaxed">
-              Transform this {convertToEventItem.type === 'collection_card' ? 'album' : 'memory'} into an official Event with guest attendance check-ins and shared guest memory notes.
-            </p>
-
-            <form onSubmit={executeConvertToEvent} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-neutral-300 mb-1">
-                  Event Title
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={eventTitle}
-                  onChange={(e) => setEventTitle(e.target.value)}
-                  placeholder="e.g. Summer Family Picnic, Birthday Celebration"
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-amber-400" /> Event Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-neutral-300 mb-1 flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-rose-400" /> Location / Place
-                  </label>
-                  <input
-                    type="text"
-                    value={eventPlace}
-                    onChange={(e) => setEventPlace(e.target.value)}
-                    placeholder="e.g. Central Park"
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white placeholder-neutral-500 focus:outline-hidden focus:ring-1 focus:ring-amber-400"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setConvertToEventItem(null)}
-                  className="px-3 py-1.5 rounded-lg text-xs text-neutral-400 hover:text-white transition"
-                >
+          ) : (
+            <>
+              <label className="label" htmlFor="report-reason">
+                What should admins look at?
+              </label>
+              <textarea
+                id="report-reason"
+                rows={3}
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Inappropriate content, privacy concern, accidental upload…"
+                className="field resize-none"
+              />
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setReportItem(null)}>
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  disabled={convertingLoading}
-                  className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-white text-xs font-semibold hover:opacity-95 disabled:opacity-40 transition shadow-md flex items-center gap-1.5"
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={executeReport}
+                  disabled={reportLoading || !reportReason.trim()}
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>{convertingLoading ? 'Converting...' : 'Convert to Event'}</span>
+                  {reportLoading ? 'Submitting…' : 'Submit report'}
                 </button>
               </div>
-            </form>
-          </div>
+            </>
+          )}
         </div>
-      )}
+      </Modal>
 
-      {/* Viewing Permissions Modal (Circles Management) */}
+      {/* ----------------------------------------------------------- convert */}
+      <Modal open={Boolean(convertToEventItem)} onClose={() => setConvertToEventItem(null)} size="md" label="Convert to event">
+        <ModalHeader
+          icon={<Sparkles className="h-4 w-4" />}
+          eyebrow="Elevate"
+          title={convertToEventItem?.type === 'collection_card' ? 'Turn collection into event' : 'Turn memory into event'}
+          subtitle="Events get attendance, a place and shared guest notes."
+          onClose={() => setConvertToEventItem(null)}
+        />
+        <form onSubmit={executeConvertToEvent} className="space-y-3 p-5">
+          <div>
+            <label className="label" htmlFor="event-title">
+              Event title
+            </label>
+            <input
+              id="event-title"
+              required
+              value={eventTitle}
+              onChange={(e) => setEventTitle(e.target.value)}
+              placeholder="Sunday lake picnic"
+              className="field"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label flex items-center gap-1.5" htmlFor="event-date">
+                <Calendar className="h-3 w-3" /> Date
+              </label>
+              <input
+                id="event-date"
+                type="date"
+                required
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+                className="field"
+              />
+            </div>
+            <div>
+              <label className="label flex items-center gap-1.5" htmlFor="event-place">
+                <MapPin className="h-3 w-3" /> Place
+              </label>
+              <input
+                id="event-place"
+                value={eventPlace}
+                onChange={(e) => setEventPlace(e.target.value)}
+                placeholder="Lakeside park"
+                className="field"
+              />
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setConvertToEventItem(null)}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={convertingLoading}>
+              <Sparkles className="h-3.5 w-3.5" />
+              {convertingLoading ? 'Converting…' : 'Convert to event'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* --------------------------------------------------------- permissions */}
       {permissionsItem && (
         <ViewingPermissionsModal
           item={permissionsItem}
           isOpen={Boolean(permissionsItem)}
           onClose={() => setPermissionsItem(null)}
           groups={groups}
-          onPermissionsUpdated={() => {
-            if (onMemoryUpdated) onMemoryUpdated();
-          }}
+          onPermissionsUpdated={() => onMemoryUpdated?.()}
         />
       )}
     </div>

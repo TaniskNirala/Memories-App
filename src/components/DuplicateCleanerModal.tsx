@@ -226,10 +226,10 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="w-full max-w-2xl bg-[#16162a] border border-[#2b2b52] rounded-3xl shadow-2xl p-5 text-white playful-card relative flex flex-col max-h-[92vh]">
+    <div className="scrim z-60">
+      <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] p-5 text-white relative flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#2b2b52]">
+        <div className="flex items-center justify-between pb-3 border-b border-[var(--border-color)]">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-2xl bg-amber-500/20 border border-amber-500/30 text-amber-400 flex items-center justify-center shadow-xs">
               <Copy className="w-4 h-4" />
@@ -238,7 +238,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
               <h3 className="font-display font-bold text-base text-white flex items-center gap-2">
                 Duplicate Photo Cleaner
               </h3>
-              <p className="text-[11px] text-neutral-400">
+              <p className="text-[11px] text-[var(--text-muted)]">
                 Identify and clean identical photos to keep your memory vault tidy
               </p>
             </div>
@@ -248,14 +248,14 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
             <button
               onClick={fetchDuplicates}
               disabled={loading}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white transition"
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] hover:text-white transition"
               title="Refresh duplicate scan"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-white/10 text-neutral-400 hover:text-white transition"
+              className="p-1.5 rounded-full hover:bg-white/10 text-[var(--text-muted)] hover:text-white transition"
             >
               <X className="w-4 h-4" />
             </button>
@@ -286,10 +286,10 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
         </div>
 
         {/* Summary Card */}
-        <div className="mt-3 p-3.5 rounded-2xl bg-[#1e1e38] border border-[#2b2b52] flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="mt-3 p-3.5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-4">
             <div>
-              <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider">
+              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block tracking-wider">
                 Duplicate Sets
               </span>
               <span className="font-display font-bold text-lg text-amber-400">
@@ -298,7 +298,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
             </div>
             <div className="h-8 w-px bg-white/10" />
             <div>
-              <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider">
+              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block tracking-wider">
                 Copies Found
               </span>
               <span className="font-display font-bold text-lg text-rose-400">
@@ -307,7 +307,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
             </div>
             <div className="h-8 w-px bg-white/10" />
             <div>
-              <span className="text-[10px] uppercase font-bold text-neutral-400 block tracking-wider">
+              <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block tracking-wider">
                 Reclaimable
               </span>
               <span className="font-display font-bold text-lg text-emerald-400">
@@ -350,7 +350,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
               onChange={(e) => setMergePlacements(e.target.checked)}
               className="rounded accent-amber-500 cursor-pointer"
             />
-            <label htmlFor="mergePlacements" className="text-neutral-300 text-[11px] cursor-pointer">
+            <label htmlFor="mergePlacements" className="text-[var(--text-secondary)] text-[11px] cursor-pointer">
               Merge friend circle permissions so no friends lose access to the kept memory
             </label>
           </div>
@@ -360,17 +360,17 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
         {/* Duplicate Groups List */}
         <div className="flex-1 overflow-y-auto my-3 space-y-4 pr-1">
           {loading && duplicateGroups.length === 0 ? (
-            <div className="py-16 text-center text-neutral-400 space-y-2">
+            <div className="py-16 text-center text-[var(--text-muted)] space-y-2">
               <RefreshCw className="w-7 h-7 animate-spin mx-auto text-amber-400" />
               <p className="text-xs">Scanning memories for duplicate photos...</p>
             </div>
           ) : duplicateGroups.length === 0 ? (
-            <div className="py-16 text-center text-neutral-400 space-y-3">
+            <div className="py-16 text-center text-[var(--text-muted)] space-y-3">
               <div className="w-14 h-14 rounded-3xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
                 <CheckCircle2 className="w-7 h-7" />
               </div>
               <h4 className="font-bold text-white text-sm">No duplicate photos detected!</h4>
-              <p className="text-xs text-neutral-400 max-w-sm mx-auto">
+              <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
                 Your memory timeline is clean and perfectly organized. When you upload photos, duplicate detection will prevent accidental double-uploads.
               </p>
             </div>
@@ -385,17 +385,17 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
               return (
                 <div
                   key={group.matchKey}
-                  className="p-3.5 rounded-2xl bg-[#1e1e38] border border-[#2b2b52] space-y-3"
+                  className="p-3.5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] space-y-3"
                 >
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-[10px]">
                         Group #{groupIdx + 1}
                       </span>
-                      <span className="text-neutral-300 font-medium">
+                      <span className="text-[var(--text-secondary)] font-medium">
                         {group.fileCount} Identical Copies
                       </span>
-                      <span className="text-[10px] text-neutral-400 font-mono">
+                      <span className="text-[10px] text-[var(--text-muted)] font-mono">
                         ({formatBytes(group.fileSize)} each • saves {formatBytes(group.wastedBytes)})
                       </span>
                     </div>
@@ -466,7 +466,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
                               <p className="font-semibold text-white line-clamp-1">
                                 {file.caption || 'Untitled Memory'}
                               </p>
-                              <div className="flex items-center gap-1 text-[10px] text-neutral-400 mt-0.5">
+                              <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)] mt-0.5">
                                 <Calendar className="w-3 h-3 shrink-0" />
                                 <span>{new Date(file.takenAt).toLocaleDateString()}</span>
                               </div>
@@ -475,7 +475,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
                                   {file.placements.map((p) => (
                                     <span
                                       key={p.id}
-                                      className="px-1.5 py-0.2 rounded bg-white/10 text-[9px] text-neutral-300 font-mono"
+                                      className="px-1.5 py-0.2 rounded bg-white/10 text-[9px] text-[var(--text-secondary)] font-mono"
                                     >
                                       {p.name}
                                     </span>
@@ -491,7 +491,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
                                 className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition ${
                                   isOldest
                                     ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-                                    : 'bg-white/10 text-neutral-300 hover:bg-white/20'
+                                    : 'bg-white/10 text-[var(--text-secondary)] hover:bg-white/20'
                                 }`}
                               >
                                 Keep this version
@@ -509,8 +509,8 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="pt-3 border-t border-[#2b2b52] flex items-center justify-between">
-          <span className="text-[11px] text-neutral-400">
+        <div className="pt-3 border-t border-[var(--border-color)] flex items-center justify-between">
+          <span className="text-[11px] text-[var(--text-muted)]">
             Deleted duplicate photos are safely archived to Trash
           </span>
           <button

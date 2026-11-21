@@ -1,4 +1,4 @@
-import { getStorageAdapter } from './index.ts';
+import { getStorageAdapter, isTelegramKey } from './index.ts';
 import { queryOne, queryAll, run } from '../db.ts';
 import crypto from 'crypto';
 
@@ -32,7 +32,7 @@ export async function repairPostFileKeys(): Promise<number> {
       let newStorageKey = f.storage_key;
       let newThumbKey = f.thumb_key;
 
-      if (f.storage_key) {
+      if (f.storage_key && !isTelegramKey(f.storage_key)) {
         const resolved = await storage.resolveKey(f.storage_key);
         if (resolved && resolved !== f.storage_key) {
           newStorageKey = resolved;
@@ -40,7 +40,7 @@ export async function repairPostFileKeys(): Promise<number> {
         }
       }
 
-      if (f.thumb_key) {
+      if (f.thumb_key && !isTelegramKey(f.thumb_key)) {
         const resolvedThumb = await storage.resolveKey(f.thumb_key);
         if (resolvedThumb && resolvedThumb !== f.thumb_key) {
           newThumbKey = resolvedThumb;

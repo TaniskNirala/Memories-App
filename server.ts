@@ -9,8 +9,8 @@ import { getDb } from './server/db.ts';
 import { seedDatabase } from './server/seed.ts';
 import { authMiddleware } from './server/middleware/auth.ts';
 import { LocalDiskStorageAdapter } from './server/storage/local.ts';
-import { getStorageAdapter } from './server/storage/index.ts';
-import { syncStorageToDatabase } from './server/storage/sync.ts';
+import { getStorageAdapter, isTelegramKey } from './server/storage/index.ts';
+import { repairPostFileKeys } from './server/storage/sync.ts';
 import { isDeleteProtected } from './server/config.ts';
 
 // Routers
@@ -33,7 +33,7 @@ const __dirname = path.dirname(__filename);
 
 export async function createApp() {
   await getDb();
-  await syncStorageToDatabase().catch((e) => console.warn('Storage sync notice:', e));
+  await repairPostFileKeys().catch((e) => console.warn('Storage key repair notice:', e));
 
   const app = express();
 
@@ -128,6 +128,7 @@ export async function createApp() {
       // Allow cross-origin and canvas image access unconditionally
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
 
       // Normalize key (resolve encoded slashes and strip redundant uploads prefix)
       let cleanKey = rawKey.trim();
@@ -141,6 +142,13 @@ export async function createApp() {
         }
       }
       cleanKey = cleanKey.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
+
+      // 0. Route Telegram keys (tg:<file_id>/... and tgmsg:<msg_id>/...) with full HTTP 206 Range support
+      const storage = getStorageAdapter();
+      if (isTelegramKey(cleanKey) && storage.streamToResponse) {
+        const handled = await storage.streamToResponse(cleanKey, req, res);
+        if (handled) return;
+      }
 
       // 1. Try local disk paths
       let targetPath = localStorageAdapter.getFilePath(cleanKey);
@@ -228,17 +236,43 @@ export async function createApp() {
         else if (ext === '.webp') mimeType = 'image/webp';
         else if (ext === '.svg') mimeType = 'image/svg+xml';
         else if (ext === '.mp4') mimeType = 'video/mp4';
+        else if (ext === '.webm') mimeType = 'video/webm';
+        else if (ext === '.mov') mimeType = 'video/quicktime';
         else if (ext === '.mp3') mimeType = 'audio/mpeg';
 
         const stat = fs.statSync(targetPath);
         res.setHeader('Content-Type', mimeType);
-        res.setHeader('Content-Length', stat.size);
+        res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Cache-Control', 'public, max-age=86400');
+
+        const rangeHeader = req.headers.range;
+        if (rangeHeader) {
+          const m = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+          if (m && (m[1] !== '' || m[2] !== '')) {
+            let start = 0;
+            let end = stat.size - 1;
+            if (m[1] === '') {
+              start = Math.max(0, stat.size - parseInt(m[2], 10));
+            } else {
+              start = parseInt(m[1], 10);
+              if (m[2] !== '') end = Math.min(parseInt(m[2], 10), stat.size - 1);
+            }
+            if (start < stat.size && start <= end) {
+              res.status(206);
+              res.setHeader('Content-Range', `bytes ${start}-${end}/${stat.size}`);
+              res.setHeader('Content-Length', end - start + 1);
+              return fs.createReadStream(targetPath, { start, end }).pipe(res);
+            }
+            res.setHeader('Content-Range', `bytes */${stat.size}`);
+            return res.status(416).end();
+          }
+        }
+
+        res.setHeader('Content-Length', stat.size);
         return fs.createReadStream(targetPath).pipe(res);
       }
 
       // 2. Try S3 / Backblaze B2 storage adapter via streaming pipe
-      const storage = getStorageAdapter();
       if (storage.getObjectStream) {
         const streamObj = await storage.getObjectStream(cleanKey);
         if (streamObj && streamObj.stream) {
@@ -357,9 +391,18 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Kinfolk Memories server listening on http://0.0.0.0:${PORT}`);
   });
+
+  const gracefulShutdown = async () => {
+    try {
+      await getStorageAdapter().disconnect?.();
+    } catch {}
+    server.close(() => process.exit(0));
+  };
+  process.once('SIGTERM', gracefulShutdown);
+  process.once('SIGINT', gracefulShutdown);
 }
 
 // Only start when executed directly as main script

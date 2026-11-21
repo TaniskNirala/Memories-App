@@ -1,47 +1,147 @@
-import { StorageAdapter } from './types.ts';
+import { StorageAdapter, StorageCapabilities } from './types.ts';
 import { LocalDiskStorageAdapter } from './local.ts';
 import { S3StorageAdapter, S3Config } from './s3.ts';
+import { TelegramStorageAdapter } from './telegram.ts';
+import { HybridTelegramB2Adapter } from './hybrid.ts';
 
 let adapterInstance: StorageAdapter | null = null;
 
-export function getStorageAdapter(): StorageAdapter {
-  if (adapterInstance) return adapterInstance;
+function hasTelegramCredentials(): boolean {
+  const hasChat = Boolean(process.env.TELEGRAM_CHAT_ID?.trim());
+  const hasBot = Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim() && hasChat);
+  const hasEmbeddedMtproto = Boolean(
+    process.env.TELEGRAM_API_ID?.trim() &&
+      process.env.TELEGRAM_API_HASH?.trim() &&
+      process.env.TELEGRAM_SESSION?.trim() &&
+      hasChat
+  );
+  const hasExternalMtproto = Boolean(process.env.TELEGRAM_MTPROTO_SERVER_URL?.trim());
+  return hasBot || hasEmbeddedMtproto || hasExternalMtproto;
+}
 
-  const backend = (process.env.STORAGE_BACKEND || 'local').toLowerCase();
+function createS3FallbackAdapter(): S3StorageAdapter | null {
+  const bucket = process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME || '';
+  const accessKeyId =
+    process.env.S3_ACCESS_KEY_ID ||
+    process.env.B2_ACCESS_KEY_ID ||
+    process.env.B2_APPLICATION_KEY_ID ||
+    process.env.B2_KEY_ID ||
+    '';
+  const secretAccessKey =
+    process.env.S3_SECRET_ACCESS_KEY ||
+    process.env.B2_SECRET_ACCESS_KEY ||
+    process.env.B2_APPLICATION_KEY ||
+    '';
 
-  const isCloudStorage =
+  if (!bucket || !accessKeyId || !secretAccessKey) {
+    return null;
+  }
+
+  const config: S3Config = {
+    endpoint: process.env.S3_ENDPOINT || process.env.B2_ENDPOINT,
+    region: process.env.S3_REGION || process.env.B2_REGION || 'auto',
+    bucket,
+    accessKeyId,
+    secretAccessKey,
+    publicUrl: process.env.S3_PUBLIC_URL || process.env.B2_PUBLIC_URL,
+  };
+  return new S3StorageAdapter(config);
+}
+
+export function isCloudStorageBackend(): boolean {
+  const backend = (process.env.STORAGE_BACKEND || '').toLowerCase().trim();
+  if (backend === 'local') return false;
+  if (backend === 'telegram' || backend === 'tg') return true;
+  if (backend === 's3' || backend === 'r2' || backend === 'b2' || backend === 'backblaze') return true;
+  if (hasTelegramCredentials()) return true;
+  return Boolean(process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME);
+}
+
+export function getStorageCapabilities(): StorageCapabilities {
+  const adapter = getStorageAdapter();
+  if (adapter.getCapabilities) {
+    return adapter.getCapabilities();
+  }
+  const backend = (process.env.STORAGE_BACKEND || 'local').toLowerCase().trim();
+  const isS3 =
     backend === 's3' ||
     backend === 'r2' ||
     backend === 'b2' ||
     backend === 'backblaze' ||
-    Boolean(process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME);
+    (backend !== 'local' && Boolean(process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME));
 
-  if (isCloudStorage) {
-    const config: S3Config = {
-      endpoint: process.env.S3_ENDPOINT || process.env.B2_ENDPOINT,
-      region: process.env.S3_REGION || process.env.B2_REGION || 'auto',
-      bucket: process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME || '',
-      accessKeyId:
-        process.env.S3_ACCESS_KEY_ID ||
-        process.env.B2_ACCESS_KEY_ID ||
-        process.env.B2_APPLICATION_KEY_ID ||
-        process.env.B2_KEY_ID ||
-        '',
-      secretAccessKey:
-        process.env.S3_SECRET_ACCESS_KEY ||
-        process.env.B2_SECRET_ACCESS_KEY ||
-        process.env.B2_APPLICATION_KEY ||
-        '',
-      publicUrl: process.env.S3_PUBLIC_URL || process.env.B2_PUBLIC_URL,
+  if (isS3) {
+    return {
+      backend: 's3',
+      mode: 'Backblaze B2 / S3 Cloud',
+      maxFileSizeBytes: 500 * 1024 * 1024,
+      maxFileSizeLabel: '500 MB',
+      botApiEnabled: false,
+      mtprotoEnabled: false,
+      mtprotoMode: 'none',
+      customBotApiUrl: false,
+      b2FallbackEnabled: false,
+      archiveOnDelete: false,
     };
-    adapterInstance = new S3StorageAdapter(config);
-  } else {
-    adapterInstance = new LocalDiskStorageAdapter();
   }
 
+  return {
+    backend: 'local',
+    mode: 'Local Disk Storage',
+    maxFileSizeBytes: 500 * 1024 * 1024,
+    maxFileSizeLabel: '500 MB',
+    botApiEnabled: false,
+    mtprotoEnabled: false,
+    mtprotoMode: 'none',
+    customBotApiUrl: false,
+    b2FallbackEnabled: false,
+    archiveOnDelete: false,
+  };
+}
+
+export function getStorageAdapter(): StorageAdapter {
+  if (adapterInstance) return adapterInstance;
+
+  const backend = (process.env.STORAGE_BACKEND || '').toLowerCase().trim();
+  const telegramExplicit = backend === 'telegram' || backend === 'tg';
+  const s3Explicit = backend === 's3' || backend === 'r2' || backend === 'b2' || backend === 'backblaze';
+  const localExplicit = backend === 'local';
+
+  // Prefer Telegram when explicitly set OR when Telegram credentials exist and another backend wasn't forced
+  if (telegramExplicit || (!s3Explicit && !localExplicit && hasTelegramCredentials())) {
+    const telegramAdapter = new TelegramStorageAdapter({
+      botToken: process.env.TELEGRAM_BOT_TOKEN,
+      chatId: process.env.TELEGRAM_CHAT_ID,
+      botApiBaseUrl: process.env.TELEGRAM_API_BASE_URL,
+      apiId: process.env.TELEGRAM_API_ID ? parseInt(process.env.TELEGRAM_API_ID, 10) : undefined,
+      apiHash: process.env.TELEGRAM_API_HASH,
+      session: process.env.TELEGRAM_SESSION,
+      mtprotoServerUrl: process.env.TELEGRAM_MTPROTO_SERVER_URL,
+    });
+
+    const b2Fallback = createS3FallbackAdapter();
+    adapterInstance = new HybridTelegramB2Adapter(telegramAdapter, b2Fallback);
+    const caps = adapterInstance.getCapabilities!();
+    console.log(
+      `🚀 [Storage] Initialized ${caps.mode} (Max file: ${caps.maxFileSizeLabel}${caps.b2FallbackEnabled ? ', Backblaze B2 read fallback active' : ''})`
+    );
+    return adapterInstance;
+  }
+
+  if (s3Explicit || (!localExplicit && Boolean(process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME))) {
+    const s3 = createS3FallbackAdapter();
+    if (s3) {
+      adapterInstance = s3;
+      return adapterInstance;
+    }
+  }
+
+  adapterInstance = new LocalDiskStorageAdapter();
   return adapterInstance;
 }
 
 export * from './types.ts';
 export * from './local.ts';
 export * from './s3.ts';
+export * from './telegram.ts';
+export * from './hybrid.ts';

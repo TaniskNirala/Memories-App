@@ -5,7 +5,7 @@ import fs from 'fs';
 import multer from 'multer';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved, requireAdmin } from '../middleware/auth.ts';
-import { getStorageAdapter } from '../storage/index.ts';
+import { getStorageAdapter, getStorageCapabilities, isCloudStorageBackend, isTelegramKey } from '../storage/index.ts';
 import { syncStorageToDatabase } from '../storage/sync.ts';
 import { isDeleteProtected } from '../config.ts';
 
@@ -36,11 +36,83 @@ const diskStorage = multer.diskStorage({
 
 const upload = multer({
   storage: diskStorage,
-  limits: { fileSize: 1024 * 1024 * 500 }, // 500 MB limit
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB limit for MTProto Telegram video support
 });
+
+// Active SSE upload progress listeners keyed by uploadId (NotaForge two-phase progress)
+const uploadProgressClients = new Map<string, any>();
+
+function emitUploadProgress(uploadId: string | null, pct: number): void {
+  if (!uploadId) return;
+  const clientRes = uploadProgressClients.get(uploadId);
+  if (clientRes && !clientRes.writableEnded) {
+    try {
+      clientRes.write(`data: ${Math.min(100, Math.max(0, Math.round(pct)))}\n\n`);
+    } catch {}
+  }
+}
+
+function emitUploadDone(uploadId: string | null): void {
+  if (!uploadId) return;
+  const clientRes = uploadProgressClients.get(uploadId);
+  if (clientRes && !clientRes.writableEnded) {
+    try {
+      clientRes.write(`event: done\ndata: 100\n\n`);
+      clientRes.end();
+    } catch {}
+  }
+  uploadProgressClients.delete(uploadId);
+}
+
+function computeFileSha256(filePath: string): Promise<string> {
+  return new Promise((resolve) => {
+    try {
+      const hash = crypto.createHash('sha256');
+      const stream = fs.createReadStream(filePath);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
+      stream.on('error', () => resolve(''));
+    } catch {
+      resolve('');
+    }
+  });
+}
 
 export const postsRouter = Router();
 postsRouter.use(requireApproved);
+
+// Expose active storage capabilities (max file size, dual-lane status) for upload validation
+postsRouter.get('/storage-capabilities', (_req: AuthenticatedRequest, res) => {
+  res.json(getStorageCapabilities());
+});
+
+// SSE endpoint streaming server -> Telegram upload progress (Phase 2: 30-100% on client)
+postsRouter.get('/upload-progress/:uploadId', (req: AuthenticatedRequest, res) => {
+  const uploadId = String(req.params.uploadId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64);
+  if (!uploadId) {
+    return res.status(400).json({ error: 'Invalid uploadId' });
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders?.();
+
+  uploadProgressClients.set(uploadId, res);
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded) {
+      try {
+        res.write(':heartbeat\n\n');
+      } catch {}
+    }
+  }, 20000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    uploadProgressClients.delete(uploadId);
+  });
+});
 
 // Helper to check if a user can view a post
 export function canUserViewPost(
@@ -123,48 +195,87 @@ postsRouter.post(
     { name: 'thumb', maxCount: 1 },
   ]),
   async (req: AuthenticatedRequest, res) => {
-    try {
-      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-      const mainFile = files?.file?.[0];
-      const thumbFile = files?.thumb?.[0];
+    const uploadId = typeof req.query.uploadId === 'string' ? req.query.uploadId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) : null;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    const mainFile = files?.file?.[0];
+    const thumbFile = files?.thumb?.[0];
 
+    try {
       if (!mainFile) {
         return res.status(400).json({ error: 'No main file received' });
       }
 
+      const caps = getStorageCapabilities();
+      if (mainFile.size > caps.maxFileSizeBytes) {
+        fs.unlink(mainFile.path, () => {});
+        if (thumbFile) fs.unlink(thumbFile.path, () => {});
+        return res.status(413).json({
+          error: `File exceeds the active ${caps.maxFileSizeLabel} limit (${caps.mode}).`,
+        });
+      }
+
       const userId = req.user!.id;
-      const mainStorageKey = `posts/${userId}/${mainFile.filename}`;
-      const thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
+      let mainStorageKey = `posts/${userId}/${mainFile.filename}`;
+      let thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
 
-      // Compute SHA-256 checksum for duplicate detection
-      let checksum = '';
-      try {
-        const fileBuf = fs.readFileSync(mainFile.path);
-        checksum = crypto.createHash('sha256').update(fileBuf).digest('hex');
-      } catch {}
+      // Compute SHA-256 checksum via stream (safe for multi-GB videos)
+      const checksum = await computeFileSha256(mainFile.path);
 
-      // If cloud storage backend is configured, sync uploaded buffers to cloud safely
+      // Sync uploaded media to active cloud backend (Telegram Dual-Lane or Backblaze B2 / S3)
       const storage = getStorageAdapter();
-      const backend = (process.env.STORAGE_BACKEND || '').toLowerCase();
-      const isCloud =
-        backend === 's3' ||
-        backend === 'r2' ||
-        backend === 'b2' ||
-        backend === 'backblaze' ||
-        Boolean(process.env.S3_BUCKET || process.env.B2_BUCKET || process.env.B2_BUCKET_NAME);
+      const isCloud = isCloudStorageBackend();
 
       if (isCloud && storage.putObject) {
         try {
-          const fileBuf = fs.readFileSync(mainFile.path);
-          await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype);
-          if (thumbFile) {
+          // For Telegram MTProto large files (>15 MB), pass disk path directly to avoid loading GBs into RAM
+          const isLargeFile = mainFile.size > 15 * 1024 * 1024;
+          const fileBuf = isLargeFile && caps.backend === 'telegram' ? Buffer.alloc(0) : fs.readFileSync(mainFile.path);
+
+          const returnedMainKey = await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype, {
+            filePath: mainFile.path,
+            fileName: mainFile.originalname || mainFile.filename,
+            fileSize: mainFile.size,
+            onProgress: (pct) => emitUploadProgress(uploadId, pct),
+          });
+          if (typeof returnedMainKey === 'string' && returnedMainKey.length > 0) {
+            mainStorageKey = returnedMainKey;
+          }
+
+          // Smart thumbnail handling: skip redundant Telegram thumbnail upload for already-small photos (<250 KB)
+          const shouldUploadThumb =
+            Boolean(thumbFile) &&
+            (caps.backend !== 'telegram' || mainFile.size >= 250 * 1024 || mainFile.mimetype.startsWith('video'));
+
+          if (thumbFile && shouldUploadThumb) {
             const thumbBuf = fs.readFileSync(thumbFile.path);
-            await storage.putObject(thumbStorageKey, thumbBuf, thumbFile.mimetype);
+            const returnedThumbKey = await storage.putObject(thumbStorageKey, thumbBuf, thumbFile.mimetype, {
+              filePath: thumbFile.path,
+              fileName: thumbFile.originalname || thumbFile.filename,
+              fileSize: thumbFile.size,
+            });
+            if (typeof returnedThumbKey === 'string' && returnedThumbKey.length > 0) {
+              thumbStorageKey = returnedThumbKey;
+            }
+          } else {
+            thumbStorageKey = mainStorageKey;
+          }
+
+          // Clean up temporary multer files once safely stored in Telegram (small images are cached in tg-cache)
+          if (isTelegramKey(mainStorageKey)) {
+            fs.unlink(mainFile.path, () => {});
+            if (thumbFile) fs.unlink(thumbFile.path, () => {});
           }
         } catch (cloudErr: any) {
+          if (caps.backend === 'telegram') {
+            fs.unlink(mainFile.path, () => {});
+            if (thumbFile) fs.unlink(thumbFile.path, () => {});
+            throw new Error(cloudErr?.message || 'Failed to upload file to Telegram storage');
+          }
           console.error('⚠️ Cloud storage sync warning (file safely saved on disk):', cloudErr.message);
         }
       }
+
+      emitUploadDone(uploadId);
 
       const fileType = mainFile.mimetype.startsWith('video')
         ? 'video'
@@ -187,6 +298,7 @@ postsRouter.post(
         checksum,
       });
     } catch (err: any) {
+      if (uploadId) uploadProgressClients.delete(uploadId);
       console.error('File upload error:', err);
       res.status(500).json({ error: err.message || 'File upload failed' });
     }
@@ -505,20 +617,47 @@ postsRouter.put(
         return res.status(400).json({ error: 'No edited photo received' });
       }
 
-      const mainStorageKey = `posts/${userId}/${mainFile.filename}`;
-      const thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
+      let mainStorageKey = `posts/${userId}/${mainFile.filename}`;
+      let thumbStorageKey = thumbFile ? `posts/${userId}/${thumbFile.filename}` : mainStorageKey;
 
       const storage = getStorageAdapter();
-      const backend = process.env.STORAGE_BACKEND;
-      if (backend === 's3' || backend === 'r2') {
+      const caps = getStorageCapabilities();
+      if (isCloudStorageBackend() && storage.putObject) {
         try {
           const fileBuf = fs.readFileSync(mainFile.path);
-          await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype);
-          if (thumbFile) {
+          const returnedMainKey = await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype, {
+            filePath: mainFile.path,
+            fileName: mainFile.originalname || mainFile.filename,
+            fileSize: mainFile.size,
+          });
+          if (typeof returnedMainKey === 'string' && returnedMainKey.length > 0) {
+            mainStorageKey = returnedMainKey;
+          }
+
+          if (thumbFile && (caps.backend !== 'telegram' || mainFile.size >= 250 * 1024)) {
             const thumbBuf = fs.readFileSync(thumbFile.path);
-            await storage.putObject(thumbStorageKey, thumbBuf, thumbFile.mimetype);
+            const returnedThumbKey = await storage.putObject(thumbStorageKey, thumbBuf, thumbFile.mimetype, {
+              filePath: thumbFile.path,
+              fileName: thumbFile.originalname || thumbFile.filename,
+              fileSize: thumbFile.size,
+            });
+            if (typeof returnedThumbKey === 'string' && returnedThumbKey.length > 0) {
+              thumbStorageKey = returnedThumbKey;
+            }
+          } else {
+            thumbStorageKey = mainStorageKey;
+          }
+
+          if (isTelegramKey(mainStorageKey)) {
+            fs.unlink(mainFile.path, () => {});
+            if (thumbFile) fs.unlink(thumbFile.path, () => {});
           }
         } catch (cloudErr: any) {
+          if (caps.backend === 'telegram') {
+            fs.unlink(mainFile.path, () => {});
+            if (thumbFile) fs.unlink(thumbFile.path, () => {});
+            throw new Error(cloudErr?.message || 'Failed to upload edited photo to Telegram');
+          }
           console.error('Cloud storage sync warning:', cloudErr.message);
         }
       }

@@ -12,6 +12,11 @@ import {
 } from 'lucide-react';
 import exifr from 'exifr';
 import { apiFetch } from '../context/AuthContext.tsx';
+import {
+  fetchStorageCapabilities,
+  uploadFileWithProgress,
+  StorageCapabilitiesResponse,
+} from '../utils/uploadWithProgress.ts';
 
 interface AddPhotosToAlbumModalProps {
   isOpen: boolean;
@@ -41,6 +46,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [storageCaps, setStorageCaps] = useState<StorageCapabilitiesResponse | null>(null);
 
   // Library picker state (for curated collections)
   const [libraryPosts, setLibraryPosts] = useState<any[]>([]);
@@ -60,6 +66,9 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
       setIsDragOver(false);
       setSelectedPostIds([]);
       setActiveTab('upload');
+      fetchStorageCapabilities().then((caps) => {
+        if (caps) setStorageCaps(caps);
+      });
 
       if (target.type === 'collection') {
         fetchLibraryPosts();
@@ -91,9 +100,21 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
   };
 
   const processIncomingFiles = async (files: File[]) => {
-    const valid = files.filter(
+    const media = files.filter(
       (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
     );
+    if (media.length === 0) return;
+
+    let valid = media;
+    if (storageCaps && storageCaps.maxFileSizeBytes > 0) {
+      const oversized = media.filter((f) => f.size > storageCaps.maxFileSizeBytes);
+      if (oversized.length > 0) {
+        valid = media.filter((f) => f.size <= storageCaps.maxFileSizeBytes);
+        setErrorMessage(
+          `${oversized.length} file(s) skipped because they exceed the current ${storageCaps.maxFileSizeLabel} upload limit (${oversized[0].name}).`
+        );
+      }
+    }
     if (valid.length === 0) return;
 
     const newItems: QueuedItem[] = valid.map((f) => ({
@@ -279,29 +300,31 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
         setUploadProgress(10 + Math.round(((i + 1) / queue.length) * 20));
       }
 
-      // 2. Upload blobs via direct multipart upload
+      // 2. Upload blobs via direct multipart upload with live two-phase progress
       const uploadedFilesInfo = [];
       for (let i = 0; i < preparedList.length; i++) {
         const item = preparedList[i];
+        const payloadBlob = item.mainBlob || item.file;
+        if (storageCaps && storageCaps.maxFileSizeBytes > 0 && payloadBlob.size > storageCaps.maxFileSizeBytes) {
+          throw new Error(`"${item.file.name}" exceeds the ${storageCaps.maxFileSizeLabel} limit`);
+        }
+
         const formData = new FormData();
-        formData.append('file', item.mainBlob || item.file, item.file.name);
+        formData.append('file', payloadBlob, item.file.name);
         if (item.thumbBlob) {
           formData.append('thumb', item.thumbBlob, `thumb_${item.file.name}`);
         }
         formData.append('width', String(item.width || 1200));
         formData.append('height', String(item.height || 800));
 
-        const res = await apiFetch('/api/posts/upload-file', {
-          method: 'POST',
-          body: formData,
+        const data = await uploadFileWithProgress(formData, {
+          useTwoPhaseSse: storageCaps?.backend === 'telegram',
+          onProgress: (pct) => {
+            const overall = 20 + Math.round(((i + pct / 100) / preparedList.length) * 70);
+            setUploadProgress(Math.min(95, overall));
+          },
         });
 
-        if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson.error || `Failed to upload photo #${i + 1}`);
-        }
-
-        const data = await res.json();
         uploadedFilesInfo.push({
           storageKey: data.storageKey,
           thumbKey: data.thumbKey || data.storageKey,
@@ -312,7 +335,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
           height: data.height || item.height,
         });
 
-        setUploadProgress(20 + Math.round(((i + 1) / preparedList.length) * 65));
+        setUploadProgress(20 + Math.round(((i + 1) / preparedList.length) * 70));
       }
 
       // 4. Register to target
@@ -506,7 +529,9 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
                     {isDragOver ? 'Drop photos to add!' : 'Drag & drop photos here, or click to browse'}
                   </p>
                   <p className="text-[11px] text-[var(--text-muted)] mt-0.5">
-                    Ultra-HD 4K quality preserved • Direct addition to this event
+                    {storageCaps
+                      ? `Original quality preserved • Up to ${storageCaps.maxFileSizeLabel} per file`
+                      : 'Ultra-HD 4K quality preserved • Direct addition to this event'}
                   </p>
                 </div>
               </div>

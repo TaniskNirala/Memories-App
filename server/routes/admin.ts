@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync } from '../db.ts';
-import { saveTursoCredentials } from '../tursoSync.ts';
+import { saveTursoCredentials, flushTursoWrites } from '../tursoSync.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
-import { getStorageAdapter } from '../storage/index.ts';
+import { getStorageAdapter, getStorageCapabilities } from '../storage/index.ts';
 import { syncStorageToDatabase, repairPostFileKeys } from '../storage/sync.ts';
 
 export const adminRouter = Router();
@@ -104,6 +104,61 @@ adminRouter.post('/db-config', async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// Read-only storage backend diagnostics (never exposes secrets or tokens)
+adminRouter.get('/storage-status', (_req: AuthenticatedRequest, res) => {
+  const capabilities = getStorageCapabilities();
+  const tgCountRow = queryOne<{ count: number }>(
+    "SELECT COUNT(*) as count FROM post_files WHERE storage_key LIKE 'tg:%' OR storage_key LIKE 'tgmsg:%'"
+  );
+  const legacyCountRow = queryOne<{ count: number }>(
+    "SELECT COUNT(*) as count FROM post_files WHERE storage_key NOT LIKE 'tg:%' AND storage_key NOT LIKE 'tgmsg:%'"
+  );
+  res.json({
+    ...capabilities,
+    telegramFileCount: tgCountRow?.count || 0,
+    legacyFileCount: legacyCountRow?.count || 0,
+  });
+});
+
+// Live storage connectivity test (verifies Telegram Bot API, MTProto channel, and B2 fallback)
+adminRouter.post('/storage-test', async (_req: AuthenticatedRequest, res) => {
+  try {
+    const storage = getStorageAdapter();
+    if (storage.testConnection) {
+      const result = await storage.testConnection();
+      return res.json({
+        ...result,
+        capabilities: getStorageCapabilities(),
+      });
+    }
+
+    const caps = getStorageCapabilities();
+    if (caps.backend === 's3' && storage.listObjects) {
+      const keys = await storage.listObjects('');
+      return res.json({
+        ok: true,
+        summary: `Connected to ${caps.mode} (${keys.length} object(s) found).`,
+        lanes: { b2Fallback: { enabled: true, ok: true, objectCount: keys.length } },
+        capabilities: caps,
+      });
+    }
+
+    return res.json({
+      ok: true,
+      summary: `Using ${caps.mode}.`,
+      lanes: {},
+      capabilities: caps,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      ok: false,
+      summary: err?.message || 'Storage connection test failed',
+      lanes: {},
+      capabilities: getStorageCapabilities(),
+    });
+  }
+});
+
 // Sync past uploads from cloud storage into database
 adminRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
   try {
@@ -114,14 +169,43 @@ adminRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
   }
 });
 
+// Clear all feed posts, memories, and collections from database and cloud (keeps users & circles intact)
+adminRouter.post('/clear-feed', async (_req: AuthenticatedRequest, res) => {
+  try {
+    run('PRAGMA foreign_keys = OFF');
+    run('DELETE FROM comments');
+    run('DELETE FROM reactions');
+    run('DELETE FROM post_files');
+    run('DELETE FROM album_items');
+    run('DELETE FROM event_attendance');
+    run('DELETE FROM event_notes');
+    run("DELETE FROM item_groups WHERE item_type IN ('post', 'album')");
+    run('DELETE FROM posts');
+    run('DELETE FROM albums');
+    run('PRAGMA foreign_keys = ON');
+
+    await flushTursoWrites().catch(() => {});
+
+    res.json({
+      success: true,
+      message: 'All feed posts, memories, and collections cleared. Users and circles preserved.',
+    });
+  } catch (err: any) {
+    console.error('Error during clear-feed:', err);
+    res.status(500).json({ error: err.message || 'Failed to clear feed' });
+  }
+});
+
 // Purge all past uploaded files from cloud/local storage and wipe all posts/albums/comments from database
 adminRouter.post('/purge-all-data', async (_req: AuthenticatedRequest, res) => {
   try {
     const storage = getStorageAdapter();
     let deletedFiles = 0;
+    let purgeNote: string | undefined;
     if (storage.purgeAllObjects) {
       const result = await storage.purgeAllObjects();
       deletedFiles = result.deleted;
+      purgeNote = result.note;
     }
 
     // Wipe all media posts, files, albums, comments, reactions from database
@@ -137,9 +221,13 @@ adminRouter.post('/purge-all-data', async (_req: AuthenticatedRequest, res) => {
     run('DELETE FROM albums');
     run('PRAGMA foreign_keys = ON');
 
+    await flushTursoWrites().catch(() => {});
+
     res.json({
       success: true,
-      message: `Permanently deleted ${deletedFiles} file(s) from storage bucket and cleared all posts and collections from the database.`,
+      message: purgeNote
+        ? `Cleared all feed posts and collections (${deletedFiles} local cache file(s) removed). ${purgeNote}`
+        : `Permanently deleted ${deletedFiles} file(s) from storage bucket and cleared all posts and collections from the database.`,
       deletedFiles,
     });
   } catch (err: any) {

@@ -18,9 +18,11 @@ import {
   RefreshCw,
   Database,
   Download,
+  HardDrive,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
+import { StorageCapabilitiesResponse } from '../utils/uploadWithProgress.ts';
 
 export const AdminPanel: React.FC = () => {
   const { user, isAdmin } = useAuth();
@@ -53,6 +55,8 @@ export const AdminPanel: React.FC = () => {
   const [syncLoading, setSyncLoading] = useState(false);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [purgeLoading, setPurgeLoading] = useState(false);
+  const [showClearFeedConfirm, setShowClearFeedConfirm] = useState(false);
+  const [clearFeedLoading, setClearFeedLoading] = useState(false);
   const [dbStatus, setDbStatus] = useState<{
     isTursoSynced: boolean;
     tursoConfigured: boolean;
@@ -71,6 +75,22 @@ export const AdminPanel: React.FC = () => {
   const [customTursoToken, setCustomTursoToken] = useState('');
   const [saveCredLoading, setSaveCredLoading] = useState(false);
 
+  // Read-only Storage diagnostics state (credentials are strictly server env-only)
+  const [storageStatus, setStorageStatus] = useState<
+    (StorageCapabilitiesResponse & { telegramFileCount: number; legacyFileCount: number }) | null
+  >(null);
+  const [showStorageModal, setShowStorageModal] = useState(false);
+  const [storageTestLoading, setStorageTestLoading] = useState(false);
+  const [storageTestResult, setStorageTestResult] = useState<{
+    ok: boolean;
+    summary: string;
+    lanes?: {
+      botApi?: { enabled: boolean; ok: boolean; botUsername?: string; channelTitle?: string; customServer?: boolean; error?: string };
+      mtproto?: { enabled: boolean; mode: 'embedded' | 'external'; ok: boolean; connected?: boolean; channelTitle?: string; error?: string };
+      b2Fallback?: { enabled: boolean; ok: boolean; objectCount?: number; error?: string };
+    };
+  } | null>(null);
+
   const fetchDbStatus = async () => {
     try {
       const res = await apiFetch('/api/admin/db-status');
@@ -79,6 +99,38 @@ export const AdminPanel: React.FC = () => {
         setDbStatus(data);
       }
     } catch {}
+  };
+
+  const fetchStorageStatus = async () => {
+    try {
+      const res = await apiFetch('/api/admin/storage-status');
+      if (res.ok) {
+        const data = await res.json();
+        setStorageStatus(data);
+      }
+    } catch {}
+  };
+
+  const handleTestStorageConnection = async () => {
+    setStorageTestLoading(true);
+    setStorageTestResult(null);
+    try {
+      const res = await apiFetch('/api/admin/storage-test', { method: 'POST' });
+      const data = await res.json().catch(() => ({ ok: false, summary: 'Invalid server response' }));
+      setStorageTestResult(data);
+      if (data.ok) {
+        setActionToast({ message: data.summary || 'Storage connection verified!', type: 'success' });
+      } else {
+        setActionToast({ message: data.summary || 'Storage connection check reported an issue', type: 'error' });
+      }
+      fetchStorageStatus();
+    } catch (e: any) {
+      const msg = e.message || 'Failed to test storage connection';
+      setStorageTestResult({ ok: false, summary: msg });
+      setActionToast({ message: msg, type: 'error' });
+    } finally {
+      setStorageTestLoading(false);
+    }
   };
 
   const handleManualDbSync = async () => {
@@ -158,6 +210,7 @@ export const AdminPanel: React.FC = () => {
 
   useEffect(() => {
     fetchDbStatus();
+    fetchStorageStatus();
   }, []);
 
   const handlePurgeAllData = async () => {
@@ -171,6 +224,8 @@ export const AdminPanel: React.FC = () => {
           type: 'success',
         });
         setShowPurgeConfirm(false);
+        fetchDbStatus();
+        fetchStorageStatus();
       } else {
         setActionToast({ message: data.error || 'Failed to purge data', type: 'error' });
       }
@@ -178,6 +233,29 @@ export const AdminPanel: React.FC = () => {
       setActionToast({ message: e.message || 'Error purging data', type: 'error' });
     } finally {
       setPurgeLoading(false);
+    }
+  };
+
+  const handleClearFeed = async () => {
+    setClearFeedLoading(true);
+    try {
+      const res = await apiFetch('/api/admin/clear-feed', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setActionToast({
+          message: data.message || 'All feed posts and collections cleared. Users and circles preserved.',
+          type: 'success',
+        });
+        setShowClearFeedConfirm(false);
+        fetchDbStatus();
+        fetchStorageStatus();
+      } else {
+        setActionToast({ message: data.error || 'Failed to clear feed', type: 'error' });
+      }
+    } catch (e: any) {
+      setActionToast({ message: e.message || 'Error clearing feed', type: 'error' });
+    } finally {
+      setClearFeedLoading(false);
     }
   };
 
@@ -439,25 +517,73 @@ export const AdminPanel: React.FC = () => {
               <span>{dbStatus.isTursoSynced ? 'Turso Cloud Synced' : dbStatus.tursoConfigured ? 'Turso Sync Status' : 'Local SQLite'}</span>
             </button>
           )}
+          {storageStatus && (
+            <button
+              type="button"
+              onClick={() => {
+                setStorageTestResult(null);
+                setShowStorageModal(true);
+                fetchStorageStatus();
+              }}
+              className={`text-[10px] px-2.5 py-0.5 rounded-full font-medium border flex items-center gap-1.5 transition cursor-pointer hover:opacity-85 ${
+                storageStatus.backend === 'telegram'
+                  ? 'bg-sky-500/10 border-sky-500/30 text-sky-400'
+                  : storageStatus.backend === 's3'
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  : 'bg-neutral-800 border-neutral-700 text-neutral-400'
+              }`}
+              title="Click to view media storage diagnostics & run live connection test"
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  storageStatus.backend === 'telegram'
+                    ? 'bg-sky-400 animate-pulse'
+                    : storageStatus.backend === 's3'
+                    ? 'bg-emerald-400'
+                    : 'bg-neutral-400'
+                }`}
+              />
+              <span>
+                {storageStatus.backend === 'telegram'
+                  ? storageStatus.mtprotoEnabled && storageStatus.botApiEnabled
+                    ? `Telegram Dual-Lane (${storageStatus.maxFileSizeLabel})`
+                    : storageStatus.mtprotoEnabled
+                    ? `Telegram MTProto (${storageStatus.maxFileSizeLabel})`
+                    : `Telegram Bot API (${storageStatus.maxFileSizeLabel})`
+                  : storageStatus.backend === 's3'
+                  ? 'Backblaze B2'
+                  : 'Local Disk'}
+              </span>
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleSyncStorage}
-            disabled={syncLoading || purgeLoading}
+            disabled={syncLoading || purgeLoading || clearFeedLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 rounded-xl text-xs font-semibold transition border border-amber-500/20 disabled:opacity-50 cursor-pointer"
             title="Scan Backblaze B2 / local storage and restore past uploaded photos into feed"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${syncLoading ? 'animate-spin' : ''}`} />
-            {syncLoading ? 'Syncing...' : 'Sync Storage'}
+            {syncLoading ? 'Syncing...' : 'Scan Storage'}
+          </button>
+          <button
+            onClick={() => setShowClearFeedConfirm(true)}
+            disabled={syncLoading || purgeLoading || clearFeedLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded-xl text-xs font-semibold transition border border-amber-500/20 disabled:opacity-50 cursor-pointer"
+            title="Clear all memories and collections from feed (keeps users, circles, and storage files intact)"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Clear Feed Memories
           </button>
           <button
             onClick={() => setShowPurgeConfirm(true)}
-            disabled={syncLoading || purgeLoading}
+            disabled={syncLoading || purgeLoading || clearFeedLoading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-xl text-xs font-semibold transition border border-rose-500/20 disabled:opacity-50 cursor-pointer"
             title="Permanently delete all files from Backblaze B2/storage and clear all posts"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Wipe Storage Bucket
+            Wipe Bucket & Feed
           </button>
         </div>
       </div>
@@ -1008,6 +1134,52 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
+      {/* Clear Feed Confirmation Modal */}
+      {showClearFeedConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !clearFeedLoading) setShowClearFeedConfirm(false);
+          }}
+        >
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-amber-500/30 rounded-3xl shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+              <AlertTriangle className="w-4 h-4" />
+              <span>Clear Feed Memories</span>
+            </div>
+
+            <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
+              <p>
+                Are you sure you want to <strong>clear all test memories and collections from the feed</strong>?
+              </p>
+              <p className="text-[11px] text-amber-300 bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/30">
+                This will remove the current feed posts and sync the clean state to Turso so you can start fresh. All user accounts, circles, and stored files are kept completely safe.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={clearFeedLoading}
+                onClick={() => setShowClearFeedConfirm(false)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearFeedLoading}
+                onClick={handleClearFeed}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-amber-600 hover:bg-amber-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                {clearFeedLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{clearFeedLoading ? 'Clearing Feed...' : 'Yes, Clear Feed'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Wipe Storage & Feed Confirmation Modal */}
       {showPurgeConfirm && (
         <div
@@ -1024,10 +1196,20 @@ export const AdminPanel: React.FC = () => {
 
             <div className="space-y-2 text-xs text-[var(--text-secondary)] leading-relaxed">
               <p>
-                Are you sure you want to <strong>permanently delete all past files from your storage bucket</strong> and clear all posts and collections?
+                {storageStatus?.backend === 'telegram' ? (
+                  <>
+                    Are you sure you want to <strong>clear all feed posts, collections, and local cache</strong>?
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to <strong>permanently delete all past files from your storage bucket</strong> and clear all posts and collections?
+                  </>
+                )}
               </p>
               <p className="text-[11px] text-rose-300 bg-rose-950/40 p-2.5 rounded-xl border border-rose-500/30">
-                This will delete every uploaded photo/video from Backblaze B2 and reset feed data so you can start with a completely clean slate.
+                {storageStatus?.backend === 'telegram'
+                  ? 'Feed memories, collections, and local server cache will be cleared. Original documents saved in your private Telegram channel remain safely archived (archive-on-delete).'
+                  : 'This will delete every uploaded photo/video from Backblaze B2 and reset feed data so you can start with a completely clean slate.'}
               </p>
             </div>
 
@@ -1224,6 +1406,172 @@ export const AdminPanel: React.FC = () => {
                   <Download className="w-3.5 h-3.5" />
                 )}
                 <span>{restoreLoading ? 'Restoring from Turso...' : 'Restore All Data from Turso Cloud'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Storage Backend Diagnostics Modal (Read-Only, Server Env Configured) */}
+      {showStorageModal && storageStatus && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !storageTestLoading) setShowStorageModal(false);
+          }}
+        >
+          <div className="w-full max-w-md p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
+              <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
+                <HardDrive className="w-4 h-4 text-sky-400" />
+                <span>Media Storage Diagnostics</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStorageModal(false)}
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--text-muted)] font-medium">Active Storage Engine</span>
+                  <span className="font-semibold text-[var(--text-primary)] text-right">
+                    {storageStatus.mode}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--text-muted)] font-medium">Max Upload File Size</span>
+                  <span className="font-mono font-bold text-sky-400">
+                    {storageStatus.maxFileSizeLabel}
+                  </span>
+                </div>
+
+                {storageStatus.backend === 'telegram' && (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[var(--text-muted)] font-medium">Bot API Lane (≤ 15 MB)</span>
+                      <span className={`font-semibold ${storageStatus.botApiEnabled ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                        {storageStatus.botApiEnabled
+                          ? storageStatus.customBotApiUrl
+                            ? 'Enabled (Custom Server)'
+                            : 'Enabled (Standard)'
+                          : 'Disabled'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[var(--text-muted)] font-medium">MTProto Lane (Up to 2 GB)</span>
+                      <span className={`font-semibold ${storageStatus.mtprotoEnabled ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                        {storageStatus.mtprotoEnabled
+                          ? storageStatus.mtprotoMode === 'external'
+                            ? 'External Server'
+                            : storageStatus.mtprotoConnected
+                            ? 'Embedded • Connected'
+                            : 'Embedded • Ready'
+                          : 'Not Configured'}
+                      </span>
+                    </div>
+
+                    {storageStatus.channelTitle && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[var(--text-muted)] font-medium">Telegram Channel</span>
+                        <span className="font-semibold text-[var(--text-secondary)] truncate max-w-[200px]">
+                          {storageStatus.channelTitle}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[var(--text-muted)] font-medium">Deletion Policy</span>
+                      <span className="font-semibold text-amber-400">
+                        Archive-on-Delete (Preserved)
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--text-muted)] font-medium">Backblaze B2 Fallback</span>
+                  <span className={`font-semibold ${storageStatus.b2FallbackEnabled ? 'text-emerald-400' : 'text-neutral-500'}`}>
+                    {storageStatus.b2FallbackEnabled ? 'Active (Legacy Reads)' : 'Inactive'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--border-subtle)]">
+                  <span className="text-[var(--text-muted)] font-medium">Stored Media Records</span>
+                  <span className="font-mono text-[11px] text-[var(--text-secondary)]">
+                    {storageStatus.telegramFileCount} Telegram • {storageStatus.legacyFileCount} Legacy
+                  </span>
+                </div>
+              </div>
+
+              {storageTestResult && (
+                <div
+                  className={`p-3 rounded-xl border text-[11px] space-y-1.5 ${
+                    storageTestResult.ok
+                      ? 'bg-emerald-950/35 border-emerald-500/30 text-emerald-200'
+                      : 'bg-rose-950/35 border-rose-500/30 text-rose-200'
+                  }`}
+                >
+                  <div className="font-semibold flex items-center gap-1.5">
+                    {storageTestResult.ok ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                    )}
+                    <span>{storageTestResult.summary}</span>
+                  </div>
+                  {storageTestResult.lanes?.botApi?.enabled && (
+                    <div className="text-[10px] font-mono text-[var(--text-secondary)] pl-5">
+                      Bot API: {storageTestResult.lanes.botApi.ok ? 'OK' : 'Error'}
+                      {storageTestResult.lanes.botApi.botUsername ? ` (@${storageTestResult.lanes.botApi.botUsername})` : ''}
+                      {storageTestResult.lanes.botApi.channelTitle ? ` → ${storageTestResult.lanes.botApi.channelTitle}` : ''}
+                      {storageTestResult.lanes.botApi.error ? ` — ${storageTestResult.lanes.botApi.error}` : ''}
+                    </div>
+                  )}
+                  {storageTestResult.lanes?.mtproto?.enabled && (
+                    <div className="text-[10px] font-mono text-[var(--text-secondary)] pl-5">
+                      MTProto ({storageTestResult.lanes.mtproto.mode}): {storageTestResult.lanes.mtproto.ok ? 'OK' : 'Error'}
+                      {storageTestResult.lanes.mtproto.channelTitle ? ` → ${storageTestResult.lanes.mtproto.channelTitle}` : ''}
+                      {storageTestResult.lanes.mtproto.error ? ` — ${storageTestResult.lanes.mtproto.error}` : ''}
+                    </div>
+                  )}
+                  {storageTestResult.lanes?.b2Fallback?.enabled && (
+                    <div className="text-[10px] font-mono text-[var(--text-secondary)] pl-5">
+                      B2 Fallback: {storageTestResult.lanes.b2Fallback.ok ? 'OK' : 'Error'}
+                      {storageTestResult.lanes.b2Fallback.error ? ` — ${storageTestResult.lanes.b2Fallback.error}` : ''}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
+                Storage credentials are configured strictly via server environment variables. New photos and videos upload uncompressed as original documents; legacy Backblaze B2 memories continue loading transparently.
+              </p>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={storageTestLoading}
+                onClick={() => setShowStorageModal(false)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={storageTestLoading}
+                onClick={handleTestStorageConnection}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-sky-600 hover:bg-sky-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${storageTestLoading ? 'animate-spin' : ''}`} />
+                <span>{storageTestLoading ? 'Testing Connection...' : 'Test Storage Connection'}</span>
               </button>
             </div>
           </div>

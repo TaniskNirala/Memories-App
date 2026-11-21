@@ -19,6 +19,11 @@ import exifr from 'exifr';
 import { Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
+import {
+  fetchStorageCapabilities,
+  uploadFileWithProgress,
+  StorageCapabilitiesResponse,
+} from '../utils/uploadWithProgress.ts';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -245,8 +250,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [captionTags, setCaptionTags] = useState<string[]>([]);
   const [userTypedCaption, setUserTypedCaption] = useState<string | null>(null);
   const [captionTemporalSummary, setCaptionTemporalSummary] = useState<string | null>(null);
+  const [storageCaps, setStorageCaps] = useState<StorageCapabilitiesResponse | null>(null);
 
-  // Sync group selection: keep specific selected circle if provided, otherwise default to empty
+  // Sync group selection and fetch active storage capabilities on open
   useEffect(() => {
     if (isOpen) {
       if (selectedGroupId) {
@@ -254,6 +260,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       } else {
         setSelectedGroupIds([]);
       }
+      fetchStorageCapabilities().then((caps) => {
+        if (caps) setStorageCaps(caps);
+      });
     }
   }, [isOpen, selectedGroupId]);
 
@@ -408,9 +417,21 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   };
 
   const processIncomingFiles = async (filesArray: File[]) => {
-    const validFiles = filesArray.filter(
+    const mediaFiles = filesArray.filter(
       (f) => f.type.startsWith('image/') || f.type.startsWith('video/') || f.type.startsWith('audio/')
     );
+    if (mediaFiles.length === 0) return;
+
+    let validFiles = mediaFiles;
+    if (storageCaps && storageCaps.maxFileSizeBytes > 0) {
+      const oversized = mediaFiles.filter((f) => f.size > storageCaps.maxFileSizeBytes);
+      if (oversized.length > 0) {
+        validFiles = mediaFiles.filter((f) => f.size <= storageCaps.maxFileSizeBytes);
+        setGlobalError(
+          `${oversized.length} file(s) skipped because they exceed the current ${storageCaps.maxFileSizeLabel} upload limit (${oversized[0].name}).`
+        );
+      }
+    }
     if (validFiles.length === 0) return;
 
     const newFiles: QueuedFile[] = validFiles.map((f) => ({
@@ -570,28 +591,31 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           if (!item) continue;
 
           item.status = 'uploading';
+          item.progress = 1;
           setQueue([...processedQueue]);
 
           try {
+            const payloadBlob = item.mainBlob || item.file;
+            if (storageCaps && storageCaps.maxFileSizeBytes > 0 && payloadBlob.size > storageCaps.maxFileSizeBytes) {
+              throw new Error(`Exceeds ${storageCaps.maxFileSizeLabel} limit`);
+            }
+
             const formData = new FormData();
-            formData.append('file', item.mainBlob || item.file, item.file.name);
+            formData.append('file', payloadBlob, item.file.name);
             if (item.thumbBlob) {
               formData.append('thumb', item.thumbBlob, `thumb_${item.file.name}`);
             }
             formData.append('width', String(item.width || 1200));
             formData.append('height', String(item.height || 800));
 
-            const res = await apiFetch('/api/posts/upload-file', {
-              method: 'POST',
-              body: formData,
+            const data = await uploadFileWithProgress(formData, {
+              useTwoPhaseSse: storageCaps?.backend === 'telegram',
+              onProgress: (pct) => {
+                item.progress = pct;
+                setQueue([...processedQueue]);
+              },
             });
 
-            if (!res.ok) {
-              const errJson = await res.json().catch(() => ({}));
-              throw new Error(errJson.error || `Upload failed (${res.status})`);
-            }
-
-            const data = await res.json();
             item.mainStorageKey = data.storageKey;
             item.thumbStorageKey = data.thumbKey;
             item.status = 'done';
@@ -731,7 +755,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <h3 className="font-display font-bold text-base text-[var(--text-primary)]">
               Share Memories
             </h3>
-            <span className="text-[11px] text-[var(--accent-coral)] font-mono">Zero Quota</span>
+            <span className="text-[11px] text-[var(--accent-coral)] font-mono">
+              {storageCaps ? `Up to ${storageCaps.maxFileSizeLabel}` : 'Zero Quota'}
+            </span>
           </div>
           <button
             onClick={handleClose}
@@ -821,7 +847,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     {isDragOver ? 'Drop photos or videos right here!' : 'Drag & drop photos here, or browse'}
                   </p>
                   <p className="text-[11px] text-[var(--text-muted)] mt-1">
-                    Ultra-HD 4K clarity preserved • Auto-detects date taken from EXIF
+                    {storageCaps
+                      ? `Original quality preserved • Up to ${storageCaps.maxFileSizeLabel} per file • Auto-detects EXIF date`
+                      : 'Ultra-HD 4K clarity preserved • Auto-detects date taken from EXIF'}
                   </p>
                 </div>
                 <span className="px-3.5 py-1.5 rounded-full bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-xs font-semibold text-[var(--text-primary)] group-hover:border-amber-400 transition shadow-xs">
@@ -876,8 +904,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         </div>
                       )}
                       {item.status === 'uploading' && (
-                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white">
+                        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white gap-1 px-2">
                           <RefreshCw className="w-4 h-4 animate-spin text-sky-400" />
+                          <span className="text-[10px] font-mono font-bold text-sky-300">
+                            {Math.max(1, Math.min(99, item.progress))}%
+                          </span>
+                          <div className="w-full h-1 rounded-full bg-white/15 overflow-hidden">
+                            <div
+                              className="h-full bg-sky-400 transition-all duration-150"
+                              style={{ width: `${Math.max(4, Math.min(100, item.progress))}%` }}
+                            />
+                          </div>
                         </div>
                       )}
                       {item.status === 'done' && (

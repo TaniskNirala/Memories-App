@@ -387,13 +387,17 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
 
 const MonthMarker: React.FC<{ label: string; count: number; people: number }> = ({ label, count, people }) => (
   <div className="tl-month">
-    <span className="tl-month-pill">
-      <Calendar className="!h-6 !w-6" />
-      <span className="font-display text-[13px] leading-none">{label}</span>
-      <span className="ml-1 flex items-center gap-1.5 border-l border-[var(--border-subtle)] pl-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--text-muted)]">
-        {count} {count === 1 ? 'memory' : 'memories'}
-        <Dot />
-        {people} {people === 1 ? 'person' : 'people'}
+    <span className="tl-month-pill min-w-0">
+      <Calendar className="!h-6 !w-6 shrink-0" />
+      <span className="truncate font-display text-[12.5px] leading-none sm:text-[13px]">{label}</span>
+      <span className="ml-0.5 flex shrink-0 items-center gap-1.5 border-l border-[var(--border-subtle)] pl-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] sm:ml-1 sm:text-[10px] sm:tracking-[0.08em]">
+        <span>
+          {count} {count === 1 ? 'memory' : 'memories'}
+        </span>
+        <span className="hidden min-[400px]:inline-flex items-center gap-1.5">
+          <Dot />
+          {people} {people === 1 ? 'person' : 'people'}
+        </span>
       </span>
     </span>
   </div>
@@ -425,20 +429,20 @@ const MediaFrame: React.FC<{
   <div className="group/media relative">
     <PostCollage item={item} onOpenViewer={onOpenViewer} />
 
-    {/* hover affordance */}
-    <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-2 opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-within/media:opacity-100">
-      <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
+    {/* multi-photo badge (always visible on mobile, full prompt on hover) */}
+    <div className="pointer-events-none absolute inset-x-2.5 top-2.5 flex items-start justify-between gap-2 sm:inset-x-3 sm:top-3">
+      <span className="hidden items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover/media:opacity-100 group-focus-within/media:opacity-100 sm:flex">
         <Eye className="h-3 w-3" /> Tap to open
       </span>
       {item.files.length > 1 && (
-        <span className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
+        <span className="ml-auto flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
           <Images className="h-3 w-3" /> {item.files.length}
         </span>
       )}
     </div>
 
     {/* quick actions */}
-    <div className="absolute bottom-3 left-3 flex items-center gap-1.5 opacity-0 transition-all duration-200 group-hover/media:translate-y-0 group-hover/media:opacity-100">
+    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 opacity-100 transition-all duration-200 sm:bottom-3 sm:left-3 sm:opacity-0 sm:group-hover/media:translate-y-0 sm:group-hover/media:opacity-100">
       <button
         type="button"
         onClick={(e) => {
@@ -517,7 +521,7 @@ const MemoryCard: React.FC<{
   return (
     <article className="tl-card card overflow-hidden">
       {/* header */}
-      <div className="flex items-start justify-between gap-3 px-4 pt-4">
+      <div className="flex items-start justify-between gap-2.5 px-3.5 pt-3.5 sm:gap-3 sm:px-4 sm:pt-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <Avatar name={item.owner.displayName} color={item.owner.avatarColor} src={item.owner.avatarUrl} size={34} />
           <div className="min-w-0">
@@ -525,12 +529,12 @@ const MemoryCard: React.FC<{
               <span className="truncate text-[12.5px] font-bold leading-tight">{item.owner.displayName}</span>
               {item.isOwner && <Badge tone="amber">You</Badge>}
             </div>
-            <div className="mt-0.5 flex items-center gap-1.5 truncate text-[10.5px] text-[var(--text-muted)]">
-              <span className="font-mono">@{item.owner.username}</span>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10.5px] text-[var(--text-muted)]">
+              <span className="truncate font-mono">@{item.owner.username}</span>
               <Dot />
-              <span>{relativeTime(item.takenAt)}</span>
+              <span className="shrink-0">{relativeTime(item.takenAt)}</span>
               <Dot />
-              <span className="truncate font-medium" style={{ color: 'var(--accent-cyan)' }}>
+              <span className="max-w-[150px] truncate font-medium sm:max-w-[220px]" style={{ color: 'var(--accent-cyan)' }}>
                 {placementNames}
               </span>
             </div>
@@ -680,15 +684,15 @@ const MemoryCard: React.FC<{
       </div>
 
       {/* body */}
-      <div className="px-4 pb-1 pt-3">
+      <div className="px-3.5 pb-1 pt-3 sm:px-4">
         {item.caption && (
-          <p className="mb-2.5 text-[13px] leading-relaxed text-[var(--text-primary)]">{item.caption}</p>
+          <p className="mb-2.5 break-words text-[13px] leading-relaxed text-[var(--text-primary)]">{item.caption}</p>
         )}
         <MediaFrame item={item} onOpenViewer={onOpenViewer} onOpenComments={onOpenComments} />
       </div>
 
       {/* footer */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pb-4 pt-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 pb-3.5 pt-1 sm:px-4 sm:pb-4">
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -1258,9 +1262,9 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     <div className="relative">
       {/* toast */}
       {toastMessage && (
-        <div className="fixed left-1/2 top-[74px] z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-card)]/95 px-4 py-2 text-[11.5px] font-semibold shadow-[var(--shadow-float)] backdrop-blur-xl fade-in">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          {toastMessage}
+        <div className="fixed inset-x-4 top-[calc(4.5rem+env(safe-area-inset-top,0px))] z-[80] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-card)]/95 px-4 py-2 text-[11.5px] font-semibold shadow-[var(--shadow-float)] backdrop-blur-xl fade-in">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+          <span className="truncate">{toastMessage}</span>
         </div>
       )}
 
@@ -1573,7 +1577,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
               className="field"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className="label flex items-center gap-1.5" htmlFor="event-date">
                 <Calendar className="h-3 w-3" /> Date

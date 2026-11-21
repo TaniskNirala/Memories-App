@@ -264,16 +264,16 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="relative flex h-[80vh] max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-[var(--border-color)] bg-[var(--bg-card)] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)]">
+      <div className="relative flex h-[86dvh] max-h-[90dvh] sm:h-[80vh] sm:max-w-2xl w-full flex-col overflow-hidden rounded-[22px] sm:rounded-[26px] border border-[var(--border-color)] bg-[var(--bg-card)] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)]">
         {/* Header */}
-        <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-[var(--accent-coral)]" />
-            <h3 className="font-display font-bold text-base text-[var(--text-primary)]">
+        <div className="px-4 py-3.5 sm:p-4 border-b border-[var(--border-color)] flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <Users className="w-5 h-5 shrink-0 text-[var(--accent-coral)]" />
+            <h3 className="truncate font-display font-bold text-base text-[var(--text-primary)]">
               {showCreateModal ? 'New circle' : 'Your Circles'}
             </h3>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={() => {
                 setCreateError(null);
@@ -293,10 +293,10 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
           </div>
         </div>
 
-        {/* 2-Column Split: Circles List on left, Selected Circle detail on right */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Circles Sidebar */}
-          <div className="w-1/3 border-r border-[var(--border-color)] overflow-y-auto p-2 space-y-1">
+        {/* Responsive Split: horizontal circle strip on mobile, 2-column sidebar on sm+ */}
+        <div className="flex-1 flex flex-col sm:flex-row overflow-hidden">
+          {/* Circles Sidebar / Mobile Strip */}
+          <div className="w-full sm:w-1/3 shrink-0 border-b sm:border-b-0 sm:border-r border-[var(--border-color)] overflow-x-auto sm:overflow-y-auto p-2 flex sm:flex-col gap-1.5 sm:gap-1 sm:space-y-0 scroll-x">
             {groups.map((g) => {
               const active = selectedGroup?.id === g.id;
               return (
@@ -307,10 +307,10 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                     setIsEditing(false);
                     setShowAddMember(false);
                   }}
-                  className={`w-full text-left p-2.5 rounded-xl text-xs transition flex flex-col ${
+                  className={`shrink-0 sm:w-full min-w-[132px] sm:min-w-0 text-left p-2.5 rounded-xl text-xs transition flex flex-col ${
                     active
                       ? 'bg-[var(--bg-surface-elevated)] border border-[var(--accent-coral)]/40 font-semibold text-[var(--text-primary)]'
-                      : 'hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                      : 'bg-[var(--bg-surface)]/40 sm:bg-transparent hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -346,12 +346,12 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
           </div>
 
           {/* Circle Detail */}
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
             {selectedGroup ? (
               <div className="space-y-5">
                 {/* Circle Meta */}
-                <div className="flex items-start justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">
+                  <div className="min-w-0">
                     {isEditing ? (
                       <div className="space-y-2">
                         <input
@@ -401,7 +401,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                     {onSelectGroupFeed && (
                       <button
                         onClick={() => {

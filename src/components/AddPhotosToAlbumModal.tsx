@@ -593,7 +593,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto p-1">
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-48 overflow-y-auto p-1">
                     {queue.map((item, idx) => (
                       <div
                         key={item.id}
@@ -622,7 +622,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
                           <button
                             type="button"
                             onClick={() => removeQueueItem(item.id)}
-                            className="absolute top-1 right-1 w-5 h-5 bg-black/75 hover:bg-rose-500 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition shadow-xs"
+                            className="absolute top-1 right-1 w-6 h-6 sm:w-5 sm:h-5 bg-black/75 hover:bg-rose-500 rounded-full flex items-center justify-center text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition shadow-xs"
                           >
                             <X className="w-3 h-3" />
                           </button>

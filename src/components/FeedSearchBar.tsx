@@ -178,7 +178,7 @@ export const FeedSearchBar: React.FC<FeedSearchBarProps> = ({
       {/* Filter panel */}
       {isFilterPanelOpen && (
         <div className="fade-in space-y-3.5 border-t border-[var(--border-subtle)] px-3 pb-3 pt-3">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label className="label flex items-center gap-1.5">
                 <User className="h-3 w-3 text-[var(--accent-coral)]" /> Contributor
@@ -230,24 +230,24 @@ export const FeedSearchBar: React.FC<FeedSearchBarProps> = ({
               )}
             </div>
 
-            <div>
+            <div className="sm:col-span-2 lg:col-span-1">
               <label className="label flex items-center gap-1.5">
                 <Calendar className="h-3 w-3 text-[var(--accent-cyan)]" /> Date range
               </label>
-              <div className="flex items-center gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5 min-[420px]:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] min-[420px]:items-center">
                 <input
                   type="date"
                   value={filters.startDate}
                   onChange={(e) => onFilterChange({ ...filters, startDate: e.target.value })}
-                  className="field !px-2 text-[11px]"
+                  className="field min-w-0 !px-2.5 text-[11px]"
                   aria-label="Start date"
                 />
-                <span className="text-[var(--text-muted)]">–</span>
+                <span className="hidden text-[var(--text-muted)] min-[420px]:inline">–</span>
                 <input
                   type="date"
                   value={filters.endDate}
                   onChange={(e) => onFilterChange({ ...filters, endDate: e.target.value })}
-                  className="field !px-2 text-[11px]"
+                  className="field min-w-0 !px-2.5 text-[11px]"
                   aria-label="End date"
                 />
               </div>

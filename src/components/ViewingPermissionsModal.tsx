@@ -252,7 +252,7 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
             <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider block mb-1.5">
               Quick Audience Presets
             </span>
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="grid grid-cols-1 min-[390px]:grid-cols-3 gap-2 text-xs">
               <button
                 type="button"
                 onClick={handleSelectEveryone}

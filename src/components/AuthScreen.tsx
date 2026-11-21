@@ -183,12 +183,12 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
       </aside>
 
       {/* ------------------------------------------------------- form, right side */}
-      <div className="relative flex min-h-dvh items-center justify-center px-3 py-6 sm:px-6 sm:py-10">
+      <div className="relative flex min-h-dvh items-center justify-center px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))] sm:px-6 sm:py-10">
         {/* theme toggle */}
         <button
           type="button"
           onClick={toggleTheme}
-          className="btn-icon absolute right-4 top-4 z-30 !h-9 !w-9 backdrop-blur-xl"
+          className="btn-icon absolute right-3.5 top-[max(0.9rem,env(safe-area-inset-top))] z-30 !h-9 !w-9 backdrop-blur-xl sm:right-4 sm:top-4"
           aria-label="Toggle theme"
         >
           {isDark ? (
@@ -198,7 +198,7 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
           )}
         </button>
 
-        <div className="auth-panel relative w-full max-w-[380px] p-5 sm:p-7">
+        <div className="auth-panel relative w-full max-w-[400px] p-4 min-[375px]:p-5 sm:p-7">
             <div className="relative">
               {/* compact brand row for phones */}
               <div className="mb-5 flex items-center gap-2.5 lg:hidden">
@@ -225,7 +225,7 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
                       setError(null);
                     }}
                     aria-current={mode === t.id ? 'true' : undefined}
-                    className={`flex-1 rounded-xl py-1.5 text-[11px] font-bold transition ${
+                    className={`flex-1 rounded-xl px-1.5 py-1.5 text-[10.5px] font-bold transition min-[375px]:text-[11px] ${
                       mode === t.id
                         ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-[0_4px_12px_-6px_rgba(0,0,0,0.7)]'
                         : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
@@ -301,7 +301,7 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
                           autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder={mode === 'login' ? 'Your password' : 'At least 10 characters'}
+                          placeholder={mode === 'login' ? 'Your password' : 'At least 5 characters'}
                           className="field pl-9 pr-10"
                         />
                         <button
@@ -355,7 +355,7 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
                           autoComplete="new-password"
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
-                          placeholder="At least 10 characters"
+                          placeholder="At least 5 characters"
                           className="field pl-9 pr-10"
                         />
                         <button

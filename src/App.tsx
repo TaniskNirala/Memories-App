@@ -593,7 +593,7 @@ const MainContent: React.FC = () => {
   };
 
   return (
-    <div className="app-shell text-[var(--text-primary)] pb-24 transition-colors lg:pb-8">
+    <div className="app-shell text-[var(--text-primary)] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] transition-colors lg:pb-8">
       <Header
         selectedGroupName={selectedGroup?.name}
         onSelectGroup={(gid) => setSelectedGroupId(gid)}
@@ -601,6 +601,8 @@ const MainContent: React.FC = () => {
         onOpenDuplicates={() => setIsDuplicatesModalOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenProfile={() => setCurrentTab('profile')}
+        onOpenAdmin={() => isAdmin && setCurrentTab('admin')}
+        onOpenTrash={() => setCurrentTab('trash')}
         onUserSwitched={() => {
           setSelectedGroupId(undefined);
           fetchGroups();
@@ -642,7 +644,7 @@ const MainContent: React.FC = () => {
           <div className={currentTab === 'feed' ? 'mx-auto w-full min-w-0 max-w-[880px]' : 'min-w-0 lg:col-span-2'}>
           {/* Phones keep the greeting inline; desktop moves it to the right rail */}
           {currentTab === 'feed' && (
-            <div className="mb-4 lg:hidden">
+            <div className="mb-3.5 space-y-2.5 lg:hidden">
               <HeroRail
                 compact
                 user={user}
@@ -661,6 +663,38 @@ const MainContent: React.FC = () => {
                 }}
                 onClearGroup={() => setSelectedGroupId(undefined)}
               />
+
+              {/* Mobile & tablet horizontal circle switcher */}
+              {groups.length > 0 && (
+                <div className="scroll-x -mx-1 flex items-center gap-1.5 px-1 py-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedGroupId(undefined)}
+                    className={`chip shrink-0 !py-1.5 !px-3 !text-[11px] ${
+                      selectedGroupId === undefined ? 'chip-active' : ''
+                    }`}
+                  >
+                    All circles
+                  </button>
+                  {groups.map((g) => {
+                    const active = selectedGroupId === g.id;
+                    return (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => setSelectedGroupId(g.id)}
+                        className={`chip shrink-0 !py-1.5 !px-3 !text-[11px] ${active ? 'chip-active' : ''}`}
+                      >
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ background: accentFromName(g.name) }}
+                        />
+                        <span className="max-w-[140px] truncate">{g.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

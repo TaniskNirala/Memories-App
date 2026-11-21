@@ -287,12 +287,12 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
 
         {/* Summary Card */}
         <div className="mt-3 p-3.5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <div>
               <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block tracking-wider">
                 Duplicate Sets
               </span>
-              <span className="font-display font-bold text-lg text-amber-400">
+              <span className="font-display font-bold text-base sm:text-lg text-amber-400">
                 {duplicateGroups.length} groups
               </span>
             </div>
@@ -301,7 +301,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
               <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block tracking-wider">
                 Copies Found
               </span>
-              <span className="font-display font-bold text-lg text-rose-400">
+              <span className="font-display font-bold text-base sm:text-lg text-rose-400">
                 {totalDuplicatesCount} photos
               </span>
             </div>
@@ -310,14 +310,14 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
               <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block tracking-wider">
                 Reclaimable
               </span>
-              <span className="font-display font-bold text-lg text-emerald-400">
+              <span className="font-display font-bold text-base sm:text-lg text-emerald-400">
                 {formatBytes(totalWastedBytes)}
               </span>
             </div>
           </div>
 
           {duplicateGroups.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handleKeepBothAll}
                 disabled={loading}

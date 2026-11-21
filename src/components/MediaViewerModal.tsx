@@ -357,34 +357,36 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   };
 
   return (
-    <div className="scrim z-50 select-none">
+    <div className="scrim !p-0 z-50 select-none">
       {/* Top action bar */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-3.5 sm:p-4 bg-gradient-to-b from-black/90 via-black/60 to-transparent">
+      <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between gap-2 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-4 bg-gradient-to-b from-black/90 via-black/60 to-transparent">
         {/* Left: Author & Album info */}
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Avatar
             name={item.owner.displayName}
             color={item.owner.avatarColor}
             src={item.owner.avatarUrl}
-            size={32}
-            className="shadow-xs"
+            size={30}
+            className="shadow-xs shrink-0"
           />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white block">{item.owner.displayName}</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="truncate text-xs font-bold text-white block max-w-[96px] sm:max-w-none">{item.owner.displayName}</span>
               {hasMultiplePhotos && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1">
+                <span className="shrink-0 px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1">
                   <Images className="w-3 h-3" />
-                  {files.length} Event Photos
+                  <span>{files.length}</span>
+                  <span className="hidden sm:inline">Event Photos</span>
                 </span>
               )}
             </div>
-            <span className="text-[11px] text-[var(--text-muted)]">@{item.owner.username}</span>
+            <span className="truncate block text-[10.5px] sm:text-[11px] text-[var(--text-muted)]">@{item.owner.username}</span>
           </div>
         </div>
 
         {/* Center / Right controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <div className="scroll-x flex items-center gap-1 sm:gap-2">
           {/* Toggle between Grid View & Expanded View for multi-photo albums */}
           {hasMultiplePhotos && (
             <div className="flex items-center bg-white/10 rounded-full p-0.5 border border-white/10">
@@ -453,11 +455,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           {(canDelete || isAdmin || item.owner?.id === user?.id) && (
             <button
               onClick={() => setIsPermissionsModalOpen(true)}
-              className="px-3 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+              className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs shrink-0"
               title="Adjust Viewing Permissions"
             >
               <Shield className="w-3.5 h-3.5 text-amber-400" />
-              <span className="inline">Permissions</span>
+              <span className="hidden sm:inline">Permissions</span>
             </button>
           )}
 
@@ -524,11 +526,12 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               </button>
             </div>
           )}
+          </div>
 
           {/* Close Modal */}
           <button
             onClick={onClose}
-            className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition ml-1"
+            className="p-2 rounded-full bg-white/15 hover:bg-white/25 text-white transition shrink-0"
             title="Close"
           >
             <X className="w-5 h-5" />
@@ -583,7 +586,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                     <Calendar className="w-3 h-3 text-amber-400" /> Event Date
@@ -673,7 +676,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 {(canDelete || isAdmin || item.owner?.id === user?.id) && (
                   <button
                     onClick={() => {
@@ -776,7 +779,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         setFileIndex(idx);
                         setIsEditorOpen(true);
                       }}
-                      className="absolute top-2 right-9 p-1.5 rounded-full bg-black/75 hover:bg-amber-500 text-[var(--text-secondary)] hover:text-neutral-950 backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
+                      className="absolute top-2 right-9 p-1.5 rounded-full bg-black/75 hover:bg-amber-500 text-[var(--text-secondary)] hover:text-neutral-950 backdrop-blur-xs border border-white/20 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 z-10 shadow-md"
                       title={`Crop & Rotate Photo #${idx + 1}`}
                     >
                       <Crop className="w-3.5 h-3.5" />
@@ -790,7 +793,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         e.stopPropagation();
                         setDeleteTargetPhoto({ id: file.id, index: idx });
                       }}
-                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/75 hover:bg-rose-600 text-[var(--text-secondary)] hover:text-white backdrop-blur-xs border border-white/20 transition opacity-0 group-hover:opacity-100 z-10 shadow-md"
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/75 hover:bg-rose-600 text-[var(--text-secondary)] hover:text-white backdrop-blur-xs border border-white/20 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 z-10 shadow-md"
                       title={`Delete Photo #${idx + 1}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -987,11 +990,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           )}
 
           {/* Bottom Bar: Metadata, comments, and Filmstrip Reel */}
-          <div className="absolute bottom-0 left-0 right-0 z-30 p-3 sm:p-4 bg-gradient-to-t from-black/95 via-black/85 to-transparent text-white space-y-2.5">
+          <div className="absolute bottom-0 left-0 right-0 z-30 px-3 pt-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] sm:p-4 bg-gradient-to-t from-black/95 via-black/85 to-transparent text-white space-y-2.5">
             <div className="max-w-4xl mx-auto">
               {/* Caption & Comments Bar */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="truncate flex-1">
+              <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2.5 sm:gap-4">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-0.5">
                     {item.caption ? (
                       <p className="text-sm font-semibold truncate">{item.caption}</p>
@@ -1009,7 +1012,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                       </button>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--text-muted)]">
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 text-amber-400" />
                       {new Date(item.takenAt).toLocaleDateString([], {
@@ -1029,7 +1032,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     {item.placements && item.placements.length > 0 && (
                       <>
                         <span>•</span>
-                        <span className="text-[var(--accent-coral)] font-medium">
+                        <span className="truncate max-w-[160px] sm:max-w-xs text-[var(--accent-coral)] font-medium">
                           {item.placements.map((p) => p.groupName).join(', ')}
                         </span>
                       </>

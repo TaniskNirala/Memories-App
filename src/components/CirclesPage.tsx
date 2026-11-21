@@ -75,9 +75,9 @@ export const CirclesPage: React.FC<CirclesPageProps> = ({
 
       <div className="surface flex flex-col gap-2.5 p-2.5 sm:flex-row sm:items-center">
         <SearchBox value={query} onChange={setQuery} placeholder="Search circles or members…" className="flex-1" />
-        <span className="flex items-center gap-1.5 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-2.5 py-1 text-[10px] text-[var(--text-muted)]">
-          <KeyRound className="h-3 w-3 text-[var(--accent-amber)]" />
-          Everyone sees the “Everyone” circle automatically
+        <span className="flex items-center gap-1.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-2.5 py-1.5 text-[10px] leading-snug text-[var(--text-muted)] sm:rounded-full sm:py-1">
+          <KeyRound className="h-3 w-3 shrink-0 text-[var(--accent-amber)]" />
+          <span>Everyone sees the “Everyone” circle automatically</span>
         </span>
       </div>
 

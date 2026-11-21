@@ -203,12 +203,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose, r
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]/40 px-4 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border-subtle)] bg-[var(--bg-surface)]/40 px-4 py-2">
           <span className="flex items-center gap-3 text-[9.5px] text-[var(--text-muted)]">
             <span>↑↓ navigate</span>
             <span>↵ open</span>
           </span>
-          <span className="flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)]">
+          <span className="hidden items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.1em] text-[var(--text-muted)] sm:flex">
             <ArrowUpRight className="h-3 w-3" /> every feature, one keystroke
           </span>
         </div>

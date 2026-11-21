@@ -14,6 +14,8 @@ import {
   Command,
   Search,
   Settings2,
+  Shield,
+  Trash2,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
@@ -24,6 +26,8 @@ import { relativeTime } from '../lib/format.ts';
 
 interface HeaderProps {
   onOpenProfile?: () => void;
+  onOpenAdmin?: () => void;
+  onOpenTrash?: () => void;
   onOpenNotifications?: () => void;
   onSelectGroup?: (groupId: string | undefined) => void;
   selectedGroupName?: string;
@@ -36,11 +40,13 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   selectedGroupName,
   onOpenProfile,
+  onOpenAdmin,
+  onOpenTrash,
   onNotificationClick,
   onOpenDuplicates,
   onOpenPalette,
 }) => {
-  const { user, logout, isPending } = useAuth();
+  const { user, logout, isPending, isAdmin } = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -130,9 +136,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <div className="sticky top-0 z-50 w-full px-2 pt-2 sm:px-3 sm:pt-3">
+      <div className="sticky top-0 z-50 w-full px-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-3 sm:pt-3">
         <header className="page-wrap !px-0">
-          <div className="flex h-[58px] items-center gap-2 rounded-[18px] border border-[var(--border-color)] bg-[color-mix(in_oklab,var(--bg-card)_92%,transparent)] px-2.5 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:gap-3 sm:px-3.5">
+          <div className="flex h-[54px] items-center gap-1.5 rounded-[18px] border border-[var(--border-color)] bg-[color-mix(in_oklab,var(--bg-card)_92%,transparent)] px-2 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:h-[58px] sm:gap-3 sm:px-3.5">
             {/* ---- identity */}
             <a
               href="/"
@@ -159,10 +165,13 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={onOpenPalette}
-                className="group mx-auto flex h-9 w-full max-w-[420px] items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 px-3 text-[11.5px] text-[var(--text-muted)] transition hover:border-[var(--accent-amber)]/40 hover:text-[var(--text-secondary)]"
+                className="group mx-auto flex h-9 min-w-0 flex-1 max-w-[420px] items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 px-2.5 text-[11.5px] text-[var(--text-muted)] transition hover:border-[var(--accent-amber)]/40 hover:text-[var(--text-secondary)] sm:px-3"
               >
                 <Search className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Search memories, people, circles…</span>
+                <span className="truncate">
+                  <span className="sm:hidden">Search or jump…</span>
+                  <span className="hidden sm:inline">Search memories, people, circles…</span>
+                </span>
                 <kbd className="ml-auto hidden shrink-0 rounded border border-[var(--border-color)] bg-[var(--bg-card)] px-1.5 py-0.5 font-mono text-[9px] sm:block">
                   ⌘K
                 </kbd>
@@ -223,7 +232,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {showNotif && (
                   <>
                     <div className="fixed inset-0 z-[55]" onClick={() => setShowNotif(false)} />
-                    <div className="absolute right-0 z-[60] mt-2 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
+                    <div className="fixed inset-x-3 top-[66px] z-[60] max-h-[75dvh] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[340px]">
                       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-display text-sm">Notifications</span>
@@ -319,7 +328,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {showUserMenu && (
                     <>
                       <div className="fixed inset-0 z-[55]" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
+                      <div className="absolute right-0 z-[60] mt-2 w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
                         <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-3.5 py-3">
                           <Avatar name={user.displayName || user.username} color={user.avatarColor} src={user.avatarUrl} size={38} ring />
                           <div className="min-w-0">
@@ -337,6 +346,27 @@ export const Header: React.FC<HeaderProps> = ({
                               onClick={() => {
                                 setShowUserMenu(false);
                                 onOpenProfile();
+                              }}
+                            />
+                          )}
+                          {isAdmin && onOpenAdmin && (
+                            <MenuItem
+                              icon={<Shield className="h-3.5 w-3.5" />}
+                              label="Admin studio"
+                              tone="accent"
+                              onClick={() => {
+                                setShowUserMenu(false);
+                                onOpenAdmin();
+                              }}
+                            />
+                          )}
+                          {onOpenTrash && (
+                            <MenuItem
+                              icon={<Trash2 className="h-3.5 w-3.5" />}
+                              label="Trash bin"
+                              onClick={() => {
+                                setShowUserMenu(false);
+                                onOpenTrash();
                               }}
                             />
                           )}

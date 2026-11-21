@@ -8,10 +8,6 @@ import {
   ShieldCheck,
   Moon,
   Sun,
-  Sparkles,
-  Users,
-  CalendarDays,
-  Fingerprint,
   Eye,
   EyeOff,
 } from 'lucide-react';
@@ -26,24 +22,6 @@ import { useTheme } from '../context/ThemeContext.tsx';
    On phones the banner collapses to a slim header so the form stays above the
    fold. All copy, tabs, validation and endpoints are unchanged.
    --------------------------------------------------------------------------- */
-
-const HIGHLIGHTS = [
-  {
-    icon: <CalendarDays className="h-3.5 w-3.5" />,
-    title: 'A timeline, not a feed',
-    body: 'Every photo lands on the real day it happened.',
-  },
-  {
-    icon: <Users className="h-3.5 w-3.5" />,
-    title: 'Circles decide reach',
-    body: 'A trip group, one friend, or everyone.',
-  },
-  {
-    icon: <Fingerprint className="h-3.5 w-3.5" />,
-    title: 'Private by default',
-    body: 'No algorithms, no ads, approval only.',
-  },
-];
 
 export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
@@ -130,7 +108,7 @@ export const AuthScreen: React.FC = () => {
         : 'Paste the one-time token an admin shared with you.';
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center px-3 py-6 sm:px-6 sm:py-10">
+    <div className="auth-page relative flex min-h-dvh items-center justify-center px-3 py-6 sm:px-6 sm:py-10">
       {/* theme toggle — floats above the card, like a modal close affordance */}
       <button
         type="button"
@@ -157,9 +135,9 @@ export const AuthScreen: React.FC = () => {
         />
 
         <div className="auth-card card-glow overflow-hidden">
-          <div className="grid lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+          <div className="grid lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
             {/* ------------------------------------------------ illustrated side */}
-            <aside className="relative isolate hidden overflow-hidden lg:block">
+            <aside className="relative isolate hidden overflow-hidden bg-[#0d0b16] lg:block">
               <img
                 src="/auth-illustration.webp"
                 alt=""
@@ -171,7 +149,7 @@ export const AuthScreen: React.FC = () => {
                 className="absolute inset-0"
                 style={{
                   background:
-                    'linear-gradient(180deg, rgba(10,12,20,0.22) 0%, rgba(10,12,20,0.32) 42%, rgba(10,12,20,0.82) 100%)',
+                    'linear-gradient(180deg, rgba(10,12,20,0.28) 0%, rgba(10,12,20,0.12) 38%, rgba(10,12,20,0.78) 100%)',
                 }}
               />
               <div className="relative flex h-full flex-col justify-between p-8">
@@ -184,37 +162,12 @@ export const AuthScreen: React.FC = () => {
                     />
                     <img src="/icon.svg" alt="" className="relative z-10 h-5 w-5" />
                   </span>
-                  <div>
-                    <p className="font-display text-lg leading-none text-white">Nest</p>
-                    <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.22em] text-white/60">
-                      a private memory timeline
-                    </p>
-                  </div>
+                  <span className="font-display text-[1.35rem] leading-none text-white">Nest</span>
                 </div>
 
-                <div>
-                  <h1 className="max-w-sm font-display text-[1.85rem] leading-[1.12] text-white">
-                    Your photos, <span className="glow-text">in the order life happened.</span>
-                  </h1>
-                  <p className="mt-3 max-w-xs text-[11.5px] leading-relaxed text-white/70">
-                    A zero-quota memory space for a handful of close friends. Keep the originals, and choose exactly
-                    which circle sees what.
-                  </p>
-
-                  <ul className="mt-5 space-y-2">
-                    {HIGHLIGHTS.map((h) => (
-                      <li key={h.title} className="flex items-start gap-2.5">
-                        <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white backdrop-blur-md">
-                          {h.icon}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-[11px] font-bold leading-tight text-white">{h.title}</span>
-                          <span className="block text-[10px] leading-snug text-white/60">{h.body}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <h1 className="max-w-sm font-display text-[1.9rem] leading-[1.12] text-white">
+                  Your photos, <span className="glow-text">in the order life happened.</span>
+                </h1>
               </div>
             </aside>
 
@@ -230,12 +183,7 @@ export const AuthScreen: React.FC = () => {
                   />
                   <img src="/icon.svg" alt="" className="relative z-10 h-4 w-4" />
                 </span>
-                <div>
-                  <p className="font-display text-base leading-none">Nest</p>
-                  <p className="mt-1 font-mono text-[8.5px] uppercase tracking-[0.2em] text-[var(--text-muted)]">
-                    private memories
-                  </p>
-                </div>
+                <span className="font-display text-base leading-none">Nest</span>
               </div>
 
               <p className="eyebrow">
@@ -419,10 +367,6 @@ export const AuthScreen: React.FC = () => {
                   )}
                 </button>
 
-                <p className="flex items-center justify-center gap-1.5 pt-1 text-[10px] text-[var(--text-muted)]">
-                  <Sparkles className="h-3 w-3 text-[var(--accent-amber)]" />
-                  End-to-end private · zero quota · no ads
-                </p>
               </form>
             </section>
           </div>

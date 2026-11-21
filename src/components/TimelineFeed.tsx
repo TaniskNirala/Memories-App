@@ -1336,6 +1336,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                     return (
                       <div key={day.key} className="tl-day">
                         <div className="tl-day-head">
+                          <span className="tl-day-rule" aria-hidden />
                           <span className="tl-day-weekday">{weekdayLabel(day.date)}</span>
                           <span className="tl-day-count">
                             {dayCount === 1 ? '1 memory' : `${dayCount} memories`}

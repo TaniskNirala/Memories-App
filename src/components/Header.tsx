@@ -14,6 +14,8 @@ import {
   Sparkles,
   Check,
   Command,
+  Search,
+  Settings2,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
@@ -162,97 +164,95 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-[var(--border-color)] bg-[var(--bg-page)]/72 backdrop-blur-2xl">
-        <div className="page-wrap flex h-[60px] items-center justify-between gap-3">
-          {/* Brand */}
-          <div className="flex min-w-0 items-center gap-2.5">
+      <div className="sticky top-0 z-50 w-full px-2 pt-2 sm:px-3 sm:pt-3">
+        <header className="page-wrap !px-0">
+          <div className="flex h-[58px] items-center gap-2 rounded-[18px] border border-[var(--border-color)] bg-[color-mix(in_oklab,var(--bg-card)_92%,transparent)] px-2.5 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:gap-3 sm:px-3.5">
+            {/* ---- identity */}
             <a
               href="/"
-              className="group flex items-center gap-2.5 text-[var(--text-primary)] transition hover:opacity-95"
+              className="group flex min-w-0 shrink-0 items-center gap-2 text-[var(--text-primary)] transition hover:opacity-95"
               aria-label="Nest home"
             >
-              <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-[13px] border border-[var(--border-color)] bg-[var(--bg-card)] shadow-[0_6px_18px_-12px_rgba(0,0,0,0.9)]">
-                <span
-                  aria-hidden
-                  className="absolute inset-0 opacity-80"
-                  style={{ background: 'var(--gradient-ember)' }}
-                />
-                <img src="/icon.svg" alt="" className="relative z-10 h-5 w-5 drop-shadow" />
+              <span className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-[11px] border border-[var(--border-color)] bg-[var(--bg-surface)]">
+                <span aria-hidden className="absolute inset-0 opacity-85" style={{ background: 'var(--gradient-ember)' }} />
+                <img src="/icon.svg" alt="" className="relative z-10 h-4 w-4 drop-shadow" />
               </span>
-              <span className="flex flex-col leading-none">
-                <span className="font-display text-[1.15rem] font-bold tracking-tight">Nest</span>
-                <span className="eyebrow mt-1 hidden text-[9px] sm:block">private memories</span>
-              </span>
+              <span className="hidden font-display text-[1.05rem] font-bold leading-none tracking-tight sm:block">Nest</span>
             </a>
 
             {selectedGroupName && (
-              <span className="flex max-w-[42vw] items-center gap-1.5 truncate rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)]">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-mint,var(--accent-teal))]" />
+              <span className="hidden max-w-[30vw] items-center gap-1.5 truncate rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-2 py-0.5 text-[10.5px] font-semibold text-[var(--text-secondary)] md:flex">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-teal)]" />
                 <span className="truncate">{selectedGroupName}</span>
               </span>
             )}
-          </div>
 
-          {/* Controls */}
-          <div className="flex shrink-0 items-center gap-1.5">
+            {/* ---- command bar sits centred, like a real app shell */}
             {onOpenPalette && (
               <button
                 type="button"
                 onClick={onOpenPalette}
-                title="Command palette"
-                className="hidden h-9 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-3 text-[11px] font-medium text-[var(--text-muted)] transition hover:text-[var(--text-primary)] md:flex"
+                className="group mx-auto flex h-9 w-full max-w-[420px] items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 px-3 text-[11.5px] text-[var(--text-muted)] transition hover:border-[var(--accent-amber)]/40 hover:text-[var(--text-secondary)]"
               >
-                <Command className="h-3.5 w-3.5" />
-                <span>Jump to…</span>
-                <kbd className="rounded border border-[var(--border-color)] bg-[var(--bg-card)] px-1 font-mono text-[9px]">
+                <Search className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Search memories, people, circles…</span>
+                <kbd className="ml-auto hidden shrink-0 rounded border border-[var(--border-color)] bg-[var(--bg-card)] px-1.5 py-0.5 font-mono text-[9px] sm:block">
                   ⌘K
                 </kbd>
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={toggleTheme}
-              title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-              aria-label="Toggle theme"
-              className="btn-icon !h-9 !w-9"
-            >
-              {isDark ? <Sun className="h-4 w-4 text-[var(--accent-amber)]" /> : <Moon className="h-4 w-4 text-[var(--accent-indigo)]" />}
-            </button>
-
-            {user && !isPending && onOpenDuplicates && (
-              <button
-                type="button"
-                onClick={onOpenDuplicates}
-                title="Duplicate photo cleaner"
-                className="btn-icon !h-9 !w-9"
-              >
-                <Copy className="h-4 w-4" />
-              </button>
-            )}
-
-            <PWAInstallButton />
-
-            {/* Notifications */}
-            {user && !isPending && (
-              <div className="relative">
+            {/* ---- actions, grouped into one pill */}
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              <div className="flex items-center gap-0.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/45 p-0.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowNotif((v) => !v);
-                    setShowUserMenu(false);
-                  }}
-                  aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
-                  className="btn-icon relative !h-9 !w-9"
+                  onClick={toggleTheme}
+                  title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+                  aria-label="Toggle theme"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
                 >
-                  <Bell className="h-4 w-4" />
-                  {unreadCount > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border-2 border-[var(--bg-page)] bg-rose-500 px-1 text-[9px] font-bold text-white">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
+                  {isDark ? (
+                    <Sun className="h-4 w-4 text-[var(--accent-amber)]" />
+                  ) : (
+                    <Moon className="h-4 w-4 text-[var(--accent-indigo)]" />
                   )}
                 </button>
 
+                {user && !isPending && onOpenDuplicates && (
+                  <button
+                    type="button"
+                    onClick={onOpenDuplicates}
+                    title="Duplicate photo cleaner"
+                    aria-label="Duplicate photo cleaner"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                )}
+
+                <span className="hidden sm:block">
+                  <PWAInstallButton />
+                </span>
+
+                {user && !isPending && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNotif((v) => !v);
+                        setShowUserMenu(false);
+                      }}
+                      aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
+                      className="relative flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--bg-card)] hover:text-[var(--text-primary)]"
+                    >
+                      <Bell className="h-4 w-4" />
+                      {unreadCount > 0 && (
+                        <span className="absolute right-0.5 top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-1 text-[8.5px] font-bold text-white">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </button>
                 {showNotif && (
                   <>
                     <div className="fixed inset-0 z-[55]" onClick={() => setShowNotif(false)} />
@@ -326,102 +326,89 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                   </>
                 )}
-              </div>
-            )}
-
-            {/* User menu */}
-            {user && !isPending && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowUserMenu((v) => !v);
-                    setShowNotif(false);
-                  }}
-                  className="flex h-9 items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 pl-1 pr-2 transition hover:border-[var(--accent-amber)]/45 hover:bg-[var(--bg-surface-elevated)]"
-                >
-                  <Avatar name={user.displayName || user.username} color={user.avatarColor} size={26} />
-                  <span className="hidden max-w-[110px] truncate text-[11.5px] font-semibold sm:block">
-                    {user.displayName || user.username}
-                  </span>
-                  {user.role === 'admin' && (
-                    <span className="hidden rounded-full bg-[var(--accent-amber)]/18 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wider text-[var(--accent-amber)] sm:block">
-                      Admin
-                    </span>
-                  )}
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 text-[var(--text-muted)] transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
-                  />
-                </button>
-
-                {showUserMenu && (
-                  <>
-                    <div className="fixed inset-0 z-[55]" onClick={() => setShowUserMenu(false)} />
-                    <div className="absolute right-0 z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
-                      <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-3.5 py-3">
-                        <Avatar name={user.displayName || user.username} color={user.avatarColor} size={38} ring />
-                        <div className="min-w-0">
-                          <p className="truncate text-[12.5px] font-bold">{user.displayName}</p>
-                          <p className="truncate font-mono text-[10px] text-[var(--text-muted)]">@{user.username}</p>
-                        </div>
-                      </div>
-
-                      <div className="p-1.5">
-                        <MenuItem
-                          icon={<KeyRound className="h-3.5 w-3.5" />}
-                          label="Change password"
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            setPasswordMsg(null);
-                            setShowPasswordModal(true);
-                          }}
-                        />
-                        <MenuItem
-                          icon={<LogOut className="h-3.5 w-3.5" />}
-                          label="Sign out everywhere"
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            handleLogoutEverywhere();
-                          }}
-                        />
-                        <div className="my-1 h-px bg-[var(--border-subtle)]" />
-                        <MenuItem
-                          icon={<Trash2 className="h-3.5 w-3.5" />}
-                          label="Delete my account"
-                          tone="danger"
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            setDeletePassword('');
-                            setDeleteError(null);
-                            setShowDeleteModal(true);
-                          }}
-                        />
-                        <MenuItem
-                          icon={<LogOut className="h-3.5 w-3.5" />}
-                          label="Sign out"
-                          onClick={() => {
-                            setShowUserMenu(false);
-                            logout();
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
-            )}
+
+              {user && !isPending && (
+                <div className="relative ml-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserMenu((v) => !v);
+                      setShowNotif(false);
+                    }}
+                    aria-label="Account menu"
+                    className="flex h-9 items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 pl-1 pr-1.5 transition hover:border-[var(--accent-amber)]/45 hover:bg-[var(--bg-surface-elevated)]"
+                  >
+                    <Avatar name={user.displayName || user.username} color={user.avatarColor} size={26} ring />
+                    <span className="hidden max-w-[104px] truncate text-[11.5px] font-semibold md:block">
+                      {user.displayName || user.username}
+                    </span>
+                    <ChevronDown
+                      className={`h-3 w-3 shrink-0 text-[var(--text-muted)] transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                  {showUserMenu && (
+                    <>
+                      <div className="fixed inset-0 z-[55]" onClick={() => setShowUserMenu(false)} />
+                      <div className="absolute right-0 z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
+                        <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-3.5 py-3">
+                          <Avatar name={user.displayName || user.username} color={user.avatarColor} size={38} ring />
+                          <div className="min-w-0">
+                            <p className="truncate text-[12.5px] font-bold">{user.displayName}</p>
+                            <p className="truncate font-mono text-[10px] text-[var(--text-muted)]">@{user.username}</p>
+                          </div>
+                        </div>
+
+                        <div className="p-1.5">
+                          <MenuItem
+                            icon={<KeyRound className="h-3.5 w-3.5" />}
+                            label="Change password"
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setPasswordMsg(null);
+                              setShowPasswordModal(true);
+                            }}
+                          />
+                          <MenuItem
+                            icon={<LogOut className="h-3.5 w-3.5" />}
+                            label="Sign out everywhere"
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              handleLogoutEverywhere();
+                            }}
+                          />
+                          <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                          <MenuItem
+                            icon={<Trash2 className="h-3.5 w-3.5" />}
+                            label="Delete my account"
+                            tone="danger"
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              setDeletePassword('');
+                              setDeleteError(null);
+                              setShowDeleteModal(true);
+                            }}
+                          />
+                          <MenuItem
+                            icon={<LogOut className="h-3.5 w-3.5" />}
+                            label="Sign out"
+                            onClick={() => {
+                              setShowUserMenu(false);
+                              logout();
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        {/* Progress hairline that reacts to the theme switch */}
-        <div
-          aria-hidden
-          className="h-px w-full"
-          style={{
-            background:
-              'linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent-amber) 55%, transparent) 22%, color-mix(in oklab, var(--accent-coral) 45%, transparent) 55%, transparent)',
-          }}
-        />
-      </header>
+        </header>
+      </div>
 
       {/* ---------------------------------------------------------- Account deletion */}
       <Modal open={showDeleteModal} onClose={() => !deleteLoading && setShowDeleteModal(false)} size="sm" label="Delete account">

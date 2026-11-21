@@ -62,14 +62,14 @@
     --paper-dot: rgba(255, 255, 255, 0.04);
     --pattern-ink: rgba(226, 222, 255, 0.15);
     --pattern-tint: rgba(246, 181, 68, 0.16);
-    --pattern-size: 540px auto;
+    --pattern-size: 378px auto;
     --blob-a: rgba(255, 112, 105, 0.2);
     --blob-b: rgba(94, 234, 212, 0.13);
     --blob-c: rgba(155, 155, 255, 0.17);
     --vignette: rgba(0, 0, 0, 0.55);
-    --glass-tint: rgba(255, 255, 255, 0.045);
+    --glass-tint: rgba(255, 255, 255, 0.04);
     /* how much of a card's fill is opaque — lower lets the doodle sheet show */
-    --surface-opacity: 88%;
+    --surface-opacity: 100%;
     --glass-border: rgba(255, 255, 255, 0.08);
     --btn-shadow: 0 12px 30px -14px rgba(246, 169, 43, 0.7);
     --gradient-ember: linear-gradient(135deg, #ffc86b 0%, #f6a92b 42%, #f9655f 100%);
@@ -101,13 +101,13 @@
     --paper-dot: rgba(26, 24, 38, 0.055);
     --pattern-ink: rgba(26, 24, 38, 0.17);
     --pattern-tint: rgba(196, 122, 9, 0.18);
-    --pattern-size: 540px auto;
+    --pattern-size: 378px auto;
     --blob-a: rgba(246, 169, 43, 0.24);
     --blob-b: rgba(13, 143, 132, 0.14);
     --blob-c: rgba(85, 81, 212, 0.12);
     --vignette: rgba(120, 96, 60, 0.07);
     --glass-tint: rgba(255, 255, 255, 0.6);
-    --surface-opacity: 86%;
+    --surface-opacity: 100%;
     --glass-border: rgba(26, 24, 38, 0.07);
     --btn-shadow: 0 14px 30px -16px rgba(222, 120, 20, 0.75);
     --gradient-ember: linear-gradient(135deg, #ffcf7d 0%, #f6a92b 45%, #f9655f 100%);
@@ -162,8 +162,8 @@
     content: "";
     position: fixed;
     inset: 0;
-    /* Above the shell's opaque page background so the art is never painted over */
-    z-index: 1;
+    /* Below every surface; the shell no longer paints an opaque fill */
+    z-index: -1;
     pointer-events: none;
     background-color: var(--pattern-ink);
     background-image: linear-gradient(160deg, transparent 30%, var(--pattern-tint) 78%);
@@ -231,6 +231,8 @@
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 55%),
       color-mix(in oklab, var(--bg-card) var(--surface-opacity), transparent);
+    backdrop-filter: blur(22px) saturate(1.12);
+    -webkit-backdrop-filter: blur(22px) saturate(1.12);
     border: 1px solid var(--border-color);
     border-radius: 22px;
     box-shadow: var(--shadow-card);
@@ -280,7 +282,7 @@
     border: 1px solid var(--border-color);
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 45%),
-      color-mix(in oklab, var(--bg-card) 72%, transparent);
+      color-mix(in oklab, var(--bg-card) 96%, transparent);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.06) inset,
       0 40px 90px -50px rgba(0, 0, 0, 0.95);
@@ -451,6 +453,8 @@
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 40%),
       var(--bg-card);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--border-color);
     border-radius: 26px;
     box-shadow: var(--shadow-float), 0 1px 0 rgba(255, 255, 255, 0.05) inset;

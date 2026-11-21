@@ -108,14 +108,14 @@ export const AuthScreen: React.FC = () => {
         : 'Paste the one-time token an admin shared with you.';
 
   return (
-    <div className="auth-page relative min-h-dvh lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+    <div className="auth-page relative z-0 min-h-dvh lg:grid lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
       {/* ------------------------------------------- full-bleed illustrated left */}
       <aside className="relative isolate hidden overflow-hidden bg-[#0d0b16] lg:block">
         <img
           src="/auth-illustration.webp"
           alt=""
           aria-hidden
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover object-center"
         />
         <div
           aria-hidden
@@ -258,20 +258,9 @@ export const AuthScreen: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <div className="mb-1 flex items-baseline justify-between">
-                        <label className="label !mb-0" htmlFor="password">
-                          Password
-                        </label>
-                        {mode === 'login' && (
-                          <button
-                            type="button"
-                            onClick={() => setMode('redeem_reset')}
-                            className="text-[10.5px] font-semibold text-[var(--accent-amber)] transition hover:opacity-80"
-                          >
-                            Forgot password?
-                          </button>
-                        )}
-                      </div>
+                      <label className="label" htmlFor="password">
+                        Password
+                      </label>
                       <div className="relative">
                         <Lock className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--text-muted)]" />
                         <input
@@ -293,6 +282,15 @@ export const AuthScreen: React.FC = () => {
                           {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                         </button>
                       </div>
+                      {mode === 'login' && (
+                        <button
+                          type="button"
+                          onClick={() => setMode('redeem_reset')}
+                          className="mt-1.5 text-[10.5px] font-semibold text-[var(--accent-amber)] transition hover:opacity-80"
+                        >
+                          Forgot password?
+                        </button>
+                      )}
                     </div>
                   </>
                 ) : (

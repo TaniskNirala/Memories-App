@@ -22,6 +22,15 @@ export const SharePlacementModal: React.FC<SharePlacementModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, loading, onClose]);
+
   if (!isOpen || !item) return null;
 
   const toggleGroup = (id: string) => {
@@ -64,7 +73,12 @@ export const SharePlacementModal: React.FC<SharePlacementModalProps> = ({
   };
 
   return (
-    <div className="scrim z-50">
+    <div
+      className="scrim z-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose();
+      }}
+    >
       <div className="w-full max-w-sm bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">

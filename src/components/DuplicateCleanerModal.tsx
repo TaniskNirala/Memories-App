@@ -77,6 +77,15 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !resolvingKey) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, resolvingKey, onClose]);
+
   if (!isOpen) return null;
 
   const totalWastedBytes = duplicateGroups.reduce((acc, g) => acc + g.wastedBytes, 0);
@@ -226,7 +235,12 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
   };
 
   return (
-    <div className="scrim z-60">
+    <div
+      className="scrim z-60"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !resolvingKey) onClose();
+      }}
+    >
       <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] p-5 text-white relative flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[var(--border-color)]">

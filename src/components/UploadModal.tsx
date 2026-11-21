@@ -549,6 +549,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     onClose();
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isProcessing && !editingQueueItemId) {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, isProcessing, editingQueueItemId]);
+
   if (!isOpen) return null;
 
   const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -763,6 +774,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !editingQueueItemId) {
+          handleClose();
+        }
+      }}
       className="scrim z-50"
     >
       <div

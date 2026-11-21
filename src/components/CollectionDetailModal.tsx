@@ -252,7 +252,14 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   };
 
   return (
-    <div className="scrim z-50">
+    <div
+      className="scrim z-50"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isAddPhotosOpen && !isPermissionsOpen && !showDeleteConfirm) {
+          onClose();
+        }
+      }}
+    >
       <div className="w-full max-w-3xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[92vh] h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-[var(--border-color)] flex items-start justify-between gap-3">
@@ -715,7 +722,12 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
 
       {/* Delete Event Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="scrim z-60">
+        <div
+          className="scrim z-60"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isDeleting) setShowDeleteConfirm(false);
+          }}
+        >
           <div className="w-full max-w-sm bg-[var(--bg-card)] border border-rose-500/30 rounded-3xl p-5 text-center shadow-2xl space-y-4">
             <div className="w-12 h-12 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-500 flex items-center justify-center mx-auto shadow-sm">
               <Trash2 className="w-6 h-6" />

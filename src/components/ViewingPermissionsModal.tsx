@@ -183,7 +183,12 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
   const isEveryoneSelected = everyoneGroup ? selectedGroupIds.includes(everyoneGroup.id) : false;
 
   return (
-    <div className="scrim z-60">
+    <div
+      className="scrim z-60"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !saving) onClose();
+      }}
+    >
       <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] p-5 text-white relative flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-[var(--border-color)]">

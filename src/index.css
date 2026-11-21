@@ -563,11 +563,10 @@
     opacity: 0.95;
   }
 
-  /* month "chapter" marker */
+  /* month "chapter" marker — stays in place on the timeline (does not follow scroll) */
   .tl-month {
-    position: sticky;
-    top: calc(4.25rem + env(safe-area-inset-top, 0px));
-    z-index: 18;
+    position: relative;
+    z-index: 12;
     display: flex;
     justify-content: flex-start;
     margin: 0 0 1.1rem;

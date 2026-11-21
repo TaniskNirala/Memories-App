@@ -76,13 +76,15 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchAvailableUsers();
+      setCreateError(null);
       if (initialCreateMode) {
-        // Opening straight into "new circle": do not quietly select an existing
-        // circle behind the create sheet (it read as "your circles opening").
+        // Opening straight into "new circle": render ONLY the Create Circle
+        // popup with no background Manage panel behind it.
         setShowCreateModal(true);
         setSelectedGroup(null);
         return;
       }
+      setShowCreateModal(false);
       if (selectedGroup) {
         // Keep selected group updated with fresh props
         const fresh = groups.find((g) => g.id === selectedGroup.id);
@@ -107,6 +109,33 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
       setPendingSelectId(null);
     }
   }, [groups, pendingSelectId]);
+
+  const closeCreateSheet = () => {
+    setShowCreateModal(false);
+    setCreateError(null);
+    if (initialCreateMode) {
+      onClose();
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showDeleteModal) {
+          if (!deleteLoading) setShowDeleteModal(false);
+        } else if (showLeaveModal) {
+          if (!leaveLoading) setShowLeaveModal(false);
+        } else if (showCreateModal) {
+          closeCreateSheet();
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, showDeleteModal, deleteLoading, showLeaveModal, leaveLoading, showCreateModal, initialCreateMode]);
 
   if (!isOpen) return null;
 
@@ -133,6 +162,11 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         setSelectedUserIds([]);
         setShowCreateModal(false);
         onRefreshGroups();
+        if (initialCreateMode) {
+          // When opened directly via "Create Circle" / "New Circle", finish and close cleanly
+          onClose();
+          return;
+        }
         // POST /api/groups answers { groupId }; select it once the parent's
         // refetch has delivered the new circle.
         const createdId = data.group?.id || data.groupId;
@@ -257,6 +291,123 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
       (isAdmin || selectedGroup.canManage || selectedGroup.creatorId === user?.id)
   );
 
+  if (showCreateModal) {
+    return (
+      <div
+        className="scrim z-50"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) closeCreateSheet();
+        }}
+      >
+        <div className="modal-panel max-w-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="eyebrow text-[0.62rem]">New circle</p>
+              <h4 className="mt-0.5 font-display font-bold text-sm text-[var(--text-primary)]">
+                Create Private Circle
+              </h4>
+            </div>
+            <button
+              type="button"
+              onClick={closeCreateSheet}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <form onSubmit={handleCreateGroup} className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+                Circle Name
+              </label>
+              <input
+                type="text"
+                required
+                autoFocus
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="e.g. College Buddies, Hiking Trip"
+                className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+                Description (optional)
+              </label>
+              <input
+                type="text"
+                value={newGroupDesc}
+                onChange={(e) => setNewGroupDesc(e.target.value)}
+                placeholder="Short description..."
+                className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
+                Add Friends
+              </label>
+              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-2 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]">
+                {availableUsers.length === 0 ? (
+                  <p className="text-[11px] text-[var(--text-muted)] p-1">
+                    No other members yet. You can create the circle now and add members later!
+                  </p>
+                ) : (
+                  availableUsers.map((u) => {
+                    const selected = selectedUserIds.includes(u.id);
+                    const uName = u.displayName || u.display_name || u.username;
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedUserIds((prev) =>
+                            prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]
+                          );
+                        }}
+                        className={`px-2.5 py-1 text-[11px] rounded-lg transition font-medium ${
+                          selected
+                            ? 'bg-[var(--accent-coral)] text-white shadow-xs'
+                            : 'bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        }`}
+                      >
+                        {uName}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {createError && (
+              <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2 text-[11px] font-medium text-rose-400">
+                {createError}
+              </p>
+            )}
+
+            <div className="pt-2 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeCreateSheet}
+                className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-[var(--accent-coral)] text-white playful-btn shadow-md"
+              >
+                Create Circle
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="scrim z-50"
@@ -270,7 +421,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
           <div className="flex min-w-0 items-center gap-2">
             <Users className="w-5 h-5 shrink-0 text-[var(--accent-coral)]" />
             <h3 className="truncate font-display font-bold text-base text-[var(--text-primary)]">
-              {showCreateModal ? 'New circle' : 'Your Circles'}
+              Your Circles
             </h3>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -550,126 +701,6 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
             )}
           </div>
         </div>
-
-        {/* Create Group Sub-Modal */}
-        {showCreateModal && (
-          <div
-            className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowCreateModal(false);
-            }}
-          >
-            <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="eyebrow text-[0.62rem]">New circle</p>
-                  <h4 className="mt-0.5 font-display font-bold text-sm text-[var(--text-primary)]">
-                    Create Private Circle
-                  </h4>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setCreateError(null);
-                  }}
-                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <form onSubmit={handleCreateGroup} className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                    Circle Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    placeholder="e.g. College Buddies, Hiking Trip"
-                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                    Description (optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={newGroupDesc}
-                    onChange={(e) => setNewGroupDesc(e.target.value)}
-                    placeholder="Short description..."
-                    className="w-full px-3 py-1.5 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1">
-                    Add Friends
-                  </label>
-                  <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto p-1.5 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]">
-                    {availableUsers.length === 0 ? (
-                      <p className="text-[11px] text-[var(--text-muted)] p-1">
-                        No other members yet. You can create the circle now and add members later!
-                      </p>
-                    ) : (
-                      availableUsers.map((u) => {
-                        const selected = selectedUserIds.includes(u.id);
-                        const uName = u.displayName || u.display_name || u.username;
-                        return (
-                          <button
-                            key={u.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedUserIds((prev) =>
-                                prev.includes(u.id) ? prev.filter((id) => id !== u.id) : [...prev, u.id]
-                              );
-                            }}
-                            className={`px-2.5 py-1 text-[11px] rounded-lg transition font-medium ${
-                              selected
-                                ? 'bg-[var(--accent-coral)] text-white shadow-xs'
-                                : 'bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-white'
-                            }`}
-                          >
-                            {uName}
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {createError && (
-                  <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2 text-[11px] font-medium text-rose-400">
-                    {createError}
-                  </p>
-                )}
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setCreateError(null);
-                    }}
-                    className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-[var(--accent-coral)] text-white playful-btn shadow-md"
-                  >
-                    Create Circle
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
         {/* --- Delete Circle Confirmation Modal (In-App) --- */}
         {showDeleteModal && selectedGroup && (

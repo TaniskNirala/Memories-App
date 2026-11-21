@@ -416,13 +416,32 @@ export const PageHero: React.FC<{
   actions?: React.ReactNode;
   accent?: Tone;
   aside?: React.ReactNode;
-}> = ({ eyebrow, title, subtitle, actions, accent = 'amber', aside }) => {
+  /** Mirror the left rail on wide screens: text stays centred, cards move right */
+  rail?: boolean;
+}> = ({ eyebrow, title, subtitle, actions, accent = 'amber', aside, rail = false }) => {
   const gradient = useMemo(
     () =>
       `radial-gradient(680px 240px at 4% -40%, color-mix(in oklab, ${toneVar[accent]} 22%, transparent), transparent 72%), radial-gradient(520px 220px at 92% -60%, color-mix(in oklab, ${
         accent === 'coral' ? toneVar.amber : toneVar.coral
       } 16%, transparent), transparent 70%)`,
     [accent]
+  );
+
+  const text = (
+    <div className="min-w-0">
+      {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
+      <h1 className="font-display text-[1.6rem] leading-[1.12] tracking-tight sm:text-[2rem]">{title}</h1>
+      {subtitle && (
+        <p className="mt-1.5 max-w-xl text-[12px] leading-relaxed text-[var(--text-secondary)]">{subtitle}</p>
+      )}
+    </div>
+  );
+
+  const cluster = (
+    <div className="flex shrink-0 flex-wrap items-center gap-2">
+      {aside}
+      {actions}
+    </div>
   );
 
   return (
@@ -433,19 +452,19 @@ export const PageHero: React.FC<{
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
         style={{ background: 'linear-gradient(90deg, transparent, var(--border-color), transparent)' }}
       />
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
-          <h1 className="font-display text-[1.6rem] leading-[1.12] tracking-tight sm:text-[2rem]">{title}</h1>
-          {subtitle && (
-            <p className="mt-1.5 max-w-xl text-[12px] leading-relaxed text-[var(--text-secondary)]">{subtitle}</p>
-          )}
+      {rail ? (
+        /* Wide: the text block sits centred in the content column and the
+           action cluster floats to the right edge, balancing the nav rail. */
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between lg:flex-nowrap">
+          <div className="min-w-0 flex-1 sm:text-center lg:mx-auto lg:max-w-[440px] lg:flex-none lg:text-center">{text}</div>
+          <div className="lg:ml-auto lg:self-center">{cluster}</div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {aside}
-          {actions}
+      ) : (
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+          {text}
+          {cluster}
         </div>
-      </div>
+      )}
     </header>
   );
 };

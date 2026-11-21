@@ -74,35 +74,38 @@ const HeroBand: React.FC<{
           `${selectedGroupMembers || 0} people in this circle — everything below is only visible to them.`
         : 'Your memories, stacked by the day they happened. Pick a circle on the left to narrow the view.'
     }
+    rail
     aside={
-      <div className="flex items-center gap-2">
-        <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} size={36} ring />
-        <div className="hidden leading-tight sm:block">
-          <p className="text-[11px] font-bold">@{user?.username}</p>
-          <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">{user?.role}</p>
+      <div className="flex items-center gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-page)]/45 px-2.5 py-1.5">
+        <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} size={30} ring />
+        <div className="leading-tight">
+          <p className="text-[10.5px] font-bold">@{user?.username}</p>
+          <p className="text-[8.5px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            {user?.role}
+          </p>
         </div>
       </div>
     }
     actions={
       <>
-        <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 px-3 py-1.5">
+        <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-page)]/45 px-2.5 py-1.5">
           {[
             { label: 'memories', value: memories },
             { label: 'circles', value: groupsCount },
             { label: 'people', value: contributors },
           ].map((s, i) => (
-            <div key={s.label} className={i > 0 ? 'border-l border-[var(--border-subtle)] pl-3' : ''}>
-              <p className="font-display text-[15px] leading-none tabular-nums">{s.value}</p>
-              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
+            <div key={s.label} className={i > 0 ? 'border-l border-[var(--border-subtle)] pl-2.5' : ''}>
+              <p className="font-display text-[14px] leading-none tabular-nums">{s.value}</p>
+              <p className="mt-0.5 text-[7.5px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">
                 {s.label}
               </p>
             </div>
           ))}
         </div>
-        <button type="button" onClick={onOpenUpload} className="btn btn-primary">
+        <button type="button" onClick={onOpenUpload} className="btn btn-primary !px-3.5 !py-2">
           Add memory
         </button>
-        <button type="button" onClick={onOpenGroupsManager} className="btn btn-soft hidden sm:inline-flex">
+        <button type="button" onClick={onOpenGroupsManager} className="btn btn-soft hidden !px-3.5 !py-2 sm:inline-flex">
           Circles
         </button>
       </>

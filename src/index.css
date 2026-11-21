@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 /* ==========================================================================
    NEST — "Lumen Timeline" design system
@@ -54,6 +55,22 @@
     --accent-cyan: #5eead4;
     --accent-teal: #34d399;
     --accent-indigo: #9b9bff;
+    --tone-emerald-fg: #6ee7b7;
+    --tone-emerald-muted: rgba(110, 231, 183, 0.8);
+    --tone-emerald-bg: rgba(16, 185, 129, 0.14);
+    --tone-emerald-border: rgba(16, 185, 129, 0.34);
+    --tone-rose-fg: #fda4af;
+    --tone-rose-muted: rgba(253, 164, 175, 0.82);
+    --tone-rose-bg: rgba(244, 63, 94, 0.14);
+    --tone-rose-border: rgba(244, 63, 94, 0.34);
+    --tone-sky-fg: #7dd3fc;
+    --tone-sky-muted: rgba(125, 211, 252, 0.82);
+    --tone-sky-bg: rgba(14, 165, 233, 0.16);
+    --tone-sky-border: rgba(56, 189, 248, 0.36);
+    --tone-amber-fg: #fcd34d;
+    --tone-amber-muted: rgba(252, 211, 77, 0.85);
+    --tone-amber-bg: rgba(245, 158, 11, 0.15);
+    --tone-amber-border: rgba(245, 158, 11, 0.36);
     --ring-focus: rgba(246, 181, 68, 0.45);
     --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -24px rgba(0, 0, 0, 0.9);
     --shadow-float: 0 24px 60px -28px rgba(0, 0, 0, 0.95);
@@ -94,6 +111,22 @@
     --accent-cyan: #0d8f84;
     --accent-teal: #0d8f6a;
     --accent-indigo: #5551d4;
+    --tone-emerald-fg: #065f46;
+    --tone-emerald-muted: #047857;
+    --tone-emerald-bg: rgba(16, 185, 129, 0.14);
+    --tone-emerald-border: rgba(16, 185, 129, 0.38);
+    --tone-rose-fg: #9f1239;
+    --tone-rose-muted: #be123c;
+    --tone-rose-bg: rgba(225, 29, 72, 0.1);
+    --tone-rose-border: rgba(225, 29, 72, 0.32);
+    --tone-sky-fg: #075985;
+    --tone-sky-muted: #0369a1;
+    --tone-sky-bg: rgba(2, 132, 199, 0.12);
+    --tone-sky-border: rgba(2, 132, 199, 0.34);
+    --tone-amber-fg: #92400e;
+    --tone-amber-muted: #b45309;
+    --tone-amber-bg: rgba(217, 119, 6, 0.13);
+    --tone-amber-border: rgba(217, 119, 6, 0.35);
     --ring-focus: rgba(222, 74, 72, 0.35);
     --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 18px 36px -26px rgba(70, 50, 20, 0.45);
     --shadow-float: 0 24px 60px -30px rgba(70, 50, 20, 0.4);
@@ -642,6 +675,11 @@
     margin-bottom: 0.65rem;
     min-height: 1.5rem;
   }
+  .tl-day-head-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
   .tl-day-weekday {
     font-size: 0.58rem;
     font-weight: 800;
@@ -674,10 +712,25 @@
   @media (min-width: 900px) {
     .tl-root { --tl-pad: 0px; }
 
+    .tl-day {
+      padding-top: calc(var(--tl-node) + 0.35rem);
+    }
+
     .tl-day-head {
       justify-content: center;
       gap: 0.6rem;
       margin-bottom: 0.9rem;
+    }
+    .tl-day-head-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.22rem 0.68rem;
+      border-radius: 999px;
+      background: color-mix(in oklab, var(--bg-card) 92%, var(--bg-page));
+      border: 1px solid var(--border-subtle);
+      position: relative;
+      z-index: 6;
     }
     .tl-day-rule {
       flex: 0 1 7rem;
@@ -795,6 +848,27 @@
     scrollbar-width: none;
   }
   .scroll-x::-webkit-scrollbar { display: none; }
+
+  .tone-emerald {
+    color: var(--tone-emerald-fg);
+    background-color: var(--tone-emerald-bg);
+    border-color: var(--tone-emerald-border);
+  }
+  .tone-rose {
+    color: var(--tone-rose-fg);
+    background-color: var(--tone-rose-bg);
+    border-color: var(--tone-rose-border);
+  }
+  .tone-sky {
+    color: var(--tone-sky-fg);
+    background-color: var(--tone-sky-bg);
+    border-color: var(--tone-sky-border);
+  }
+  .tone-amber {
+    color: var(--tone-amber-fg);
+    background-color: var(--tone-amber-bg);
+    border-color: var(--tone-amber-border);
+  }
 }
 
 /* --------------------------------------------------------------------------

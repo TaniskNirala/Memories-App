@@ -300,10 +300,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
             {isHost && (
               <button
                 onClick={() => setIsPermissionsOpen(true)}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+                className="tone-amber px-3 py-1.5 rounded-xl border hover:opacity-90 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
                 title="Adjust circles & viewing permissions"
               >
-                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <Shield className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Permissions</span>
               </button>
             )}
@@ -311,10 +311,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
             {isHost && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 hover:text-rose-300 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+                className="tone-rose p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border hover:opacity-90 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
                 title="Delete this event"
               >
-                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <Trash2 className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Delete</span>
               </button>
             )}
@@ -322,10 +322,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
             {!collection?.isEvent && isHost && (
               <button
                 onClick={() => setShowConvertToEvent((prev) => !prev)}
-                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 border border-amber-500/30 text-amber-300 hover:text-white transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
+                className="tone-amber px-3 py-1.5 rounded-xl border hover:opacity-90 transition flex items-center gap-1.5 text-xs font-semibold shadow-xs cursor-pointer"
                 title="Convert this photo album into an event with guest attendees and notes"
               >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <Sparkles className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Convert to Event</span>
                 <span className="sm:hidden">To Event</span>
               </button>
@@ -342,17 +342,17 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
 
         {/* Inline Convert to Event Form */}
         {showConvertToEvent && (
-          <div className="p-4 bg-amber-500/10 border-b border-amber-500/30 animate-in fade-in duration-150">
+          <div className="p-4 bg-[var(--tone-amber-bg)] border-b border-[var(--tone-amber-border)] animate-in fade-in duration-150">
             <form onSubmit={handleConvertToEvent} className="max-w-2xl mx-auto space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
+                <div className="flex items-center gap-2 text-xs font-bold text-[var(--tone-amber-fg)]">
+                  <Sparkles className="w-4 h-4" />
                   <span>Upgrade to Interactive Event</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowConvertToEvent(false)}
-                  className="text-[var(--text-muted)] hover:text-white text-xs cursor-pointer"
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -401,7 +401,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowConvertToEvent(false)}
-                  className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-[var(--text-secondary)] text-xs font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-[var(--bg-card)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-secondary)] text-xs font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -438,7 +438,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                       <Check className="w-3.5 h-3.5" /> I was there
                     </button>
                   ) : (
-                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                    <span className="text-xs text-[var(--tone-emerald-fg)] font-semibold flex items-center gap-1">
                       <Check className="w-3.5 h-3.5" /> You attended
                     </span>
                   )}

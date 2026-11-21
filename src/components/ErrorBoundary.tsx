@@ -26,7 +26,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
     return (
       <div className="app-shell items-center justify-center p-4">
         <div className="surface card-glow w-full max-w-md p-6 text-center">
-          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-500/10 text-rose-400">
+          <span className="tone-rose mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border">
             <AlertTriangle className="h-6 w-6" />
           </span>
           <p className="eyebrow">Something slipped</p>

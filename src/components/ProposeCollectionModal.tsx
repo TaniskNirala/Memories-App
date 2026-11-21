@@ -102,7 +102,7 @@ export const ProposeCollectionModal: React.FC<ProposeCollectionModalProps> = ({
         </div>
 
         {msg && (
-          <div className="p-2.5 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs">
+          <div className="tone-amber p-2.5 mb-3 rounded-xl border text-xs font-medium">
             {msg}
           </div>
         )}

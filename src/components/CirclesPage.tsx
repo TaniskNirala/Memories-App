@@ -194,7 +194,7 @@ export const CirclesPage: React.FC<CirclesPageProps> = ({
                   </div>
 
                   {g.isEveryone && (
-                    <p className="mt-3 flex items-start gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/8 px-2.5 py-2 text-[10px] leading-relaxed text-emerald-300">
+                    <p className="tone-emerald mt-3 flex items-start gap-1.5 rounded-lg border px-2.5 py-2 text-[10px] leading-relaxed font-medium">
                       <Sparkles className="mt-px h-3 w-3 shrink-0" />
                       Every approved member is added here automatically — perfect for the stuff you don't mind everyone seeing.
                     </p>

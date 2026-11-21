@@ -53,7 +53,7 @@ export const PendingApprovalScreen: React.FC = () => {
                 <p className="truncate text-[12.5px] font-bold">{user?.displayName}</p>
                 <p className="truncate font-mono text-[10px] text-[var(--text-muted)]">@{user?.username}</p>
               </div>
-              <span className="ml-auto rounded-full border border-amber-500/30 bg-amber-500/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-amber-400">
+              <span className="tone-amber ml-auto rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em]">
                 Pending
               </span>
             </div>
@@ -66,9 +66,9 @@ export const PendingApprovalScreen: React.FC = () => {
                     <span
                       className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold ${
                         s.done
-                          ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400'
+                          ? 'tone-emerald'
                           : i === 1
-                            ? 'border-[var(--accent-amber)]/60 bg-[var(--accent-amber)]/12 text-[var(--accent-amber)]'
+                            ? 'tone-amber'
                             : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-muted)]'
                       }`}
                     >

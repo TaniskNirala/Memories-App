@@ -82,7 +82,7 @@ export const SharePlacementModal: React.FC<SharePlacementModalProps> = ({
       <div className="w-full max-w-sm bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Share2 className="w-4 h-4 text-sky-400" />
+            <Share2 className="w-4 h-4 text-[var(--tone-sky-fg)]" />
             <h4 className="font-display font-bold text-sm text-[var(--text-primary)]">
               Share to Circle
             </h4>
@@ -97,7 +97,7 @@ export const SharePlacementModal: React.FC<SharePlacementModalProps> = ({
         </p>
 
         {message && (
-          <div className="p-2.5 mb-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs flex items-center gap-1.5">
+          <div className="tone-amber p-2.5 mb-3 rounded-xl border text-xs flex items-center gap-1.5 font-medium">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{message}</span>
           </div>

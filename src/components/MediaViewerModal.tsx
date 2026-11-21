@@ -555,18 +555,18 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             if (e.target === e.currentTarget && !isConvertingPost) setShowConvertPostToEvent(false);
           }}
         >
-          <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 text-white space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl p-5 text-[var(--text-primary)] space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[var(--border-subtle)] pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center shadow-xs">
                   <Sparkles className="w-4 h-4 text-white" />
                 </div>
-                <h3 className="font-display font-bold text-sm text-white">Convert into Event Collection</h3>
+                <h3 className="font-display font-bold text-sm text-[var(--text-primary)]">Convert into Event Collection</h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowConvertPostToEvent(false)}
-                className="text-[var(--text-muted)] hover:text-white text-xs cursor-pointer"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xs cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -587,43 +587,43 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   value={postEventTitle}
                   onChange={(e) => setPostEventTitle(e.target.value)}
                   placeholder="e.g. Summer Lake Trip, Birthday Party"
-                  className="w-full px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                  className="w-full px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden focus:ring-1 focus:ring-amber-400"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
-                    <Calendar className="w-3 h-3 text-amber-400" /> Event Date
+                    <Calendar className="w-3 h-3 text-[var(--accent-amber)]" /> Event Date
                   </label>
                   <input
                     type="date"
                     required
                     value={postEventDate}
                     onChange={(e) => setPostEventDate(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden focus:ring-1 focus:ring-amber-400"
                   />
                 </div>
 
                 <div>
                   <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-rose-400" /> Location / Venue
+                    <MapPin className="w-3 h-3 text-[var(--accent-coral)]" /> Location / Venue
                   </label>
                   <input
                     type="text"
                     value={postEventPlace}
                     onChange={(e) => setPostEventPlace(e.target.value)}
                     placeholder="e.g. Lake Tahoe"
-                    className="w-full px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white placeholder-neutral-500 focus:outline-hidden focus:ring-1 focus:ring-amber-400"
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden focus:ring-1 focus:ring-amber-400"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+              <div className="flex justify-end gap-2 pt-2 border-t border-[var(--border-subtle)]">
                 <button
                   type="button"
                   onClick={() => setShowConvertPostToEvent(false)}
-                  className="px-3 py-1.5 rounded-xl bg-white/10 text-[var(--text-secondary)] hover:text-white font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>

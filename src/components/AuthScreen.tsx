@@ -238,13 +238,13 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
 
               <form onSubmit={handleSubmit} className="mt-4 space-y-3">
                 {error && (
-                  <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2.5 text-[11px] font-medium text-rose-300">
+                  <div className="tone-rose flex items-start gap-2 rounded-xl border px-3 py-2.5 text-[11px] font-medium">
                     <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0" />
                     <span>{error}</span>
                   </div>
                 )}
                 {successMsg && (
-                  <div className="flex items-start gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5 text-[11px] font-medium text-emerald-300">
+                  <div className="tone-emerald flex items-start gap-2 rounded-xl border px-3 py-2.5 text-[11px] font-medium">
                     <ShieldCheck className="mt-px h-3.5 w-3.5 shrink-0" />
                     <span>{successMsg}</span>
                   </div>

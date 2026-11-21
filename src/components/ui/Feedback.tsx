@@ -80,16 +80,16 @@ export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             key={t.id}
             className={`pointer-events-auto flex max-w-md items-center gap-2.5 rounded-full border px-4 py-2.5 text-xs font-semibold shadow-2xl backdrop-blur-xl fade-in ${
               t.tone === 'success'
-                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                ? 'tone-emerald'
                 : t.tone === 'error'
-                  ? 'border-rose-500/40 bg-rose-500/15 text-rose-300'
+                  ? 'tone-rose'
                   : 'border-[var(--border-color)] bg-[var(--bg-card)]/95 text-[var(--text-primary)]'
             }`}
             role="status"
           >
             <span
               className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                t.tone === 'success' ? 'bg-emerald-400' : t.tone === 'error' ? 'bg-rose-400' : 'bg-amber-400'
+                t.tone === 'success' ? 'bg-emerald-500' : t.tone === 'error' ? 'bg-rose-500' : 'bg-amber-500'
               }`}
             />
             <span className="line-clamp-2">{t.message}</span>

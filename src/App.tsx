@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AuthProvider, useAuth, apiFetch } from './context/AuthContext.tsx';
 import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
 import { Header } from './components/Header.tsx';
@@ -42,6 +42,7 @@ const MainContent: React.FC = () => {
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash' | 'profile'>('feed');
+  const centerScrollRef = useRef<HTMLDivElement>(null);
 
   // Circle deletion modal state
   const [circleToDelete, setCircleToDelete] = useState<Group | null>(null);
@@ -63,6 +64,15 @@ const MainContent: React.FC = () => {
   // Group filter selected on Left Circle Rail
   const [selectedGroupId, setSelectedGroupId] = useState<string | undefined>(undefined);
   const [groups, setGroups] = useState<Group[]>([]);
+
+  useEffect(() => {
+    if (centerScrollRef.current) {
+      centerScrollRef.current.scrollTop = 0;
+    }
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      window.scrollTo({ top: 0 });
+    }
+  }, [currentTab, selectedGroupId]);
 
   // Modals state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -593,7 +603,7 @@ const MainContent: React.FC = () => {
   };
 
   return (
-    <div className="app-shell text-[var(--text-primary)] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] transition-colors lg:pb-8">
+    <div className="app-shell text-[var(--text-primary)] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] transition-colors lg:h-dvh lg:overflow-hidden lg:pb-0">
       <Header
         selectedGroupName={selectedGroup?.name}
         onSelectGroup={(gid) => setSelectedGroupId(gid)}
@@ -610,7 +620,7 @@ const MainContent: React.FC = () => {
         }}
       />
 
-      <div className="page-wrap flex flex-1 items-start gap-6 pt-4">
+      <div className="page-wrap flex flex-1 items-start gap-6 pt-4 lg:min-h-0 lg:items-stretch lg:overflow-hidden">
         <SideNav
           currentTab={currentTab}
           onSelectTab={(tab) => {
@@ -639,9 +649,16 @@ const MainContent: React.FC = () => {
           eventCount={feedItems.filter((i) => i.type === 'collection_card').length}
         />
 
-        <main className="min-w-0 flex-1 lg:grid lg:grid-cols-[minmax(0,1fr)_236px] lg:items-start lg:gap-6 xl:grid-cols-[minmax(0,1fr)_264px]">
+        <main className="min-w-0 flex-1 lg:grid lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_236px] lg:items-stretch lg:gap-6 lg:overflow-hidden xl:grid-cols-[minmax(0,1fr)_264px]">
           {/* Feed pages ride a centred column between nav and hero controls */}
-          <div className={currentTab === 'feed' ? 'mx-auto w-full min-w-0 max-w-[880px]' : 'min-w-0 lg:col-span-2'}>
+          <div
+            ref={centerScrollRef}
+            className={
+              currentTab === 'feed'
+                ? 'mx-auto w-full min-w-0 max-w-[880px] lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pb-8 lg:pr-1'
+                : 'min-w-0 lg:col-span-2 lg:h-full lg:overflow-y-auto lg:overscroll-contain lg:pb-8 lg:pr-1'
+            }
+          >
           {/* Phones keep the greeting inline; desktop moves it to the right rail */}
           {currentTab === 'feed' && (
             <div className="mb-3.5 space-y-2.5 lg:hidden">
@@ -796,7 +813,7 @@ const MainContent: React.FC = () => {
 
           {/* Right hand rail — mirrors the nav so the timeline reads centred */}
           {currentTab === 'feed' && (
-            <div className="hidden lg:block">
+            <div className="hidden lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden">
               <HeroRail
                 user={user}
                 groupsCount={groups.length}

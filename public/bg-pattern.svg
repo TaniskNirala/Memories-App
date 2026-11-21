@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 540" width="540" height="540">
+  <g fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <!-- bicycle -->
+    <g transform="translate(34 40)">
+      <circle cx="26" cy="42" r="21"/><circle cx="96" cy="42" r="21"/>
+      <path d="M26 42l22-30h22l16 30M48 12l14 30h34M63 12h-9M96 42L74 20"/>
+    </g>
+    <!-- camera -->
+    <g transform="translate(300 30)">
+      <rect x="0" y="14" width="86" height="58" rx="12"/>
+      <path d="M26 14l9-12h22l9 12"/><circle cx="43" cy="43" r="17"/><circle cx="71" cy="26" r="3.5"/>
+    </g>
+    <!-- balloon -->
+    <g transform="translate(432 30)">
+      <path d="M30 12c-17 0-29 14-29 31s13 33 29 33 29-16 29-33S47 12 30 12z"/>
+      <path d="M22 76l8 10 8-10M30 86v22"/>
+    </g>
+    <!-- mountains -->
+    <g transform="translate(120 168)">
+      <path d="M0 66L38 8l26 36 16-20 30 42"/>
+      <path d="M27 26l11 15 9-12M0 78h116"/>
+    </g>
+    <!-- star cluster -->
+    <g transform="translate(330 168)">
+      <path d="M30 0l7 20 21 1-17 13 6 21-17-12-17 12 6-21L2 21l21-1z"/>
+      <path d="M76 34l5 13 14 1-11 9 4 14-12-8-12 8 4-14-11-9 14-1z"/>
+    </g>
+    <!-- mug -->
+    <g transform="translate(30 300)">
+      <path d="M6 6h58v46c0 11-9 20-20 20H26C15 72 6 63 6 52z"/>
+      <path d="M64 20h12c9 0 16 7 16 16s-7 16-16 16H64"/>
+      <path d="M22 0c0-6 6-6 6-12M40 0c0-6 6-6 6-12"/>
+    </g>
+    <!-- bird -->
+    <g transform="translate(216 330)">
+      <path d="M0 18c14-16 26-16 36 0 10-16 22-16 36 0"/>
+      <path d="M36 18v14M30 38l6-6 6 6"/>
+    </g>
+    <!-- face / eye -->
+    <g transform="translate(392 306)">
+      <circle cx="40" cy="40" r="38"/>
+      <path d="M16 38c10-13 38-13 48 0-10 13-38 13-48 0z"/><circle cx="40" cy="38" r="7"/>
+      <path d="M26 64c9 7 19 7 28 0"/>
+    </g>
+    <!-- speech digit -->
+    <g transform="translate(66 452)">
+      <path d="M0 10c0-6 4-10 10-10h76c6 0 10 4 10 10v34c0 6-4 10-10 10H40L18 68l2-14H10C4 54 0 50 0 44z"/>
+      <path d="M34 16v22M46 16h10c5 0 9 3 9 8s-4 8-9 8H46"/>
+    </g>
+    <!-- map pin route -->
+    <g transform="translate(232 452)">
+      <path d="M8 56c0-14 12-26 26-26s26 12 26 26" />
+      <path d="M34 0c9 0 16 7 16 16s-16 32-16 32S18 25 18 16 25 0 34 0z"/>
+      <path d="M0 58h96"/>
+    </g>
+    <!-- tiny heart -->
+    <g transform="translate(404 452)">
+      <path d="M26 46S4 33 4 18C4 9 11 3 19 3c5 0 8 3 10 7 2-4 5-7 10-7 8 0 15 6 15 15 0 15-22 28-22 28z"/>
+    </g>
+  </g>
+</svg>

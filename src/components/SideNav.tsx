@@ -51,7 +51,7 @@ export const SideNav: React.FC<SideNavProps> = ({
   ];
 
   return (
-    <aside className="hidden w-[248px] shrink-0 lg:block">
+    <aside className="hidden w-[248px] shrink-0 lg:block xl:w-[268px]">
       <div className="sticky top-[76px] space-y-3 pb-8">
         {/* Primary navigation */}
         <nav className="surface overflow-hidden p-1.5">

@@ -213,7 +213,7 @@
   .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.5rem); }
   .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
   .app-shell { min-height: 100dvh; display: flex; flex-direction: column; }
-  .page-wrap { width: 100%; max-width: 1180px; margin-inline: auto; padding-inline: clamp(0.9rem, 3vw, 2rem); }
+  .page-wrap { width: 100%; max-width: 1280px; margin-inline: auto; padding-inline: clamp(0.9rem, 3vw, 2rem); }
   .hairline { border: 1px solid var(--border-color); }
 
   /* ---------------------------------------------------------------- Surfaces */
@@ -454,37 +454,43 @@
     color: var(--text-muted);
   }
 
-  /* ---------------------------------------------------------------- Timeline */
+  /* ---------------------------------------------------------------- Timeline
+     One centred column: a gradient spine on the left, a date node per day
+     cluster, one card per row. Month markers act as sticky "chapters". */
   .tl-root {
+    --tl-pad: 2.9rem;
+    --tl-rail-x: 0.78rem;
+    --tl-node: 2.2rem;
     position: relative;
-    padding: 0.25rem 0 1rem 2.15rem;
+    padding: 0.4rem 0 1rem var(--tl-pad);
   }
 
   .tl-rail {
     position: absolute;
-    top: 0.5rem;
-    bottom: 0.75rem;
-    left: 0.72rem;
+    top: 0.9rem;
+    bottom: 0.4rem;
+    left: calc(var(--tl-rail-x) - 1px);
     width: 2px;
     border-radius: 999px;
     background: linear-gradient(
       180deg,
       transparent 0,
-      color-mix(in oklab, var(--accent-amber) 55%, transparent) 6%,
-      color-mix(in oklab, var(--accent-coral) 40%, transparent) 45%,
-      color-mix(in oklab, var(--accent-cyan) 40%, transparent) 82%,
+      color-mix(in oklab, var(--accent-amber) 62%, transparent) 4%,
+      color-mix(in oklab, var(--accent-coral) 40%, transparent) 44%,
+      color-mix(in oklab, var(--accent-cyan) 38%, transparent) 82%,
       transparent 100%
     );
-    opacity: 0.85;
+    opacity: 0.9;
   }
 
+  /* Month "chapter" marker — sticks under the header while its block scrolls */
   .tl-month {
     position: sticky;
-    top: 4.6rem;
+    top: 4.4rem;
     z-index: 18;
     display: flex;
     justify-content: flex-start;
-    margin: 0 0 1.15rem;
+    margin: 0 0 1.1rem;
     pointer-events: none;
   }
 
@@ -492,9 +498,10 @@
     display: inline-flex;
     align-items: center;
     gap: 0.55rem;
-    padding: 0.4rem 1rem 0.4rem 0.45rem;
+    margin-left: calc(-1 * var(--tl-pad));
+    padding: 0.35rem 0.95rem 0.35rem 0.4rem;
     border-radius: 999px;
-    background: color-mix(in oklab, var(--bg-card) 88%, transparent);
+    background: color-mix(in oklab, var(--bg-card) 90%, transparent);
     border: 1px solid var(--border-color);
     color: var(--text-primary);
     font-weight: 700;
@@ -502,33 +509,75 @@
     box-shadow: var(--shadow-card);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
-    margin-left: -2.15rem;
     position: relative;
     z-index: 3;
     pointer-events: auto;
   }
   .tl-month-pill svg {
-    width: 1.5rem;
-    height: 1.5rem;
-    padding: 0.28rem;
+    width: 1.55rem;
+    height: 1.55rem;
+    padding: 0.3rem;
     border-radius: 999px;
-    background: color-mix(in oklab, var(--accent-amber) 18%, transparent);
+    background: color-mix(in oklab, var(--accent-amber) 16%, transparent);
     color: var(--accent-amber);
   }
 
-  .tl-item { position: relative; }
+  .tl-section + .tl-section { margin-top: 2.2rem; }
 
-  .tl-dot {
+  /* ---- Day cluster ---- */
+  .tl-day { position: relative; }
+  .tl-day + .tl-day { margin-top: 1.9rem; }
+
+  .tl-day-node {
     position: absolute;
-    top: 1.45rem;
-    left: -1.72rem;
-    width: 0.7rem;
-    height: 0.7rem;
+    top: 0.1rem;
+    left: calc(var(--tl-rail-x) - var(--tl-pad) - var(--tl-node) * 0.5);
+    width: var(--tl-node);
+    height: var(--tl-node);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 999px;
-    border: 2px solid var(--bg-page);
+    background: var(--bg-card);
+    border: 2px solid color-mix(in oklab, currentColor 55%, var(--border-color));
+    font-family: var(--font-display);
+    font-size: 0.82rem;
+    line-height: 1;
+    letter-spacing: -0.02em;
     z-index: 10;
-    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-amber) 22%, transparent), 0 0 18px 1px currentColor;
+    box-shadow: 0 0 0 4px var(--bg-page), 0 10px 22px -12px rgba(0, 0, 0, 0.9);
   }
+
+  .tl-day-head {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.7rem;
+    min-height: 1.6rem;
+  }
+  .tl-day-weekday {
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .tl-day-count {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  .tl-day-rule {
+    flex: 1 1 auto;
+    height: 1px;
+    min-width: 1.5rem;
+    background: linear-gradient(90deg, var(--border-color), transparent 85%);
+  }
+
+  .tl-day-cards { display: flex; flex-direction: column; gap: 1.1rem; }
 
   .tl-card {
     background:
@@ -539,11 +588,62 @@
     transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
   }
   .tl-card:hover {
-    transform: translateY(-3px);
-    border-color: color-mix(in oklab, var(--accent-amber) 42%, var(--border-color));
+    transform: translateY(-2px);
+    border-color: color-mix(in oklab, var(--accent-amber) 38%, var(--border-color));
     box-shadow: 0 26px 50px -32px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
   }
-  .tl-item:hover, .tl-item:focus-within { z-index: 20; }
+  .tl-day:hover, .tl-day:focus-within { z-index: 20; }
+
+  /* ---- Summary band above the spine ---- */
+  .tl-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    margin-bottom: 1.1rem;
+    border-radius: 18px;
+    border: 1px solid var(--border-subtle);
+    background:
+      linear-gradient(110deg, color-mix(in oklab, var(--accent-amber) 9%, transparent), transparent 60%),
+      color-mix(in oklab, var(--bg-surface) 55%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .tl-summary-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 12px;
+    border: 1px solid color-mix(in oklab, var(--accent-amber) 32%, transparent);
+    background: color-mix(in oklab, var(--accent-amber) 14%, transparent);
+    color: var(--accent-amber);
+    flex-shrink: 0;
+  }
+  .tl-summary-title {
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+  .tl-summary-sub {
+    margin-top: 0.15rem;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .tl-summary-order {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
 
   /* ---------------------------------------------------------------- Misc */
   .avatar-ring {
@@ -588,6 +688,17 @@
     scrollbar-width: none;
   }
   .scroll-x::-webkit-scrollbar { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   3. Responsive timeline — comfortable rhythm on desktop, tighter on phones
+   -------------------------------------------------------------------------- */
+@media (min-width: 700px) {
+  .tl-root { --tl-pad: 3.4rem; --tl-rail-x: 0.95rem; --tl-node: 2.4rem; }
+  .tl-month { top: 4.7rem; }
+  .tl-month-pill { font-size: 0.95rem; padding: 0.45rem 1.15rem 0.45rem 0.45rem; }
+  .tl-day + .tl-day { margin-top: 2.2rem; }
+  .tl-day-cards { gap: 1.35rem; }
 }
 
 /* --------------------------------------------------------------------------

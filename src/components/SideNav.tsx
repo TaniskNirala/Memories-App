@@ -51,7 +51,7 @@ export const SideNav: React.FC<SideNavProps> = ({
   ];
 
   return (
-    <aside className="hidden w-[248px] shrink-0 lg:block xl:w-[268px]">
+    <aside className="hidden w-[210px] shrink-0 lg:block">
       <div className="sticky top-[76px] space-y-3 pb-8">
         {/* Primary navigation */}
         <nav className="surface overflow-hidden p-1.5">
@@ -64,7 +64,7 @@ export const SideNav: React.FC<SideNavProps> = ({
                 type="button"
                 onClick={() => onSelectTab(item.id)}
                 aria-current={active ? 'page' : undefined}
-                className={`group relative flex w-full items-center gap-2.5 rounded-2xl px-2.5 py-2 text-left transition ${
+                className={`group relative flex w-full items-center gap-2 rounded-xl px-1.5 py-1.5 text-left transition ${
                   active ? 'bg-[var(--bg-surface-elevated)]' : 'hover:bg-[var(--bg-surface)]'
                 }`}
               >
@@ -76,27 +76,27 @@ export const SideNav: React.FC<SideNavProps> = ({
                   />
                 )}
                 <span
-                  className={`flex h-8 w-8 items-center justify-center rounded-xl border transition ${
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] border transition ${
                     active
                       ? 'border-transparent text-[#1d1204]'
                       : 'border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 text-[var(--text-muted)] group-hover:text-[var(--text-primary)]'
                   }`}
                   style={active ? { background: 'var(--gradient-ember)' } : undefined}
                 >
-                  <Icon className="h-4 w-4" strokeWidth={active ? 2.4 : 2} />
+                  <Icon className="h-3.5 w-3.5" strokeWidth={active ? 2.4 : 2} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span
-                    className={`block truncate text-[12.5px] font-semibold ${
+                    className={`block truncate text-[11.5px] font-semibold leading-tight ${
                       active ? 'text-[var(--text-primary)]' : 'text-[var(--text-secondary)]'
                     }`}
                   >
                     {item.label}
                   </span>
-                  <span className="block truncate text-[9.5px] text-[var(--text-muted)]">{item.hint}</span>
+                  <span className="mt-px block truncate text-[8.5px] leading-tight text-[var(--text-muted)]">{item.hint}</span>
                 </span>
                 {typeof item.count === 'number' && (
-                  <span className="shrink-0 rounded-full bg-[var(--bg-card)] px-1.5 py-0.5 font-mono text-[9.5px] text-[var(--text-muted)]">
+                  <span className="shrink-0 rounded-full bg-[var(--bg-card)] px-1.5 py-0.5 font-mono text-[9px] text-[var(--text-muted)]">
                     {item.count}
                   </span>
                 )}
@@ -107,7 +107,7 @@ export const SideNav: React.FC<SideNavProps> = ({
 
         {/* Circles */}
         <section className="surface overflow-hidden">
-          <div className="flex items-center justify-between px-3.5 pb-1.5 pt-3">
+          <div className="flex items-center justify-between px-2.5 pb-1 pt-2.5">
             <h2 className="eyebrow">Your circles</h2>
             <button
               type="button"
@@ -124,19 +124,19 @@ export const SideNav: React.FC<SideNavProps> = ({
             <button
               type="button"
               onClick={() => onSelectGroup(undefined)}
-              className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition ${
+              className={`flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left transition ${
                 selectedGroupId === undefined ? 'bg-[var(--bg-surface)]' : 'hover:bg-[var(--bg-surface)]/70'
               }`}
             >
               <span
-                className="flex h-7 w-7 items-center justify-center rounded-full text-[#141008]"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#141008]"
                 style={{ background: 'var(--gradient-mint)' }}
               >
-                <Compass className="h-3.5 w-3.5" strokeWidth={2.4} />
+                <Compass className="h-3 w-3" strokeWidth={2.4} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] font-semibold">All circles</span>
-                <span className="block text-[9.5px] text-[var(--text-muted)]">Everything you can see</span>
+                <span className="block truncate text-[11.5px] font-semibold leading-tight">All circles</span>
+                <span className="block truncate text-[8.5px] leading-tight text-[var(--text-muted)]">Everything you can see</span>
               </span>
               {selectedGroupId === undefined && (
                 <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-amber)]" />
@@ -156,7 +156,7 @@ export const SideNav: React.FC<SideNavProps> = ({
                   }`}
                 >
                   <span className="relative">
-                    <Avatar name={g.name} color={accent} size={28} />
+                    <Avatar name={g.name} color={accent} size={24} />
                     {g.isEveryone && (
                       <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[var(--bg-card)] bg-[var(--accent-teal)]">
                         <Sparkles className="h-2 w-2 text-[#04120c]" />
@@ -164,8 +164,8 @@ export const SideNav: React.FC<SideNavProps> = ({
                     )}
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12px] font-semibold">{g.name}</span>
-                    <span className="block truncate text-[9.5px] text-[var(--text-muted)]">
+                    <span className="block truncate text-[11.5px] font-semibold leading-tight">{g.name}</span>
+                    <span className="block truncate text-[8.5px] leading-tight text-[var(--text-muted)]">
                       {g.members?.length || g.memberCount} member{(g.members?.length || g.memberCount) === 1 ? '' : 's'}
                     </span>
                   </span>
@@ -178,17 +178,17 @@ export const SideNav: React.FC<SideNavProps> = ({
           <button
             type="button"
             onClick={onOpenGroupsManager}
-            className="flex w-full items-center justify-between gap-2 border-t border-[var(--border-subtle)] px-3.5 py-2.5 text-[11px] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]"
+            className="flex w-full items-center justify-between gap-2 border-t border-[var(--border-subtle)] px-2.5 py-2 text-[10px] font-semibold text-[var(--text-muted)] transition hover:bg-[var(--bg-surface)] hover:text-[var(--text-primary)]"
           >
-            <span className="flex items-center gap-1.5">
-              <KeyRound className="h-3.5 w-3.5" /> Manage members & rules
+            <span className="flex min-w-0 items-center gap-1.5">
+              <KeyRound className="h-3 w-3 shrink-0" /> <span className="truncate">Manage members &amp; rules</span>
             </span>
             <span aria-hidden>→</span>
           </button>
         </section>
 
         {/* Upload CTA */}
-        <button type="button" onClick={onOpenUpload} className="btn btn-primary btn-block !rounded-2xl !py-3">
+        <button type="button" onClick={onOpenUpload} className="btn btn-primary btn-block !rounded-xl !py-2.5 !text-[11.5px]">
           <Plus className="h-4 w-4" strokeWidth={3} />
           Add a memory
         </button>

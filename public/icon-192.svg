@@ -1,14 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="192" height="192" role="img" aria-label="Nest">
   <defs>
-    <linearGradient id="ember" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ffc86b"/>
-      <stop offset="0.42" stop-color="#f6a92b"/>
-      <stop offset="1" stop-color="#f9655f"/>
+    <linearGradient id="sun" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffd982"/>
+      <stop offset="0.5" stop-color="#f8c042"/>
+      <stop offset="1" stop-color="#f2a51f"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="116" fill="url(#ember)"/>
-  <rect x="82" y="82" width="348" height="348" rx="86" fill="#ffffff"/>
-  <g fill="#1d1204" transform="translate(109 109) scale(0.52)">
+  <!-- White tile -->
+  <rect width="192" height="192" rx="116" fill="#ffffff" stroke="#0f172a" stroke-opacity="0.07" stroke-width="2"/>
+  <!-- Yellow inner box -->
+  <rect x="74" y="74" width="364" height="364" rx="92" fill="url(#sun)"/>
+  <!-- White bird, centred in the yellow box: the artwork measures 565.3 x 503.3
+       units around (282.66, 282.56), so scale 0.54 + translate 103.4 puts the
+       centre on (256, 256) at 305 x 272 px. -->
+  <g fill="#ffffff" transform="translate(103.4 103.4) scale(0.54)">
     <path d="M563.473,528.105c-6.438-20.959-11-37.96-21.216-57.463c-9.764-18.638-17.532-38.213-29.441-55.867
 			c-8.907-13.199-15.12-28.214-22.55-42.412c-4.003-7.653-7.716-15.52-16.74-18.764c-7.896-2.836-15.773-5.704-23.652-8.58
 			c-3.721-1.718-7.613-3.142-11.64-4.256c-2.946-1.077-5.892-2.154-8.842-3.231c-15.794-5.765-31.012-12.778-44.823-22.415

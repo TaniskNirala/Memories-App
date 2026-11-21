@@ -25,7 +25,7 @@ export const PendingApprovalScreen: React.FC = () => {
         </h2>
 
         <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-          Hello <strong>{user?.displayName}</strong> (@{user?.username})! Kinfolk is an intimate space strictly for our close circle of friends. An administrator has been notified of your registration.
+          Hello <strong>{user?.displayName}</strong> (@{user?.username})! Nest is an intimate space strictly for our close circle of friends. An administrator has been notified of your registration.
         </p>
 
         <div className="p-3 rounded-2xl bg-[var(--bg-surface)] text-[11px] text-[var(--text-muted)] text-left space-y-1">

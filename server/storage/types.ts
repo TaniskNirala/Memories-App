@@ -1,5 +1,7 @@
 import type { Request, Response } from 'express';
 
+export type TelegramExistence = 'exists' | 'deleted' | 'unknown';
+
 export interface SignedUploadUrlResult {
   uploadUrl: string;
   method: 'PUT' | 'POST';
@@ -112,6 +114,13 @@ export interface StorageAdapter {
   ): Promise<boolean>;
 
   resolveKey?(storageKey: string): Promise<string | null>;
+
+  /**
+   * Checks whether the backing Telegram messages still exist in the channel.
+   * Returns a map storageKey -> 'exists' | 'deleted' | 'unknown'.
+   * 'unknown' means the check could not be made (never treated as deleted).
+   */
+  checkTelegramExistence?(storageKeys: string[]): Promise<Record<string, TelegramExistence>>;
 
   listObjects?(prefix?: string): Promise<string[]>;
 

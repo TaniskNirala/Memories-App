@@ -27,8 +27,8 @@ export async function fetchStorageCapabilities(): Promise<StorageCapabilitiesRes
 
 /**
  * NotaForge-style Two-Phase Upload Runner:
- * - Phase 1 (0–30%): Browser -> Kinfolk Server transfer via XMLHttpRequest upload progress
- * - Phase 2 (30–100%): Kinfolk Server -> Telegram MTProto / Bot API progress via authenticated SSE stream
+ * - Phase 1 (0–30%): Browser -> Nest Server transfer via XMLHttpRequest upload progress
+ * - Phase 2 (30–100%): Nest Server -> Telegram MTProto / Bot API progress via authenticated SSE stream
  */
 export async function uploadFileWithProgress(
   formData: FormData,

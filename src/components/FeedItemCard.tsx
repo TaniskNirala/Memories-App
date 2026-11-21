@@ -3,6 +3,7 @@ import { Calendar, MapPin, MessageSquare, MoreHorizontal, Share2, Layers, Users,
 import { FeedItem } from '../types/index.ts';
 import { LockedPlaceholder } from './LockedPlaceholder.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 
 interface FeedItemCardProps {
   item: FeedItem;
@@ -252,6 +253,8 @@ export const FeedItemCard: React.FC<FeedItemCardProps> = ({
               <span>Video / Audio Preview</span>
             </div>
           )}
+
+          {mainFile.tgDeleted && <TgDeletedBadge />}
 
           {item.files.length > 1 && (
             <div className="absolute top-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-xs rounded-lg text-[10px] font-mono font-medium text-white">

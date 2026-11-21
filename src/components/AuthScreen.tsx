@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, User, Key, AlertCircle, ArrowRight, ShieldCheck, Sparkles } from 'lucide-react';
+import { Lock, User, Key, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 
@@ -61,11 +61,13 @@ export const AuthScreen: React.FC = () => {
       <div className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl p-6 sm:p-8 playful-card relative">
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 text-white flex items-center justify-center mx-auto mb-3 shadow-lg playful-btn">
-            <Sparkles className="w-7 h-7" />
-          </div>
+          <img
+            src="/icon.svg"
+            alt="Nest"
+            className="w-14 h-14 rounded-2xl mx-auto mb-3 shadow-lg playful-btn"
+          />
           <h1 className="font-display font-bold text-2xl tracking-tight text-[var(--text-primary)]">
-            Kinfolk Memories
+            Nest
           </h1>
           <p className="text-xs text-[var(--text-secondary)] mt-1">
             Private, zero-quota memory sharing for close friends
@@ -230,7 +232,7 @@ export const AuthScreen: React.FC = () => {
               {loading
                 ? 'Processing...'
                 : mode === 'login'
-                ? 'Sign In to Kinfolk'
+                ? 'Sign In to Nest'
                 : mode === 'register'
                 ? 'Register Account'
                 : 'Save New Password'}

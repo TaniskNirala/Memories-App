@@ -12,6 +12,7 @@ import { authMiddleware } from './server/middleware/auth.ts';
 import { LocalDiskStorageAdapter } from './server/storage/local.ts';
 import { getStorageAdapter, isTelegramKey } from './server/storage/index.ts';
 import { repairPostFileKeys } from './server/storage/sync.ts';
+import { startTelegramDeletionWatcher, stopTelegramDeletionWatcher } from './server/storage/tg-deletion-sync.ts';
 import { isDeleteProtected } from './server/config.ts';
 
 // Routers
@@ -440,10 +441,12 @@ async function startServer() {
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Kinfolk Memories server listening on http://0.0.0.0:${PORT}`);
+    console.log(`Nest server listening on http://0.0.0.0:${PORT}`);
+    startTelegramDeletionWatcher();
   });
 
   const gracefulShutdown = async () => {
+    stopTelegramDeletionWatcher();
     try {
       await closeNeon(); // flush any pending database writes to Neon before exiting
     } catch {}

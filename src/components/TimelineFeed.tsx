@@ -27,6 +27,7 @@ import {
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
+import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 
 interface TimelineFeedProps {
   items: FeedItem[];
@@ -119,18 +120,22 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded bg-black/75 text-white text-[9px] font-bold uppercase tracking-wider pointer-events-none">
             Video
           </span>
+          {f.tgDeleted && <TgDeletedBadge compact />}
         </>
       );
     }
 
     return (
-      <img
-        src={f.viewUrl || f.thumbUrl}
-        alt={alt}
-        referrerPolicy="no-referrer"
-        onError={(e) => handleImageError(e, f.storageKey)}
-        className={imgClassName}
-      />
+      <>
+        <img
+          src={f.viewUrl || f.thumbUrl}
+          alt={alt}
+          referrerPolicy="no-referrer"
+          onError={(e) => handleImageError(e, f.storageKey)}
+          className={imgClassName}
+        />
+        {f.tgDeleted && <TgDeletedBadge compact />}
+      </>
     );
   };
 
@@ -162,6 +167,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
             <Maximize2 className="w-3 h-3 text-amber-400" />
             <span>Expand</span>
           </button>
+          {f.tgDeleted && <TgDeletedBadge position="top-left" />}
         </div>
       );
     }
@@ -178,6 +184,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           onError={(e) => handleImageError(e, f.storageKey)}
           className="w-full h-full object-cover group-hover/media:scale-[1.02] transition-transform duration-300"
         />
+        {f.tgDeleted && <TgDeletedBadge />}
       </div>
     );
   }

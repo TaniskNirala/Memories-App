@@ -41,6 +41,9 @@ export interface PostFile {
   mimeType?: string;
   width?: number;
   height?: number;
+  /** True when the backing Telegram message was deleted from the channel */
+  tgDeleted?: boolean;
+  tgDeletedAt?: string | null;
 }
 
 export interface PostPlacement {

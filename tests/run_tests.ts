@@ -33,7 +33,7 @@ async function runTests() {
   if (fs.existsSync(testDbFile)) {
     fs.unlinkSync(testDbFile);
   }
-  console.log('--- Starting Kinfolk Memories Automated Tests ---');
+  console.log('--- Starting Nest Automated Tests ---');
 
   const app = await createApp();
   const server = http.createServer(app);

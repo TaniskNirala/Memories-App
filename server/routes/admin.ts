@@ -4,6 +4,7 @@ import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync, restor
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter, getStorageCapabilities } from '../storage/index.ts';
 import { syncStorageToDatabase, repairPostFileKeys } from '../storage/sync.ts';
+import { scanTelegramDeletions } from '../storage/tg-deletion-sync.ts';
 
 export const adminRouter = Router();
 
@@ -105,6 +106,15 @@ adminRouter.get('/storage-status', (_req: AuthenticatedRequest, res) => {
     telegramFileCount: tgCountRow?.count || 0,
     legacyFileCount: legacyCountRow?.count || 0,
   });
+});
+
+// Manually re-scan Telegram for media that was deleted from the channel
+adminRouter.post('/telegram/check-deleted', async (_req: AuthenticatedRequest, res) => {
+  const result = await scanTelegramDeletions();
+  const flagged = queryOne<{ count: number }>(
+    'SELECT COUNT(*) as count FROM post_files WHERE tg_deleted_at IS NOT NULL'
+  );
+  res.json({ ...result, totalFlaggedDeleted: flagged?.count || 0 });
 });
 
 // Live storage connectivity test (verifies Telegram Bot API, MTProto channel, and B2 fallback)
@@ -273,7 +283,7 @@ adminRouter.post('/approve-user/:id', (req: AuthenticatedRequest, res) => {
       targetId,
       'proposal_approved',
       'Account Approved!',
-      'Welcome to Kinfolk! Your account has been approved. You are now part of the Everyone circle.',
+      'Welcome to Nest! Your account has been approved. You are now part of the Everyone circle.',
       '/',
       now,
     ]

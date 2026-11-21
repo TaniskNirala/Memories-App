@@ -21,7 +21,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Kinfolk uncaught application error:', error, errorInfo);
+    console.error('Nest uncaught application error:', error, errorInfo);
   }
 
   private handleReset = async () => {
@@ -53,7 +53,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
             <h2 className="font-bold text-xl text-white">Something went wrong</h2>
             <p className="text-xs text-neutral-400 leading-relaxed">
-              We encountered an issue loading Kinfolk. You can reload the application to restore your session.
+              We encountered an issue loading Nest. You can reload the application to restore your session.
             </p>
             {this.state.error?.message && (
               <pre className="p-3 rounded-xl bg-black/40 text-[10px] text-rose-300 font-mono text-left overflow-x-auto max-h-24">
@@ -66,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-95 text-white font-semibold text-xs transition flex items-center justify-center gap-2 mx-auto shadow-lg"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reload Kinfolk</span>
+                <span>Reload Nest</span>
               </button>
             </div>
           </div>

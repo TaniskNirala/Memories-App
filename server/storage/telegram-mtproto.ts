@@ -286,6 +286,37 @@ export class TelegramMtprotoClient {
   }
 
   /**
+   * Checks which message IDs still exist in the channel (embedded mode only).
+   * Returns null when the check can't be made (external mode / not connected / error),
+   * so callers never mistake an outage for a deletion.
+   */
+  public async checkMessagesExist(msgIds: number[]): Promise<Map<number, boolean> | null> {
+    if (this.mode !== 'embedded' || !this.client || msgIds.length === 0) return null;
+    const result = new Map<number, boolean>();
+    try {
+      const peer = await this.ensureConnected();
+      for (let i = 0; i < msgIds.length; i += 100) {
+        const chunk = msgIds.slice(i, i + 100);
+        const messages: any[] = await this.client.getMessages(peer, { ids: chunk });
+        const found = new Set<number>();
+        for (const m of messages || []) {
+          // Deleted messages come back undefined / MessageEmpty
+          if (m && m.className !== 'MessageEmpty' && m.id) found.add(Number(m.id));
+        }
+        for (const id of chunk) {
+          const present = found.has(id);
+          result.set(id, present);
+          if (!present) this.docCache.delete(id);
+        }
+      }
+      return result;
+    } catch (err: any) {
+      console.warn('⚠️ [Telegram MTProto] Existence check failed:', err?.message || err);
+      return null;
+    }
+  }
+
+  /**
    * Uploads a file via MTProto (8 parallel workers in embedded mode, or proxied to external NotaForge server).
    * Always sends with `forceDocument: true` to preserve 100% original quality.
    */

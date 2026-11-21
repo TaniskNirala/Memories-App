@@ -229,7 +229,7 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
 
   const items = queryAll<any>(
     `SELECT ai.position, p.id as post_id, pf.id as file_id, pf.position as file_position,
-            p.caption, p.taken_at, p.uploaded_at, pf.storage_key, pf.thumb_key, pf.file_type, pf.width, pf.height
+            p.caption, p.taken_at, p.uploaded_at, pf.storage_key, pf.thumb_key, pf.file_type, pf.width, pf.height, pf.tg_deleted_at
      FROM album_items ai
      JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
      JOIN post_files pf ON pf.post_id = p.id
@@ -255,6 +255,8 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
       thumbKey: item.thumb_key || item.storage_key,
       thumbUrl: await storage.getSignedViewUrl(item.thumb_key || item.storage_key),
       viewUrl: await storage.getSignedViewUrl(item.storage_key),
+      tgDeleted: Boolean(item.tg_deleted_at),
+      tgDeletedAt: item.tg_deleted_at || null,
     }))
   );
 

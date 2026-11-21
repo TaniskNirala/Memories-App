@@ -340,6 +340,7 @@ function initSchema(db: any) {
       width INTEGER,
       height INTEGER,
       checksum TEXT,
+      tg_deleted_at TEXT,
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
 
@@ -484,6 +485,11 @@ function initSchema(db: any) {
 
   try {
     db.exec('ALTER TABLE post_files ADD COLUMN checksum TEXT');
+  } catch {}
+
+  // Set when the backing Telegram message was deleted from the channel
+  try {
+    db.exec('ALTER TABLE post_files ADD COLUMN tg_deleted_at TEXT');
   } catch {}
 
   // Auto-repair missing or generic captions from storage keys

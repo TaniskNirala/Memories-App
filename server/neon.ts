@@ -227,9 +227,11 @@ const SCHEMA_STATEMENTS: string[] = [
     mime_type TEXT NOT NULL,
     width INTEGER,
     height INTEGER,
-    checksum TEXT
+    checksum TEXT,
+    tg_deleted_at TEXT
   )`,
   `ALTER TABLE post_files ADD COLUMN IF NOT EXISTS checksum TEXT`,
+  `ALTER TABLE post_files ADD COLUMN IF NOT EXISTS tg_deleted_at TEXT`,
   `CREATE TABLE IF NOT EXISTS albums (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,

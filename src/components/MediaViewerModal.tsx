@@ -28,6 +28,7 @@ import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
+import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 import { CaptionSuggestionsModal } from './CaptionSuggestionsModal.tsx';
 import { isVideoMedia, isAudioMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 
@@ -763,6 +764,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono border border-white/10">
                     {isVideoMedia(file) ? `VIDEO #${idx + 1}` : `#${idx + 1}`}
                   </div>
+                  {file.tgDeleted && <TgDeletedBadge compact />}
 
                   {/* Edit Photo Button on Thumbnail in Grid */}
                   {(canDelete || isAdmin || item.owner?.id === user?.id) && (!file.fileType || file.fileType === 'photo') && (
@@ -948,6 +950,14 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
             </div>
           )}
 
+          {/* Deleted-from-Telegram banner */}
+          {currentFile?.tgDeleted && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3 py-1.5 rounded-full bg-rose-600/95 text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-xl pointer-events-none">
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Deleted from Telegram</span>
+            </div>
+          )}
+
           {/* Left & Right Navigation Arrows (only when not heavily zoomed) */}
           {hasMultiplePhotos && (
             <>
@@ -1086,6 +1096,11 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                           }}
                           className="w-full h-full object-cover"
                         />
+                      )}
+                      {f.tgDeleted && (
+                        <span className="absolute inset-x-0 bottom-0 bg-rose-600/95 text-white text-[7px] font-bold uppercase text-center py-px pointer-events-none">
+                          Deleted
+                        </span>
                       )}
                     </button>
                   ))}

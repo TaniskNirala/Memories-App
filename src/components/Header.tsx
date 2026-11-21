@@ -92,9 +92,10 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
         <div className="flex items-center gap-2">
           <a
             href="/"
-            className="font-display text-xl sm:text-2xl font-bold tracking-tight text-[var(--text-primary)] hover:opacity-90 transition"
+            className="flex items-center gap-2 font-display text-xl sm:text-2xl font-bold tracking-tight text-[var(--text-primary)] hover:opacity-90 transition"
           >
-            Memories
+            <img src="/icon.svg" alt="" className="w-7 h-7 rounded-lg" />
+            Nest
           </a>
           {selectedGroupName && (
             <span className="text-xs text-[var(--accent-coral)] font-medium truncate max-w-[130px] sm:max-w-[200px]">

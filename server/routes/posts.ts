@@ -479,6 +479,8 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
       height: f.height,
       viewUrl: await storage.getSignedViewUrl(f.storage_key),
       thumbUrl: await storage.getSignedViewUrl(f.thumb_key),
+      tgDeleted: Boolean(f.tg_deleted_at),
+      tgDeletedAt: f.tg_deleted_at || null,
     }))
   );
 
@@ -765,6 +767,8 @@ postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
         height: f.height,
         viewUrl: await storage.getSignedViewUrl(f.storage_key, 86400),
         thumbUrl: await storage.getSignedViewUrl(f.thumb_key || f.storage_key, 86400),
+        tgDeleted: Boolean(f.tg_deleted_at),
+        tgDeletedAt: f.tg_deleted_at || null,
       }))
     );
 
@@ -1066,7 +1070,7 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
 
     const rawFiles = queryAll<any>(
       `SELECT pf.id as file_id, pf.post_id, pf.storage_key, pf.thumb_key, pf.file_size,
-              pf.width, pf.height, pf.checksum, pf.position,
+              pf.width, pf.height, pf.checksum, pf.position, pf.tg_deleted_at,
               p.caption, p.taken_at, p.uploaded_at, p.owner_id,
               u.username as owner_username, u.display_name as owner_display_name
        FROM post_files pf
@@ -1099,6 +1103,7 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
             ownerName: rf.owner_display_name,
             viewUrl: await storage.getSignedViewUrl(rf.storage_key),
             thumbUrl: await storage.getSignedViewUrl(rf.thumb_key || rf.storage_key),
+            tgDeleted: Boolean(rf.tg_deleted_at),
             placements: placements.map((p) => ({ id: p.id, name: p.name })),
           };
         })

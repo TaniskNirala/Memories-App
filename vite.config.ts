@@ -14,8 +14,8 @@ export default defineConfig(() => {
         includeAssets: ['icon.svg', 'manifest.json'],
         manifest: {
           id: '/',
-          name: 'Kinfolk Memories',
-          short_name: 'Kinfolk',
+          name: 'Nest',
+          short_name: 'Nest',
           description: 'A private, zero-quota memory and photo sharing web app for close friends.',
           theme_color: '#0f172a',
           background_color: '#0f172a',

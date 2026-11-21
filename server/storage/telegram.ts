@@ -9,6 +9,7 @@ import {
   PutObjectOptions,
   StorageCapabilities,
   StorageConnectionTestResult,
+  TelegramExistence,
 } from './types.ts';
 import {
   TelegramMtprotoClient,
@@ -42,15 +43,25 @@ export function isTelegramKey(storageKey: string): boolean {
 
 export function parseTelegramKey(
   storageKey: string
-): { lane: 'bot'; fileId: string; fileName: string } | { lane: 'mtproto'; msgId: number; fileName: string } | null {
+): { lane: 'bot'; fileId: string; msgId?: number; fileName: string } | { lane: 'mtproto'; msgId: number; fileName: string } | null {
   const clean = (storageKey || '').trim().replace(/^\/+/, '');
   if (clean.startsWith('tg:')) {
     const rest = clean.slice(3);
     const slashIdx = rest.indexOf('/');
-    const fileId = slashIdx >= 0 ? rest.slice(0, slashIdx) : rest;
+    const idPart = slashIdx >= 0 ? rest.slice(0, slashIdx) : rest;
     const fileName = slashIdx >= 0 ? rest.slice(slashIdx + 1) : 'file.bin';
+    // New keys: tg:<file_id>@<message_id>/<name>  (message_id lets us detect deletion in the channel)
+    // Legacy keys: tg:<file_id>/<name>
+    const atIdx = idPart.indexOf('@');
+    const fileId = atIdx >= 0 ? idPart.slice(0, atIdx) : idPart;
+    const msgIdRaw = atIdx >= 0 ? parseInt(idPart.slice(atIdx + 1), 10) : NaN;
     if (!fileId) return null;
-    return { lane: 'bot', fileId, fileName: sanitizeFileName(fileName) };
+    return {
+      lane: 'bot',
+      fileId,
+      msgId: Number.isFinite(msgIdRaw) && msgIdRaw > 0 ? msgIdRaw : undefined,
+      fileName: sanitizeFileName(fileName),
+    };
   }
   if (clean.startsWith('tgmsg:')) {
     const rest = clean.slice(6);
@@ -68,7 +79,7 @@ export function parseTelegramKey(
  * NotaForge Dual-Lane Telegram Storage Adapter:
  * - Lane 1 (Bot API): Fast uncompressed `sendDocument` for files <= 15 MB with 429 retry queue & Range forwarding.
  * - Lane 2 (MTProto): GramJS (embedded or external NotaForge server) for files > 15 MB up to 2 GB with 8-worker uploads & HTTP 206 streaming.
- * - Archive-on-Delete: Deleting in Kinfolk clears local cache while keeping Telegram channel messages intact as a permanent backup archive.
+ * - Archive-on-Delete: Deleting in Nest clears local cache while keeping Telegram channel messages intact as a permanent backup archive.
  */
 export class TelegramStorageAdapter implements StorageAdapter {
   private readonly botToken: string;
@@ -186,7 +197,7 @@ export class TelegramStorageAdapter implements StorageAdapter {
     storageKey: string,
     contentType: string
   ): Promise<SignedUploadUrlResult> {
-    // Uploads always go through Kinfolk's authenticated multipart endpoint so credentials stay server-side
+    // Uploads always go through Nest's authenticated multipart endpoint so credentials stay server-side
     return {
       uploadUrl: '/api/posts/upload-file',
       method: 'POST',
@@ -204,6 +215,77 @@ export class TelegramStorageAdapter implements StorageAdapter {
       return `/api/storage/file/${parsed.msgId}/${encodeURIComponent(parsed.fileName)}`;
     }
     return `/api/storage/view?key=${encodeURIComponent(storageKey)}`;
+  }
+
+  /**
+   * Detects media whose Telegram message was deleted from the channel.
+   * - MTProto keys (`tgmsg:`) are checked in batches via getMessages (embedded MTProto only).
+   * - Bot API keys carrying a message id (`tg:<file_id>@<msg_id>/name`) are probed with a no-op
+   *   editMessageCaption: "message is not modified" => still there, "message to edit not found" => deleted.
+   * - Legacy Bot API keys without a message id can't be checked and stay 'unknown'.
+   * Anything ambiguous (network errors, rate limits, missing rights) is 'unknown', never 'deleted'.
+   */
+  async checkTelegramExistence(storageKeys: string[]): Promise<Record<string, TelegramExistence>> {
+    const out: Record<string, TelegramExistence> = {};
+    const mtprotoKeys = new Map<number, string[]>();
+    const botChecks: { key: string; msgId: number; fileName: string }[] = [];
+
+    for (const key of storageKeys) {
+      out[key] = 'unknown';
+      const parsed = parseTelegramKey(key);
+      if (!parsed) continue;
+      if (parsed.lane === 'mtproto') {
+        const list = mtprotoKeys.get(parsed.msgId) || [];
+        list.push(key);
+        mtprotoKeys.set(parsed.msgId, list);
+      } else if (parsed.msgId) {
+        botChecks.push({ key, msgId: parsed.msgId, fileName: parsed.fileName });
+      }
+    }
+
+    if (mtprotoKeys.size > 0) {
+      const res = await this.mtproto.checkMessagesExist([...mtprotoKeys.keys()]);
+      if (res) {
+        for (const [msgId, keys] of mtprotoKeys) {
+          if (!res.has(msgId)) continue;
+          for (const k of keys) out[k] = res.get(msgId) ? 'exists' : 'deleted';
+        }
+      }
+    }
+
+    if (botChecks.length > 0 && this.hasBotApi()) {
+      for (const check of botChecks) {
+        try {
+          const res = await fetch(`${this.botApiBase}/bot${this.botToken}/editMessageCaption`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: this.chatId,
+              message_id: check.msgId,
+              caption: check.fileName,
+            }),
+            signal: AbortSignal.timeout(10000),
+          });
+          const json: any = await res.json().catch(() => ({}));
+          if (res.status === 429 || json?.error_code === 429) break; // back off; try again next cycle
+          if (json?.ok) {
+            out[check.key] = 'exists';
+            continue;
+          }
+          const desc = String(json?.description || '').toLowerCase();
+          if (desc.includes('message is not modified')) {
+            out[check.key] = 'exists';
+          } else if (desc.includes('message to edit not found') || desc.includes('message_id_invalid')) {
+            out[check.key] = 'deleted';
+          }
+        } catch {
+          // network hiccup => unknown
+        }
+        await new Promise((r) => setTimeout(r, 350)); // gentle pacing
+      }
+    }
+
+    return out;
   }
 
   /**
@@ -337,7 +419,10 @@ export class TelegramStorageAdapter implements StorageAdapter {
         }
 
         if (onProgress) onProgress(100);
-        return `tg:${fileId}/${fileName}`;
+        const messageId = Number(json.result?.message_id);
+        return Number.isFinite(messageId) && messageId > 0
+          ? `tg:${fileId}@${messageId}/${fileName}`
+          : `tg:${fileId}/${fileName}`;
       } catch (err: any) {
         if (attempt >= maxAttempts) {
           throw new Error(this.redactSecret(err?.message || String(err)));

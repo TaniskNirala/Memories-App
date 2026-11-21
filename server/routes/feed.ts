@@ -170,6 +170,8 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
           viewUrl: await storage.getSignedViewUrl(f.storage_key),
           width: f.width,
           height: f.height,
+          tgDeleted: Boolean(f.tg_deleted_at),
+          tgDeletedAt: f.tg_deleted_at || null,
         }))
       );
 

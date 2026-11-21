@@ -192,7 +192,7 @@ ${
     timeContextBlock = `CRITICAL NOTE: Analyze visual clues in the photo for season, lighting, time of day (morning light, sunset golden hour, night glow), and era aesthetics.`;
   }
 
-  return `You are a perceptive, authentic memory curator and storyteller for a private family and close friends photo vault called Kinfolk.
+  return `You are a perceptive, authentic memory curator and storyteller for a private family and close friends photo vault called Nest.
 Analyze this photo carefully—examine the people, expressions, setting, scenery, lighting, and specifically its temporal era.
 
 ${timeContextBlock}
@@ -266,7 +266,7 @@ function getHeuristicCaptions(
 
   const chosen = tone === 'witty' ? witty : tone === 'short' ? minimalist : warm;
 
-  const defaultTags = ['#Kinfolk', '#Memories'];
+  const defaultTags = ['#Nest', '#Memories'];
   if (temporal) {
     defaultTags.push(`#${temporal.year}`, `#Throwback${temporal.isThrowback ? temporal.year : ''}`);
     if (temporal.season) defaultTags.push(`#${temporal.season.replace(/[^a-zA-Z]/g, '')}`);
@@ -381,7 +381,7 @@ aiRouter.post('/generate-caption', upload.single('image'), async (req: Authentic
           { tone: 'Nostalgic & Time-Honored', text: firstLine },
           { tone: 'Short & Minimal', text: firstLine.slice(0, 45) },
         ],
-        tags: ['#Kinfolk', '#Memories', ...(temporal ? [`#${temporal.year}`] : [])],
+        tags: ['#Nest', '#Memories', ...(temporal ? [`#${temporal.year}`] : [])],
         temporalSummary: temporal?.relativeTimeDescription || '',
         temporal,
         source: 'gemini_raw',

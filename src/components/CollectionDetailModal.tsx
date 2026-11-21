@@ -5,6 +5,7 @@ import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
+import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 
 interface CollectionDetailModalProps {
   collectionId: string | null;
@@ -574,6 +575,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                     />
                   )}
+                  {item.tgDeleted && <TgDeletedBadge compact />}
                   {item.caption && (
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex items-end">
                       <span className="text-[10px] text-white line-clamp-2 leading-tight">

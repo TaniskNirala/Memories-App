@@ -5,6 +5,7 @@ import {
   PutObjectOptions,
   StorageCapabilities,
   StorageConnectionTestResult,
+  TelegramExistence,
 } from './types.ts';
 import { TelegramStorageAdapter, isTelegramKey } from './telegram.ts';
 import { S3StorageAdapter } from './s3.ts';
@@ -108,6 +109,10 @@ export class HybridTelegramB2Adapter implements StorageAdapter {
       return this.b2Fallback.resolveKey(storageKey);
     }
     return null;
+  }
+
+  async checkTelegramExistence(storageKeys: string[]): Promise<Record<string, TelegramExistence>> {
+    return this.telegram.checkTelegramExistence(storageKeys);
   }
 
   async listObjects(prefix?: string): Promise<string[]> {

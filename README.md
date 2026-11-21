@@ -1,4 +1,4 @@
-# Kinfolk Memories 🌿
+# Nest 🪺
 
 > **Database update:** the app now stores all data in **Neon PostgreSQL** (`DATABASE_URL`), with tables created
 > automatically on boot. See [NEON_SETUP.md](./NEON_SETUP.md) for the Render environment changes.
@@ -8,6 +8,17 @@
 A private, zero-quota memory and photo sharing web app engineered for 6 to 10 close friends. Designed for free hosting on Render (with ephemeral disk) using Supabase/Neon PostgreSQL and Cloudflare R2 / S3-compatible object storage, while running seamlessly offline or locally with pure SQLite and local-disk storage.
 
 ---
+
+
+## Deleted-from-Telegram tag
+
+If a photo/video is deleted from the Telegram channel, Nest keeps the memory but shows a red **Deleted from TG** tag on it (feed, album/event grids, and the full-screen viewer).
+
+- A background job checks Telegram every 5 minutes (`TELEGRAM_DELETE_CHECK_MINUTES`, `0` disables).
+- **MTProto files** (`tgmsg:`) are checked in fast batches. **Bot API files** now store their Telegram message id in the key (`tg:<file_id>@<msg_id>/name`) and are probed with a no-op caption edit; the bot must be an admin of the channel.
+- Files uploaded **before** this update through the Bot API only have a file id, so their deletion can't be detected. Re-upload them, or use MTProto, to get tags. They are never wrongly tagged.
+- Admins can force a check: `POST /api/admin/telegram/check-deleted`.
+- If a deleted message is restored in Telegram, the tag clears automatically.
 
 ## 1. Architecture Summary
 
@@ -161,7 +172,7 @@ S3_PUBLIC_URL=https://media.yourdomain.com
 
 ## 6. Render Deployment Guide (Free Web Tier)
 
-Render's free tier provides an ephemeral disk and puts idle services to sleep after 15 minutes. Here is how to configure Kinfolk for production:
+Render's free tier provides an ephemeral disk and puts idle services to sleep after 15 minutes. Here is how to configure Nest for production:
 
 1. **Database**:
    - Create a free Postgres instance on [Neon](https://neon.tech) or [Supabase](https://supabase.com).

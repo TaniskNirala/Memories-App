@@ -248,16 +248,18 @@ export const Dropdown: React.FC<{
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
+    const onDown = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
     document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
@@ -267,8 +269,8 @@ export const Dropdown: React.FC<{
       {trigger({ open, toggle: () => setOpen((v) => !v) })}
       {open && (
         <div
-          style={{ width }}
-          className={`absolute z-[70] mt-2 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/97 p-1.5 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in ${
+          style={{ width, maxWidth: 'min(calc(100vw - 1.5rem), 320px)' }}
+          className={`absolute z-[70] mt-2 max-h-[70dvh] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 p-1.5 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in ${
             align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
           }`}
         >
@@ -453,29 +455,29 @@ export const PageHero: React.FC<{
   const text = (
     <div className="min-w-0">
       {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
-      <h1 className="font-display text-[1.6rem] leading-[1.12] tracking-tight sm:text-[2rem]">{title}</h1>
+      <h1 className="font-display text-[1.45rem] leading-[1.12] tracking-tight sm:text-[2rem]">{title}</h1>
       {subtitle && (
         <p className="mt-1.5 max-w-xl text-[12px] leading-relaxed text-[var(--text-secondary)]">{subtitle}</p>
       )}
     </div>
   );
 
-  const cluster = (
-    <div className="flex shrink-0 flex-wrap items-center gap-2">
+  const cluster = (aside || actions) ? (
+    <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto">
       {aside}
       {actions}
     </div>
-  );
+  ) : null;
 
   return (
-    <header className="relative overflow-hidden rounded-[28px] border border-[var(--border-color)] bg-[var(--bg-card)]/70 px-5 py-5 backdrop-blur-xl sm:px-6 sm:py-6">
+    <header className="relative overflow-hidden rounded-[24px] border border-[var(--border-color)] bg-[var(--bg-card)]/70 px-4 py-4 backdrop-blur-xl sm:rounded-[28px] sm:px-6 sm:py-6">
       <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: gradient }} />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
         style={{ background: 'linear-gradient(90deg, transparent, var(--border-color), transparent)' }}
       />
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+      <div className="relative flex flex-col gap-3.5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         {text}
         {cluster}
       </div>

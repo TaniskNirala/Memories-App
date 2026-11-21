@@ -416,13 +416,13 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
           {/* Attendance Section for Events */}
           {collection?.isEvent && (
             <div className="p-3.5 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)]">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-sky-400" />
                   Who Was There ({attendees.length})
                 </span>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {!isUserAttending ? (
                     <button
                       onClick={() => handleMarkPresent()}
@@ -637,13 +637,13 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                   className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
                 />
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="flex items-center gap-1.5 text-xs text-[var(--text-muted)] cursor-pointer">
                     <input
                       type="checkbox"
                       checked={isAnonymous}
                       onChange={(e) => setIsAnonymous(e.target.checked)}
-                      className="rounded accent-[var(--accent-coral)]"
+                      className="rounded accent-[var(--accent-coral)] shrink-0"
                     />
                     <span>Post anonymously (hidden from friends, visible to admins)</span>
                   </label>
@@ -651,7 +651,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                   <button
                     type="submit"
                     disabled={!noteText.trim()}
-                    className="px-3 py-1.5 rounded-lg bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition playful-btn"
+                    className="ml-auto px-3 py-1.5 rounded-lg bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition playful-btn shrink-0"
                   >
                     Add Note
                   </button>

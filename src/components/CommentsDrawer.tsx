@@ -186,12 +186,12 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
 
   return (
     <div
-      className="scrim z-50 !items-end sm:!items-center"
+      className="scrim z-50 !p-0 sm:!p-4 !items-end sm:!items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full sm:max-w-lg bg-[var(--bg-card)] border-t sm:border border-[var(--border-color)] rounded-t-3xl sm:rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[85vh] h-[75vh] overflow-hidden">
+      <div className="w-full sm:max-w-lg bg-[var(--bg-card)] border-t sm:border border-[var(--border-color)] rounded-t-3xl sm:rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[88dvh] h-[78dvh] sm:h-[75vh] overflow-hidden pb-[env(safe-area-inset-bottom,0px)] sm:pb-0">
         {/* Grab bar affordance for mobile */}
         <div className="w-10 h-1 bg-[var(--border-color)] rounded-full mx-auto my-2 sm:hidden" />
 

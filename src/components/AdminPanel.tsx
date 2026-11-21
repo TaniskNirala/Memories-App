@@ -616,9 +616,9 @@ export const AdminPanel: React.FC = () => {
             pendingSignups.map((u) => (
               <div
                 key={u.id}
-                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
+                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex min-w-0 items-center gap-2.5">
                   <Avatar
                     name={u.display_name}
                     color={u.avatar_color}
@@ -626,17 +626,17 @@ export const AdminPanel: React.FC = () => {
                     size={32}
                     className="shadow-xs"
                   />
-                  <div>
-                    <span className="font-bold text-[var(--text-primary)] block">
+                  <div className="min-w-0">
+                    <span className="font-bold text-[var(--text-primary)] block truncate">
                       {u.display_name}
                     </span>
-                    <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                    <span className="text-[11px] text-[var(--text-muted)] font-mono block truncate">
                       @{u.username} • Signed up {new Date(u.created_at).toLocaleDateString()}
                     </span>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
                   <button
                     onClick={() => handleApproveUser(u.id, u.username)}
                     className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 transition playful-btn shadow-xs"
@@ -668,10 +668,10 @@ export const AdminPanel: React.FC = () => {
             proposals.map((p) => (
               <div
                 key={p.id}
-                className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-start justify-between gap-3 text-xs"
+                className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex flex-col sm:flex-row sm:items-start justify-between gap-3 text-xs"
               >
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
                     <span className="text-[11px] text-amber-500 font-semibold uppercase">
                       Event Proposal
                     </span>
@@ -683,7 +683,7 @@ export const AdminPanel: React.FC = () => {
                   {p.description && <p className="text-xs text-[var(--text-secondary)] mt-1">{p.description}</p>}
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleProposalDecision(p.id, 'approved')}
                     className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1 transition playful-btn"
@@ -709,9 +709,9 @@ export const AdminPanel: React.FC = () => {
           {users.map((u) => (
             <div
               key={u.id}
-              className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
+              className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
                 <Avatar
                   name={u.display_name}
                   color={u.avatar_color}
@@ -719,10 +719,10 @@ export const AdminPanel: React.FC = () => {
                   size={28}
                   className="shadow-2xs"
                 />
-                <div>
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-bold text-[var(--text-primary)]">{u.display_name}</span>
-                    <span className="text-[10px] text-[var(--text-muted)] font-mono">@{u.username}</span>
+                    <span className="font-bold text-[var(--text-primary)] truncate">{u.display_name}</span>
+                    <span className="text-[10px] text-[var(--text-muted)] font-mono truncate">@{u.username}</span>
 
                     {u.role === 'admin' && (
                       <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold font-mono">
@@ -751,7 +751,7 @@ export const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
                 {/* One-click Approve for any user in User Directory who is pending */}
                 {u.role === 'pending' && (
                   <button
@@ -821,10 +821,10 @@ export const AdminPanel: React.FC = () => {
             circles.map((c) => (
               <div
                 key={c.id}
-                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
+                className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
               >
-                <div>
-                  <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-bold text-[var(--text-primary)] text-sm">{c.name}</span>
                     {c.isEveryone ? (
                       <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold font-mono">
@@ -909,14 +909,14 @@ export const AdminPanel: React.FC = () => {
           {auditLogs.map((log) => (
             <div
               key={log.id}
-              className="p-3 rounded-xl bg-[var(--bg-surface)] text-xs border border-[var(--border-subtle)] flex items-start justify-between gap-3 font-mono"
+              className="p-3 rounded-xl bg-[var(--bg-surface)] text-xs border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-start justify-between gap-1.5 sm:gap-3 font-mono"
             >
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-bold text-[var(--accent-coral)]">{log.action}</span>
                   <span className="text-[10px] text-[var(--text-muted)]">by @{log.actor_username || 'system'}</span>
                 </div>
-                <p className="text-[var(--text-secondary)] mt-0.5">{log.details}</p>
+                <p className="text-[var(--text-secondary)] mt-0.5 break-words">{log.details}</p>
               </div>
               <span className="text-[10px] text-[var(--text-muted)] shrink-0">
                 {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1219,7 +1219,7 @@ export const AdminPanel: React.FC = () => {
 
             <div className="space-y-3 text-xs">
               <div className="p-3 rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <span className="text-[var(--text-muted)] font-medium">Connection State</span>
                   <span
                     className={`font-semibold flex items-center gap-1.5 ${
@@ -1235,21 +1235,21 @@ export const AdminPanel: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <span className="text-[var(--text-muted)] font-medium">Neon database</span>
-                  <span className="font-mono text-[11px] text-[var(--text-secondary)] truncate max-w-[220px]" title={dbStatus?.tursoUrl || 'Not configured'}>
+                  <span className="font-mono text-[11px] text-[var(--text-secondary)] truncate max-w-[200px]" title={dbStatus?.tursoUrl || 'Not configured'}>
                     {dbStatus?.tursoUrl || 'Not configured'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <span className="text-[var(--text-muted)] font-medium">Last Neon Sync</span>
                   <span className="text-[var(--text-secondary)]">
                     {dbStatus?.lastSync ? new Date(dbStatus.lastSync).toLocaleString() : 'Not yet synced'}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-1">
                   <span className="text-[var(--text-muted)] font-medium">Local Database Records</span>
                   <span className="text-[var(--text-secondary)] font-mono">
                     {dbStatus?.userCount ?? 0} user(s), {dbStatus?.postCount ?? 0} memory(ies), {dbStatus?.albumCount ?? 0} event(s)

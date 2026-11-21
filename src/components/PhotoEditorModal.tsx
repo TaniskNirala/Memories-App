@@ -381,7 +381,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
           ) : (
             <div
               ref={containerRef}
-              className="relative max-w-full max-h-[58vh] flex items-center justify-center overflow-hidden rounded-xl border border-neutral-800/80 shadow-2xl"
+              className="relative max-w-full max-h-[58vh] flex items-center justify-center overflow-hidden rounded-xl border border-neutral-800/80 shadow-2xl touch-none select-none"
               style={{ aspectRatio: visualAspect }}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
@@ -522,17 +522,17 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
           </div>
 
           {/* Action Footer */}
-          <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-3">
+          <div className="pt-2 border-t border-neutral-800 flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-white transition"
+              className="px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-white transition"
             >
               Cancel
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
               {onSaveAndShare && (
                 <button
                   type="button"

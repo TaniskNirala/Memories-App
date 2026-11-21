@@ -820,12 +820,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           {/* Duplicate Detection Warning Banner */}
           {detectedDuplicates.length > 0 && (
             <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-200 text-xs space-y-2 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 font-bold text-amber-300">
                   <Copy className="w-4 h-4 text-amber-400 shrink-0" />
                   <span>{detectedDuplicates.length} Duplicate Photo(s) Detected</span>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => setDetectedDuplicates([])}
@@ -987,12 +987,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       )}
 
                       {!isProcessing && item.status !== 'done' && (
-                        <div className="absolute top-1 right-1 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition z-10">
+                        <div className="absolute top-1 right-1 flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition z-10">
                           {item.file.type.startsWith('image/') && (
                             <button
                               type="button"
                               onClick={() => setEditingQueueItemId(item.id)}
-                              className="w-5 h-5 bg-black/75 hover:bg-amber-500 hover:text-neutral-950 rounded-full flex items-center justify-center text-white transition shadow-xs"
+                              className="w-6 h-6 sm:w-5 sm:h-5 bg-black/75 hover:bg-amber-500 hover:text-neutral-950 rounded-full flex items-center justify-center text-white transition shadow-xs"
                               title="Crop & Rotate photo"
                             >
                               <Crop className="w-3 h-3" />
@@ -1001,7 +1001,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           <button
                             type="button"
                             onClick={() => removeQueueItem(item.id)}
-                            className="w-5 h-5 bg-black/75 hover:bg-rose-500 rounded-full flex items-center justify-center text-white transition shadow-xs"
+                            className="w-6 h-6 sm:w-5 sm:h-5 bg-black/75 hover:bg-rose-500 rounded-full flex items-center justify-center text-white transition shadow-xs"
                             title="Remove file"
                           >
                             <X className="w-3 h-3" />
@@ -1021,7 +1021,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       </label>
                       <span className="text-[10px] text-amber-400 font-medium">Choose display style</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setUploadStructure('grouped')}
@@ -1137,7 +1137,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
           {/* Date Selector & Basis */}
           <div className="space-y-1.5">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                   <Calendar className="w-3.5 h-3.5" /> Date Taken

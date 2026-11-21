@@ -517,14 +517,38 @@ async function runTests() {
     // -------------------------------------------------------------
     // Test Case 11: Password policy, re-auth on delete, rate limiting
     // -------------------------------------------------------------
-    console.log('\n[Test 11] Password policy, delete re-auth, login rate limit:');
+    console.log('\n[Test 11] Password policy (5-char min), delete re-auth, login rate limit:');
     try {
-      const weak = await fetch(`${baseUrl}/api/auth/register`, {
+      const tooShort = await fetch(`${baseUrl}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'weakling', password: '123456', displayName: 'Weak' }),
+        body: JSON.stringify({ username: 'weakling', password: '1234', displayName: 'Weak' }),
       });
-      if (weak.status !== 400) throw new Error(`weak password accepted (${weak.status})`);
+      if (tooShort.status !== 400) throw new Error(`4-char password accepted (${tooShort.status})`);
+
+      const fiveCharOk = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'fivechar', password: 'abcde', displayName: 'Five Char' }),
+      });
+      if (!fiveCharOk.ok) throw new Error(`5-char password rejected (${fiveCharOk.status})`);
+
+      // Also verify 5-char password works on password reset
+      const adminTok = await loginUser(baseUrl, 'admin', 'admin123');
+      const usersList = await (await fetch(`${baseUrl}/api/admin/users`, { headers: { Authorization: `Bearer ${adminTok}` } })).json();
+      const fiveUser = (usersList.users || []).find((u: any) => u.username === 'fivechar');
+      if (fiveUser) {
+        const genRes = await (await fetch(`${baseUrl}/api/admin/generate-reset-link/${fiveUser.id}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${adminTok}` },
+        })).json();
+        const resetRes = await fetch(`${baseUrl}/api/auth/redeem-reset`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: genRes.token, newPassword: 'vwxyz' }),
+        });
+        if (!resetRes.ok) throw new Error(`5-char password rejected on reset (${resetRes.status})`);
+      }
 
       const mayaToken = await loginUser(baseUrl, 'maya', 'secret123');
       const noPw = await fetch(`${baseUrl}/api/auth/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${mayaToken}`, 'Content-Type': 'application/json' }, body: '{}' });

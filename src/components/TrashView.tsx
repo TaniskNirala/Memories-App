@@ -151,7 +151,7 @@ export const TrashView: React.FC = () => {
             const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - new Date(item.deleted_at).getTime()) / 86400000));
             const thumb = item.files?.[0]?.thumbUrl;
             return (
-              <div key={item.id} className="surface group flex items-center gap-3 p-2.5 transition hover:border-[var(--accent-amber)]/35">
+              <div key={item.id} className="surface group flex flex-wrap items-center gap-3 p-3 transition hover:border-[var(--accent-amber)]/35 sm:flex-nowrap sm:p-2.5">
                 <div className="shot h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[var(--border-subtle)]">
                   {thumb ? (
                     <img src={thumb} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
@@ -164,18 +164,18 @@ export const TrashView: React.FC = () => {
 
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12.5px] font-semibold">{item.caption || 'Untitled memory'}</p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-[var(--text-muted)]">
                     <span>Deleted {relativeTime(item.deleted_at)}</span>
                     <span aria-hidden>·</span>
                     <span className={daysLeft <= 7 ? 'font-semibold text-rose-400' : ''}>
                       {daysLeft} day{daysLeft === 1 ? '' : 's'} left
                     </span>
-                    <span aria-hidden>·</span>
-                    <span className="font-mono">{shortDate(item.deleted_at)}</span>
+                    <span aria-hidden className="hidden sm:inline">·</span>
+                    <span className="hidden font-mono sm:inline">{shortDate(item.deleted_at)}</span>
                   </p>
                 </div>
 
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="ml-auto flex shrink-0 items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleRestore(item.id)}
@@ -188,7 +188,7 @@ export const TrashView: React.FC = () => {
                     type="button"
                     onClick={() => setPendingDelete(item)}
                     disabled={isDeleteProtected || busyId === item.id}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-rose-500/12 hover:text-rose-400 disabled:opacity-40"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-rose-500/12 hover:text-rose-400 disabled:opacity-40"
                     title={isDeleteProtected ? 'Locked in preview' : 'Delete forever'}
                   >
                     <Trash2 className="h-3.5 w-3.5" />

@@ -121,7 +121,7 @@ export const ProposeCollectionModal: React.FC<ProposeCollectionModalProps> = ({
             />
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)] cursor-pointer">
               <input
                 type="radio"
@@ -145,7 +145,7 @@ export const ProposeCollectionModal: React.FC<ProposeCollectionModalProps> = ({
           </div>
 
           {isEvent && (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="block text-xs font-semibold text-[var(--text-secondary)] mb-1 flex items-center gap-1">
                   <Calendar className="w-3 h-3 text-amber-500" /> Event Date

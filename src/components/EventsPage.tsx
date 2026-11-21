@@ -233,35 +233,37 @@ export const EventsPage: React.FC<EventsPageProps> = ({
       {/* toolbar */}
       <div className="surface flex flex-col gap-2.5 p-2.5 sm:flex-row sm:items-center">
         <SearchBox value={query} onChange={setQuery} placeholder="Search chapters, places, people…" className="flex-1" />
-        <div className="scroll-x flex items-center gap-1.5">
-          {([
-            { id: 'all', label: 'All' },
-            { id: 'events', label: 'Events' },
-            { id: 'collections', label: 'Collections' },
-            { id: 'attended', label: 'I attended' },
-          ] as const).map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={`chip ${filter === f.id ? 'chip-active' : ''}`}
+        <div className="flex items-center justify-between gap-2 sm:contents">
+          <div className="scroll-x flex min-w-0 flex-1 items-center gap-1.5 sm:flex-initial">
+            {([
+              { id: 'all', label: 'All' },
+              { id: 'events', label: 'Events' },
+              { id: 'collections', label: 'Collections' },
+              { id: 'attended', label: 'I attended' },
+            ] as const).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                className={`chip ${filter === f.id ? 'chip-active' : ''}`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative shrink-0">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as typeof sort)}
+              className="field !w-auto !py-1.5 appearance-none pr-7 text-[11px]"
+              aria-label="Sort chapters"
             >
-              {f.label}
-            </button>
-          ))}
-        </div>
-        <div className="relative shrink-0">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as typeof sort)}
-            className="field !w-auto !py-1.5 appearance-none pr-7 text-[11px]"
-            aria-label="Sort chapters"
-          >
-            <option value="recent">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="biggest">Most photos</option>
-          </select>
-          <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--text-muted)]" />
+              <option value="recent">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="biggest">Most photos</option>
+            </select>
+            <Search className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[var(--text-muted)]" />
+          </div>
         </div>
       </div>
 

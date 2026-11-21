@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 
 export const BCRYPT_COST = 12;
-export const MIN_PASSWORD_LENGTH = 10;
+export const MIN_PASSWORD_LENGTH = 5;
 const MAX_PASSWORD_BYTES = 72; // bcrypt ignores anything past 72 bytes
 
 const COMMON_PASSWORDS = new Set([

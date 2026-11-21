@@ -459,7 +459,7 @@ export const ProfilePage: React.FC = () => {
                 autoComplete="new-password"
                 value={pwNext}
                 onChange={(e) => setPwNext(e.target.value)}
-                placeholder="At least 10 characters"
+                placeholder="At least 5 characters"
                 className="field"
                 required
               />
@@ -570,11 +570,11 @@ export const ProfilePage: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-2 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 p-4">
           <p className="text-[10.5px] text-[var(--text-muted)]">
             Your handle is <span className="font-mono text-[var(--text-secondary)]">@{user?.username}</span>
           </p>
-          <button type="button" onClick={() => setDeleteOpen(true)} className="btn btn-danger btn-sm">
+          <button type="button" onClick={() => setDeleteOpen(true)} className="btn btn-danger btn-sm shrink-0">
             <Trash2 className="h-3.5 w-3.5" /> Delete account
           </button>
         </div>

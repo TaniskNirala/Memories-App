@@ -4,6 +4,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 interface TestResult {
   name: string;
@@ -23,7 +24,22 @@ async function loginUser(baseUrl: string, username: string, password: string): P
   if (!res.ok && res.status !== 403) {
     throw new Error(`Login failed for ${username}: ${data.error}`);
   }
-  return data.token;
+  // Sessions are cookie-only now: pull the session value out of Set-Cookie (it works as a Bearer token too)
+  const setCookie = res.headers.getSetCookie?.() || [];
+  const match = setCookie.map((c) => /kinfolk_session=([^;]+)/.exec(c)).find(Boolean);
+  return match ? decodeURIComponent(match[1]) : (data.token as string);
+}
+
+function rawRequest(baseUrl: string, pathname: string, headers: Record<string, string> = {}, method = 'GET'): Promise<{ status: number; headers: http.IncomingHttpHeaders }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(baseUrl);
+    const req = http.request({ host: u.hostname, port: u.port, path: pathname, method, headers }, (r) => {
+      r.resume();
+      resolve({ status: r.statusCode || 0, headers: r.headers });
+    });
+    req.on('error', reject);
+    req.end();
+  });
 }
 
 async function runTests() {
@@ -334,6 +350,201 @@ async function runTests() {
     } catch (err: any) {
       console.error('✗ FAIL: Test 4 failed:', err.message);
       results.push({ name: 'Comments isolation', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
+    // Test Case 5: /switch-user passwordless login is gone
+    // -------------------------------------------------------------
+    console.log('\n[Test 5] /switch-user endpoint removed:');
+    try {
+      const r = await fetch(`${baseUrl}/api/auth/switch-user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin' }),
+      });
+      const body: any = await r.json().catch(() => ({}));
+      if (r.status === 200 || body.token) throw new Error(`switch-user still issues a session (status ${r.status})`);
+      console.log(`  switch-user returned ${r.status}, no token`);
+      results.push({ name: 'switch-user endpoint removed', passed: true });
+    } catch (err: any) {
+      results.push({ name: 'switch-user endpoint removed', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
+    // Test Case 6: Media endpoints require authentication
+    // -------------------------------------------------------------
+    console.log('\n[Test 6] Media endpoints require auth:');
+    try {
+      const mediaDir = path.resolve(process.cwd(), 'uploads', 'posts', 'u-maya');
+      fs.mkdirSync(mediaDir, { recursive: true });
+      const mediaFile = path.join(mediaDir, 'authtest.jpg');
+      fs.writeFileSync(mediaFile, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+
+      const urls = [
+        '/api/storage/view?key=posts/u-maya/authtest.jpg',
+        '/uploads/posts/u-maya/authtest.jpg',
+        '/api/storage/file/1',
+        '/api/storage/file/1/x.jpg',
+      ];
+      for (const u of urls) {
+        const r = await fetch(`${baseUrl}${u}`);
+        if (r.status !== 401) throw new Error(`${u} returned ${r.status} without login (expected 401)`);
+      }
+
+      // Forged / bad token must be rejected
+      const bad = await fetch(`${baseUrl}/api/storage/view?key=posts/u-maya/authtest.jpg&token=deadbeef&expires=${Date.now() + 60000}`);
+      if (bad.status !== 401) throw new Error(`bad token returned ${bad.status}`);
+
+      // Logged-in approved member can fetch
+      const mayaToken = await loginUser(baseUrl, 'maya', 'secret123');
+      const authH = { Authorization: `Bearer ${mayaToken}` };
+      for (const u of ['/api/storage/view?key=posts/u-maya/authtest.jpg', '/uploads/posts/u-maya/authtest.jpg']) {
+        const r = await fetch(`${baseUrl}${u}`, { headers: authH });
+        if (r.status !== 200) throw new Error(`${u} returned ${r.status} with login (expected 200)`);
+      }
+
+      // Pending user is blocked
+      run("UPDATE users SET role = 'pending' WHERE username = 'elena'");
+      const elenaToken = await loginUser(baseUrl, 'elena', 'secret123');
+      const pr = await fetch(`${baseUrl}/api/storage/view?key=posts/u-maya/authtest.jpg`, { headers: { Authorization: `Bearer ${elenaToken}` } });
+      if (pr.status !== 401) throw new Error(`pending user got ${pr.status}`);
+
+      fs.unlinkSync(mediaFile);
+      results.push({ name: 'Media endpoints require auth', passed: true });
+    } catch (err: any) {
+      results.push({ name: 'Media endpoints require auth', passed: false, error: err.message });
+    }
+
+
+    // -------------------------------------------------------------
+    // Test Case 7: Session token is not exposed to scripts
+    // -------------------------------------------------------------
+    console.log('\n[Test 7] Login does not return the session token in the body:');
+    try {
+      const r = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'maya', password: 'secret123' }),
+      });
+      const body: any = await r.json();
+      if (body.token) throw new Error('token present in JSON body');
+      const sc = (r.headers.getSetCookie?.() || []).join(';');
+      if (!/HttpOnly/i.test(sc) || !/SameSite=Lax/i.test(sc)) throw new Error(`cookie flags wrong: ${sc}`);
+      const stored = queryOne<{ n: number }>("SELECT COUNT(*) as n FROM sessions WHERE LENGTH(token) = 64");
+      if (!stored || stored.n < 1) throw new Error('sessions are not stored hashed');
+      results.push({ name: 'Session token httpOnly + hashed at rest', passed: true });
+    } catch (err: any) {
+      results.push({ name: 'Session token httpOnly + hashed at rest', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
+    // Test Case 8: CORS and headers
+    // -------------------------------------------------------------
+    console.log('\n[Test 8] CORS allow-list and security headers:');
+    try {
+      const evil = await rawRequest(baseUrl, '/api/health', { Origin: 'https://evil.example' });
+      if (evil.headers['access-control-allow-origin']) throw new Error('evil origin was reflected');
+      const evilPost = await rawRequest(baseUrl, '/api/auth/logout', { Origin: 'https://evil.example' }, 'POST');
+      if (evilPost.status !== 403) throw new Error(`cross-site POST returned ${evilPost.status}`);
+      const same = await rawRequest(baseUrl, '/api/health', { Origin: baseUrl });
+      if (same.headers['access-control-allow-origin'] !== baseUrl) throw new Error('same-origin request not allowed');
+      if (same.headers['x-powered-by']) throw new Error('X-Powered-By still exposed');
+      if (same.headers['x-content-type-options'] !== 'nosniff') throw new Error('nosniff missing');
+      results.push({ name: 'CORS allow-list and security headers', passed: true });
+    } catch (err: any) {
+      results.push({ name: 'CORS allow-list and security headers', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
+    // Test Case 9: Upload hardening
+    // -------------------------------------------------------------
+    console.log('\n[Test 9] Upload hardening:');
+    try {
+      // Token forged with the old hard-coded secret must be rejected
+      const expires = Date.now() + 600000;
+      const key = 'posts/u-maya/evil.jpg';
+      const forged = crypto.createHmac('sha256', 'kinfolk-local-secret-key-32chars!!').update(`upload:${key}:${expires}`).digest('hex');
+      const put = await fetch(`${baseUrl}/api/storage/upload?key=${encodeURIComponent(key)}&token=${forged}&expires=${expires}`, { method: 'PUT', body: 'x' });
+      if (put.status !== 403) throw new Error(`forged upload token returned ${put.status}`);
+
+      // Non-media extensions can never be signed
+      const { LocalDiskStorageAdapter } = await import('../server/storage/local.ts');
+      let threw = false;
+      try {
+        await new LocalDiskStorageAdapter().getSignedUploadUrl('posts/u-maya/evil.html', 'text/html');
+      } catch {
+        threw = true;
+      }
+      if (!threw) throw new Error('html key could be signed for upload');
+
+      // Multipart upload of an HTML file is refused
+      const mayaToken = await loginUser(baseUrl, 'maya', 'secret123');
+      const form = new FormData();
+      form.append('file', new Blob(['<script>alert(1)</script>'], { type: 'text/html' }), 'evil.html');
+      const up = await fetch(`${baseUrl}/api/posts/upload-file`, { method: 'POST', headers: { Authorization: `Bearer ${mayaToken}` }, body: form });
+      if (up.status !== 400) throw new Error(`html upload returned ${up.status}`);
+      results.push({ name: 'Upload hardening', passed: true });
+    } catch (err: any) {
+      results.push({ name: 'Upload hardening', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
+    // Test Case 10: Per-file authorization + body size limits
+    // -------------------------------------------------------------
+    console.log('\n[Test 10] Per-file media authorization and body limits:');
+    try {
+      const dir = path.resolve(process.cwd(), 'uploads', 'posts', 'u-maya');
+      fs.mkdirSync(dir, { recursive: true });
+      const f = path.join(dir, 'private-test.jpg');
+      fs.writeFileSync(f, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+      const leoToken = await loginUser(baseUrl, 'leo', 'secret123');
+      const r = await fetch(`${baseUrl}/api/storage/view?key=posts/u-maya/private-test.jpg`, { headers: { Authorization: `Bearer ${leoToken}` } });
+      fs.unlinkSync(f);
+      if (r.status !== 403) throw new Error(`other member got ${r.status} for an unshared file`);
+
+      const big = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'x', password: 'a'.repeat(2 * 1024 * 1024) }),
+      });
+      if (big.status !== 413) throw new Error(`2 MB JSON body returned ${big.status}`);
+      results.push({ name: 'Per-file authorization + body limits', passed: true });
+    } catch (err: any) {
+      results.push({ name: 'Per-file authorization + body limits', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
+    // Test Case 11: Password policy, re-auth on delete, rate limiting
+    // -------------------------------------------------------------
+    console.log('\n[Test 11] Password policy, delete re-auth, login rate limit:');
+    try {
+      const weak = await fetch(`${baseUrl}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'weakling', password: '123456', displayName: 'Weak' }),
+      });
+      if (weak.status !== 400) throw new Error(`weak password accepted (${weak.status})`);
+
+      const mayaToken = await loginUser(baseUrl, 'maya', 'secret123');
+      const noPw = await fetch(`${baseUrl}/api/auth/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${mayaToken}`, 'Content-Type': 'application/json' }, body: '{}' });
+      if (noPw.status !== 403) throw new Error(`account delete without password returned ${noPw.status}`);
+
+      let blocked = false;
+      for (let i = 0; i < 8; i++) {
+        const r = await fetch(`${baseUrl}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: 'ratelimit-target', password: `wrong-${i}` }),
+        });
+        if (r.status === 429) {
+          blocked = true;
+          break;
+        }
+      }
+      if (!blocked) throw new Error('login was never rate limited');
+      results.push({ name: 'Password policy, delete re-auth, login rate limit', passed: true });
+    } catch (err: any) {
+      results.push({ name: 'Password policy, delete re-auth, login rate limit', passed: false, error: err.message });
     }
 
     // -------------------------------------------------------------

@@ -11,7 +11,6 @@ interface AuthContextType {
   register: (username: string, password: string, displayName: string) => Promise<{ success: boolean; error?: string; isPending?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
-  switchUser: (username: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -24,34 +23,19 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => ({ success: false }),
   logout: async () => {},
   refreshUser: async () => {},
-  switchUser: async () => false,
 });
 
-export function getAuthToken(): string | null {
-  return localStorage.getItem('kinfolk_auth_token');
-}
-
-export function setAuthToken(token: string | null) {
-  if (token) {
-    localStorage.setItem('kinfolk_auth_token', token);
-  } else {
-    localStorage.removeItem('kinfolk_auth_token');
-  }
-}
+// Sessions live in an httpOnly cookie that scripts cannot read. Remove any token left in
+// localStorage by older versions of the app.
+try {
+  localStorage.removeItem('kinfolk_auth_token');
+} catch {}
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit, retries: number = 2): Promise<Response> {
-  const token = getAuthToken();
-  const headers = new Headers(init?.headers || {});
-
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
   try {
     const res = await fetch(input, {
       ...init,
-      headers,
-      credentials: 'include',
+      credentials: 'same-origin',
     });
     return res;
   } catch (err) {
@@ -99,9 +83,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!res.ok) {
         return { success: false, error: data.error, isPending: data.isPending };
       }
-      if (data.token) {
-        setAuthToken(data.token);
-      }
       setUser(data.user);
       return { success: true, isPending: data.isPending };
     } catch (err: any) {
@@ -120,34 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!res.ok) {
         return { success: false, error: data.error };
       }
-      if (data.token) {
-        setAuthToken(data.token);
-      }
       setUser(data.user);
       return { success: true, isPending: data.isPending };
     } catch (err: any) {
       return { success: false, error: err.message || 'Registration failed' };
-    }
-  };
-
-  const switchUser = async (username: string): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/auth/switch-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.token) {
-          setAuthToken(data.token);
-        }
-        setUser(data.user);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
     }
   };
 
@@ -157,7 +114,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (e) {
       console.error('Logout error:', e);
     } finally {
-      setAuthToken(null);
       setUser(null);
     }
   };
@@ -178,7 +134,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         refreshUser,
-        switchUser,
       }}
     >
       {children}

@@ -1,3 +1,4 @@
+import { createRateLimiter } from '../security/rateLimit.ts';
 import { Router } from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -9,6 +10,15 @@ import { getStorageAdapter } from '../storage/index.ts';
 
 export const aiRouter = Router();
 aiRouter.use(requireApproved);
+// Each call costs real money: cap per signed-in user (30 requests / 10 minutes)
+aiRouter.use(
+  createRateLimiter({
+    windowMs: 10 * 60 * 1000,
+    max: 30,
+    keyFn: (req) => (req as AuthenticatedRequest).user?.id || req.ip || 'unknown',
+    message: 'AI request limit reached. Please wait a few minutes and try again.',
+  })
+);
 
 const upload = multer({
   limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max for vision analysis
@@ -486,6 +496,6 @@ aiRouter.post('/caption-post/:postId', async (req: AuthenticatedRequest, res) =>
     });
   } catch (err: any) {
     console.error('Caption post error:', err);
-    res.status(500).json({ error: err.message || 'Failed to auto-caption memory' });
+    res.status(500).json({ error: 'Failed to auto-caption memory' });
   }
 });

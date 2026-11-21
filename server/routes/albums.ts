@@ -331,7 +331,7 @@ albumsRouter.post('/:id/items', async (req: AuthenticatedRequest, res) => {
     });
   } catch (err: any) {
     console.error('Failed to add items to album:', err);
-    res.status(500).json({ error: err.message || 'Failed to add items to album' });
+    res.status(500).json({ error: 'Failed to add items to album' });
   }
 });
 

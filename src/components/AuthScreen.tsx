@@ -7,11 +7,21 @@ export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
-  const [mode, setMode] = useState<'login' | 'register' | 'redeem_reset'>('login');
+  // Reset links look like /reset-password#token=...; the fragment never reaches the server
+  const initialResetToken = (() => {
+    try {
+      const m = /(?:^#|&)token=([A-Za-z0-9]+)/.exec(window.location.hash) || /[?&]token=([A-Za-z0-9]+)/.exec(window.location.search);
+      return m ? m[1] : '';
+    } catch {
+      return '';
+    }
+  })();
+
+  const [mode, setMode] = useState<'login' | 'register' | 'redeem_reset'>(initialResetToken ? 'redeem_reset' : 'login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [resetToken, setResetToken] = useState('');
+  const [resetToken, setResetToken] = useState(initialResetToken);
   const [newPassword, setNewPassword] = useState('');
 
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +55,7 @@ export const AuthScreen: React.FC = () => {
         if (res.ok) {
           setSuccessMsg(data.message || 'Password reset successfully! Please log in.');
           setMode('login');
+          if (initialResetToken) window.history.replaceState(null, '', '/');
         } else {
           setError(data.error || 'Failed to redeem password reset link');
         }
@@ -178,7 +189,7 @@ export const AuthScreen: React.FC = () => {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder="At least 10 characters"
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
                   />
                   <Lock className="w-4 h-4 absolute left-3 top-2.5 text-[var(--text-muted)]" />
@@ -214,7 +225,7 @@ export const AuthScreen: React.FC = () => {
                     required
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min 6 characters"
+                    placeholder="Min 10 characters"
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] focus:outline-hidden"
                   />
                   <Lock className="w-4 h-4 absolute left-3 top-2.5 text-[var(--text-muted)]" />

@@ -1,3 +1,5 @@
+import { hashToken } from '../security/tokens.ts';
+import { getAppBaseUrl } from '../security/http.ts';
 import { Router } from 'express';
 import crypto from 'crypto';
 import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync, restoreDatabaseFromCloud, flushNeonWrites } from '../db.ts';
@@ -70,7 +72,8 @@ adminRouter.post('/db-sync', async (_req: AuthenticatedRequest, res) => {
     await repairPostFileKeys().catch(() => {});
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to sync database' });
+    console.error('admin.ts error:', err);
+    res.status(500).json({ error: 'Failed to sync database' });
   }
 });
 
@@ -81,7 +84,8 @@ adminRouter.post('/restore-turso', async (_req: AuthenticatedRequest, res) => {
     await repairPostFileKeys().catch(() => {});
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to restore database from Neon' });
+    console.error('admin.ts error:', err);
+    res.status(500).json({ error: 'Failed to restore database from Neon' });
   }
 });
 
@@ -162,7 +166,8 @@ adminRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
     const result = await syncStorageToDatabase();
     res.json({ success: true, ...result });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to sync storage' });
+    console.error('admin.ts error:', err);
+    res.status(500).json({ error: 'Failed to sync storage' });
   }
 });
 
@@ -189,7 +194,7 @@ adminRouter.post('/clear-feed', async (_req: AuthenticatedRequest, res) => {
     });
   } catch (err: any) {
     console.error('Error during clear-feed:', err);
-    res.status(500).json({ error: err.message || 'Failed to clear feed' });
+    res.status(500).json({ error: 'Failed to clear feed' });
   }
 });
 
@@ -229,7 +234,7 @@ adminRouter.post('/purge-all-data', async (_req: AuthenticatedRequest, res) => {
     });
   } catch (err: any) {
     console.error('Error during purge-all-data:', err);
-    res.status(500).json({ error: err.message || 'Failed to purge data from storage' });
+    res.status(500).json({ error: 'Failed to purge data from storage' });
   }
 });
 
@@ -457,7 +462,7 @@ adminRouter.post('/generate-reset-link/:id', (req: AuthenticatedRequest, res) =>
 
   run(
     'INSERT INTO password_resets (token, user_id, expires_at, used_at, created_by, created_at) VALUES (?, ?, ?, NULL, ?, ?)',
-    [token, targetId, expiresAt, adminId, now]
+    [hashToken(token), targetId, expiresAt, adminId, now]
   );
 
   run(
@@ -465,7 +470,8 @@ adminRouter.post('/generate-reset-link/:id', (req: AuthenticatedRequest, res) =>
     [crypto.randomUUID(), adminId, 'password_reset_created', 'user', targetId, `Generated one-time reset link for @${target.username}`, now]
   );
 
-  const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
+  // Token goes in the URL fragment so it is never sent to servers, proxies or Referer headers
+  const resetUrl = `${getAppBaseUrl(req)}/reset-password#token=${token}`;
 
   res.json({
     success: true,

@@ -14,6 +14,9 @@ import { getStorageAdapter, isTelegramKey } from './server/storage/index.ts';
 import { repairPostFileKeys } from './server/storage/sync.ts';
 import { startTelegramDeletionWatcher, stopTelegramDeletionWatcher } from './server/storage/tg-deletion-sync.ts';
 import { isDeleteProtected } from './server/config.ts';
+import { corsMiddleware, securityHeaders, setUntrustedContentHeaders } from './server/security/http.ts';
+import { MIME_BY_EXT, isAllowedMediaName } from './server/security/media.ts';
+import { canAccessStorageKey, canAccessTelegramMessage, normaliseKey } from './server/security/mediaAccess.ts';
 
 // Routers
 import { authRouter } from './server/routes/auth.ts';
@@ -39,23 +42,16 @@ export async function createApp() {
 
   const app = express();
 
-  // CORS and preflight handling for browser and iframe preview
-  app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-    } else {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-    }
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  app.disable('x-powered-by');
+  if (process.env.TRUST_PROXY) {
+    app.set('trust proxy', /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY);
+  } else if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1); // typical single reverse proxy (Render, Fly, Railway, ...)
+  }
 
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-    next();
-  });
+  // Security headers + strict CORS (same-origin or ALLOWED_ORIGINS / APP_URL only)
+  app.use(securityHeaders);
+  app.use(corsMiddleware);
 
   app.use(cookieParser());
 
@@ -73,15 +69,46 @@ export async function createApp() {
     };
     next();
   });
-  // No size limits on requests
-  app.use(express.json({ limit: '500mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '500mb' }));
-
-  // Session & user parser
+  // Session & user parser runs BEFORE body parsing so large bodies are only accepted from signed-in users
   app.use(authMiddleware as any);
+
+  // Image-bearing AI requests (base64 payloads) are allowed to be larger, but only for signed-in users
+  app.use('/api/ai', (req, res, next) => {
+    if ((req as any).user) return express.json({ limit: '25mb' })(req, res, next);
+    next();
+  });
+  // Everything else: small JSON/form bodies only (file uploads use multipart/raw routes)
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   // --- Local Disk Storage Direct Adapter Endpoints ---
   const localStorageAdapter = new LocalDiskStorageAdapter();
+
+  // Media access guard. A request may proceed when either:
+  //  - it carries a valid session AND that user is allowed to see this specific file
+  //    (owner, admin, or a viewer of a post that contains it), or
+  //  - it carries an unexpired HMAC view token that was issued by the server for this exact key.
+  const requireMediaAccess = (opts: { key?: (req: express.Request) => string | undefined; msgId?: (req: express.Request) => string | undefined }) =>
+    (req: express.Request, res: express.Response, next: express.NextFunction) => {
+      const u = (req as any).user as { id: string; role: string; status: string } | undefined;
+      const key = opts.key?.(req);
+
+      if (u && u.status !== 'suspended' && u.role !== 'pending') {
+        const msgId = opts.msgId?.(req);
+        const ok = msgId ? canAccessTelegramMessage(u, msgId) : key ? canAccessStorageKey(u, key) : false;
+        if (ok) return next();
+        return res.status(403).json({ error: 'You do not have access to this file' });
+      }
+
+      const { token, expires } = req.query as { token?: string; expires?: string };
+      if (key && token && expires) {
+        const exp = parseInt(String(expires), 10);
+        if (!Number.isNaN(exp) && localStorageAdapter.verifyToken(key, exp, 'view', String(token))) {
+          return next();
+        }
+      }
+      return res.status(401).json({ error: 'Authentication required' });
+    };
 
   // Browser direct upload endpoint (verifies HMAC signature)
   app.put('/api/storage/upload', express.raw({ type: '*/*', limit: '500mb' }), async (req, res) => {
@@ -96,8 +123,11 @@ export async function createApp() {
       if (!isValid) {
         return res.status(403).json({ error: 'Invalid or expired upload authorization token' });
       }
+      if (!isAllowedMediaName(key)) {
+        return res.status(415).json({ error: 'File type not allowed' });
+      }
 
-      const targetPath = localStorageAdapter.getFilePath(key);
+      const targetPath = localStorageAdapter.getFilePathForWrite(key);
 
       // Handle buffer, string, or stream piping into target file
       if (Buffer.isBuffer(req.body) && req.body.length > 0) {
@@ -117,19 +147,33 @@ export async function createApp() {
       res.json({ success: true, key });
     } catch (err: any) {
       console.error('Storage upload error:', err);
-      res.status(500).json({ error: err.message || 'Upload write failed' });
+      res.status(500).json({ error: 'Upload write failed' });
     }
   });
 
-  // Mount uploads directory statically for direct access with full CORS headers
+  // Uploads directory: per-file authorization, media extensions only, never rendered as a page
+  const decodeUploadKey = (req: express.Request) => {
+    try {
+      return decodeURIComponent(req.path).replace(/^[/\\]+/, '');
+    } catch {
+      return '';
+    }
+  };
   app.use(
     '/uploads',
+    (req, res, next) => {
+      if (!isAllowedMediaName(decodeUploadKey(req))) return res.status(404).end();
+      next();
+    },
+    requireMediaAccess({ key: decodeUploadKey }),
     express.static(path.resolve(process.cwd(), 'uploads'), {
+      dotfiles: 'deny',
+      index: false,
+      redirect: false,
       setHeaders: (res) => {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        setUntrustedContentHeaders(res);
+        res.setHeader('Content-Disposition', 'inline');
       },
     })
   );
@@ -144,9 +188,7 @@ export async function createApp() {
       const rawName = String(req.params.fileName || req.query.name || `media_${msgId}.bin`);
       const storageKey = `tgmsg:${msgId}/${rawName}`;
 
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-      res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+      setUntrustedContentHeaders(res);
 
       const storage = getStorageAdapter();
       if (storage.streamToResponse) {
@@ -159,38 +201,29 @@ export async function createApp() {
     } catch (err: any) {
       console.error('Direct Telegram media stream error:', err?.message || err);
       if (!res.headersSent) {
-        res.status(502).json({ error: 'Failed to stream media from Telegram' });
+        res.status(502).json({ error: 'Failed to stream media' });
       }
     }
   };
-  app.get('/api/storage/file/:msgId/:fileName', handleDirectTelegramFile);
-  app.get('/api/storage/file/:msgId', handleDirectTelegramFile);
+  app.get('/api/storage/file/:msgId/:fileName', requireMediaAccess({ msgId: (req) => req.params.msgId }), handleDirectTelegramFile);
+  app.get('/api/storage/file/:msgId', requireMediaAccess({ msgId: (req) => req.params.msgId }), handleDirectTelegramFile);
 
   // Universal media view endpoint (streams from Telegram, local disk, or cloud S3/Backblaze B2)
-  app.get('/api/storage/view', async (req, res) => {
+  app.get('/api/storage/view', requireMediaAccess({ key: (req) => (typeof req.query.key === 'string' ? req.query.key : undefined) }), async (req, res) => {
     try {
       const rawKey = req.query.key as string;
       if (!rawKey) {
         return res.status(400).json({ error: 'Missing key parameter' });
       }
 
-      // Allow cross-origin and canvas image access unconditionally
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-      res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+      // Uploaded content is never allowed to run as a page
+      setUntrustedContentHeaders(res);
 
       // Normalize key (resolve encoded slashes and strip redundant uploads prefix)
-      let cleanKey = rawKey.trim();
-      while (cleanKey.includes('%')) {
-        try {
-          const decoded = decodeURIComponent(cleanKey);
-          if (decoded === cleanKey) break;
-          cleanKey = decoded;
-        } catch {
-          break;
-        }
+      const cleanKey = normaliseKey(rawKey);
+      if (!cleanKey || cleanKey.includes('..')) {
+        return res.status(400).json({ error: 'Invalid key' });
       }
-      cleanKey = cleanKey.replace(/^[/\\]+/, '').replace(/^uploads[/\\]+/, '');
 
       // 0. Route Telegram keys (tg:<file_id>/... and tgmsg:<msg_id>/...) with full HTTP 206 Range support
       const storage = getStorageAdapter();
@@ -200,7 +233,12 @@ export async function createApp() {
       }
 
       // 1. Try local disk paths
-      let targetPath = localStorageAdapter.getFilePath(cleanKey);
+      let targetPath: string;
+      try {
+        targetPath = localStorageAdapter.getFilePath(cleanKey);
+      } catch {
+        return res.status(400).json({ error: 'Invalid key' });
+      }
       
       // If requested file does not exist, check fallback variants (thumb <-> full res)
       if (!fs.existsSync(targetPath)) {
@@ -222,57 +260,19 @@ export async function createApp() {
         }
       }
 
-      // If still not found on disk, attempt fuzzy match in user directory or across all user folders
+      // If still not found, look for the *same* upload under a different extension/thumb suffix
+      // (names are `<timestamp>_<uuid>[_thumb].<ext>`); never match a different file.
       if (!fs.existsSync(targetPath)) {
         const parts = cleanKey.split('/');
-        const fileName = parts.slice(parts.length - 1)[0] || '';
-        const basePrefix = fileName.split('_')[0] || '';
-        const cleanBaseName = fileName.replace(/_thumb\.[^.]+$/, '');
+        const fileName = parts[parts.length - 1] || '';
+        const stem = fileName.split('_').slice(0, 2).join('_').replace(/\.[^.]+$/, '');
 
-        // Check in requested user dir first
-        if (parts.length >= 3 && parts[0] === 'posts') {
-          const userId = parts[1];
-          const userDir = path.resolve(process.cwd(), 'uploads', 'posts', userId);
+        if (parts.length === 3 && parts[0] === 'posts' && /^[A-Za-z0-9-]+$/.test(parts[1]) && /^\d{10,}_[A-Za-z0-9-]{8,}$/.test(stem)) {
+          const userDir = path.resolve(process.cwd(), 'uploads', 'posts', parts[1]);
           if (fs.existsSync(userDir)) {
-            const files = fs.readdirSync(userDir);
-            const matched = files.find(
-              (f) =>
-                f === fileName ||
-                (basePrefix && f.startsWith(basePrefix)) ||
-                f.includes(cleanBaseName)
-            );
+            const matched = fs.readdirSync(userDir).find((f) => f.startsWith(stem) && isAllowedMediaName(f));
             if (matched) {
-              const matchedPath = path.join(userDir, matched);
-              if (fs.existsSync(matchedPath)) {
-                targetPath = matchedPath;
-              }
-            }
-          }
-        }
-
-        // If still not found, search across ANY user folder in uploads/posts
-        if (!fs.existsSync(targetPath)) {
-          const uploadsPostsDir = path.resolve(process.cwd(), 'uploads', 'posts');
-          if (fs.existsSync(uploadsPostsDir)) {
-            const allUsers = fs.readdirSync(uploadsPostsDir);
-            for (const u of allUsers) {
-              const uDir = path.join(uploadsPostsDir, u);
-              if (fs.statSync(uDir).isDirectory()) {
-                const uFiles = fs.readdirSync(uDir);
-                const matched = uFiles.find(
-                  (f) =>
-                    f === fileName ||
-                    (basePrefix && f.startsWith(basePrefix)) ||
-                    f.includes(cleanBaseName)
-                );
-                if (matched) {
-                  const candidate = path.join(uDir, matched);
-                  if (fs.existsSync(candidate)) {
-                    targetPath = candidate;
-                    break;
-                  }
-                }
-              }
+              targetPath = path.join(userDir, matched);
             }
           }
         }
@@ -280,19 +280,12 @@ export async function createApp() {
 
       if (fs.existsSync(targetPath)) {
         const ext = path.extname(targetPath).toLowerCase();
-        let mimeType = 'image/jpeg';
-        if (ext === '.png') mimeType = 'image/png';
-        else if (ext === '.webp') mimeType = 'image/webp';
-        else if (ext === '.svg') mimeType = 'image/svg+xml';
-        else if (ext === '.mp4') mimeType = 'video/mp4';
-        else if (ext === '.webm') mimeType = 'video/webm';
-        else if (ext === '.mov') mimeType = 'video/quicktime';
-        else if (ext === '.mp3') mimeType = 'audio/mpeg';
+        const mimeType = MIME_BY_EXT[ext] || 'application/octet-stream';
 
         const stat = fs.statSync(targetPath);
         res.setHeader('Content-Type', mimeType);
         res.setHeader('Accept-Ranges', 'bytes');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Cache-Control', 'private, max-age=86400');
 
         const rangeHeader = req.headers.range;
         if (rangeHeader) {
@@ -329,7 +322,7 @@ export async function createApp() {
           if (streamObj.contentLength) {
             res.setHeader('Content-Length', streamObj.contentLength);
           }
-          res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+          res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
 
           const passForDisk = new PassThrough();
           const passForRes = new PassThrough();
@@ -358,7 +351,7 @@ export async function createApp() {
 
           res.setHeader('Content-Type', obj.contentType || 'image/jpeg');
           res.setHeader('Content-Length', obj.data.length);
-          res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+          res.setHeader('Cache-Control', 'private, max-age=86400, immutable');
           return res.send(obj.data);
         }
       }

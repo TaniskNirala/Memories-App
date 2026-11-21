@@ -1,3 +1,4 @@
+import { safeExtension, isAllowedUploadMime, isAllowedMediaName } from '../security/media.ts';
 import { Router } from 'express';
 import crypto from 'crypto';
 import path from 'path';
@@ -25,7 +26,7 @@ const diskStorage = multer.diskStorage({
     cb(null, userDir);
   },
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.jpg';
+    const ext = safeExtension(file.originalname, '.jpg');
     if (file.fieldname === 'thumb') {
       cb(null, `${Date.now()}_${crypto.randomUUID()}_thumb${ext}`);
     } else {
@@ -36,8 +37,20 @@ const diskStorage = multer.diskStorage({
 
 const upload = multer({
   storage: diskStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2 GB limit for MTProto Telegram video support
+  limits: { fileSize: 2 * 1024 * 1024 * 1024, files: 2 }, // 2 GB limit for MTProto Telegram video support
+  // Only photos, videos and audio. HTML, SVG, scripts and other active content are refused.
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '');
+    const extOk = !ext || isAllowedMediaName(file.originalname);
+    cb(null, extOk && isAllowedUploadMime(file.mimetype));
+  },
 });
+
+// Optional per-user storage quota (MB). 0 disables it. Default 50 GB.
+const USER_QUOTA_BYTES = (() => {
+  const mb = Number(process.env.USER_STORAGE_QUOTA_MB ?? 51200);
+  return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : 0;
+})();
 
 // Active SSE upload progress listeners keyed by uploadId (NotaForge two-phase progress)
 const uploadProgressClients = new Map<string, any>();
@@ -202,7 +215,20 @@ postsRouter.post(
 
     try {
       if (!mainFile) {
-        return res.status(400).json({ error: 'No main file received' });
+        if (thumbFile) fs.unlink(thumbFile.path, () => {});
+        return res.status(400).json({ error: 'No valid file received. Only photos, videos and audio are allowed.' });
+      }
+
+      if (USER_QUOTA_BYTES > 0) {
+        const used = queryOne<{ total: number }>(
+          'SELECT COALESCE(SUM(pf.file_size), 0) AS total FROM post_files pf JOIN posts p ON p.id = pf.post_id WHERE p.owner_id = ?',
+          [req.user!.id]
+        );
+        if ((used?.total || 0) + mainFile.size > USER_QUOTA_BYTES) {
+          fs.unlink(mainFile.path, () => {});
+          if (thumbFile) fs.unlink(thumbFile.path, () => {});
+          return res.status(413).json({ error: 'Storage quota reached for your account.' });
+        }
       }
 
       const caps = getStorageCapabilities();
@@ -302,16 +328,22 @@ postsRouter.post(
     } catch (err: any) {
       if (uploadId) uploadProgressClients.delete(uploadId);
       console.error('File upload error:', err);
-      res.status(500).json({ error: err.message || 'File upload failed' });
+      res.status(500).json({ error: 'File upload failed' });
     }
   }
 );
 
 // Generate signed upload URLs for browser direct upload
 const handleSignedUploadUrls = async (req: AuthenticatedRequest, res: any) => {
-  const { files } = req.body;
-  if (!Array.isArray(files) || files.length === 0) {
-    return res.status(400).json({ error: 'Files array required' });
+  const { files } = req.body || {};
+  if (!Array.isArray(files) || files.length === 0 || files.length > 50) {
+    return res.status(400).json({ error: 'Files array required (max 50 files)' });
+  }
+  for (const f of files) {
+    const nm = String(f?.fileName || f?.filename || '');
+    if (path.extname(nm) && !isAllowedMediaName(nm)) {
+      return res.status(415).json({ error: 'File type not allowed' });
+    }
   }
 
   const storage = getStorageAdapter();
@@ -319,7 +351,7 @@ const handleSignedUploadUrls = async (req: AuthenticatedRequest, res: any) => {
   const results: any[] = [];
 
   for (const f of files) {
-    const ext = (f.fileName || f.filename || 'file').split('.').pop() || 'bin';
+    const ext = safeExtension(f.fileName || f.filename, '.jpg').slice(1);
     const uuid = crypto.randomUUID();
     const mainStorageKey = `posts/${userId}/${Date.now()}_${uuid}.${ext}`;
     const thumbStorageKey = `posts/${userId}/${Date.now()}_${uuid}_thumb.jpg`;
@@ -352,7 +384,8 @@ postsRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
     const result = await syncStorageToDatabase();
     res.json({ success: true, ...result });
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to sync storage' });
+    console.error('posts.ts error:', err);
+    res.status(500).json({ error: 'Failed to sync storage' });
   }
 });
 
@@ -702,7 +735,7 @@ postsRouter.put(
       });
     } catch (err: any) {
       console.error('Photo update error:', err);
-      res.status(500).json({ error: err.message || 'Failed to update photo' });
+      res.status(500).json({ error: 'Failed to update photo' });
     }
   }
 );
@@ -779,7 +812,7 @@ postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
     });
   } catch (err: any) {
     console.error('Failed to add photos to post:', err);
-    res.status(500).json({ error: err.message || 'Failed to add photos' });
+    res.status(500).json({ error: 'Failed to add photos' });
   }
 });
 

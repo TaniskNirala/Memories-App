@@ -47,6 +47,21 @@ and the `S3_*` / `B2_*` variables if you still have old files there.
 
 You do **not** need a Render persistent disk any more.
 
+**Required security variables (set these BEFORE deploying)**
+
+| Variable | Purpose |
+|---|---|
+| `STORAGE_SIGNING_SECRET` | **Required in production** (random, 32+ chars, e.g. `openssl rand -hex 32`). The server refuses to start without it. |
+| `APP_URL` | Your public URL. Used for password-reset links and as an allowed CORS origin. |
+| `BOOTSTRAP_ADMIN_USERNAME` | Only for an empty database: the username allowed to become the first admin. |
+| `ALLOWED_ORIGINS` | Optional, comma-separated extra origins allowed to call the API with credentials. |
+| `COOKIE_SAMESITE` | Optional: `lax` (default), `strict`, or `none` (only if the app must run inside a cross-site iframe). |
+| `FRAME_ANCESTORS` | Optional, space/comma-separated origins allowed to embed the app in an iframe. |
+| `TRUST_PROXY` | Optional: number of proxy hops (default `1` in production) so client IPs are correct for rate limiting. |
+| `USER_STORAGE_QUOTA_MB` | Optional per-user upload quota in MB (default 51200 = 50 GB, `0` = off). |
+
+Session tokens are now stored hashed, so everyone is signed out once after this update and has to log in again.
+
 ## 3. Deploy
 
 Push / upload this version and deploy. In the Render logs you should see:
@@ -56,15 +71,16 @@ Push / upload this version and deploy. In the Render logs you should see:
 🗄️  [Neon] Schema ready (20 tables verified/created)
 ```
 
-On the very first deploy Neon is empty, so the app copies the account(s) found in the bundled
-`data/kinfolk.sqlite` (your admin user `tanisk` and the "Everyone" circle) into Neon:
+**Creating the first admin.** The first account is no longer made admin automatically in
+production. On a brand-new (empty) Neon database set `BOOTSTRAP_ADMIN_USERNAME` to the username
+you want as admin, deploy, then register that username. Everyone else registers as *pending* and
+is approved by the admin. If Neon already contains your users, you do not need this variable.
 
-```
-🚚 [Neon] Neon is empty - migrating 1 existing local user(s) ...
-```
+**Do not commit `data/kinfolk.sqlite`.** It is a local cache (it is git-ignored and is no longer
+shipped in this project). It holds password hashes, so never publish it. If an older copy of it was
+ever shared or pushed to a public repo, change that admin password.
 
 From the second boot on you will see `📥 [Neon] Restored N row(s) from Neon`.
-After the first successful deploy you can delete `data/kinfolk.sqlite` from your repo.
 
 ## 4. Check it works
 

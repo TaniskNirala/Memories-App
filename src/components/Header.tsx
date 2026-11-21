@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Bell, LogOut, CheckCircle2, Copy, Trash2, AlertTriangle, RefreshCw, ChevronDown } from 'lucide-react';
+import { Moon, Sun, Bell, LogOut, CheckCircle2, Copy, Trash2, AlertTriangle, RefreshCw, ChevronDown, KeyRound } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
@@ -24,12 +24,54 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  const handleChangePassword = async () => {
+    setPasswordLoading(true);
+    setPasswordMsg(null);
+    try {
+      const res = await apiFetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setPasswordMsg({ text: data.message || 'Password changed.', ok: true });
+        setCurrentPassword('');
+        setNewPassword('');
+      } else {
+        setPasswordMsg({ text: data.error || 'Failed to change password', ok: false });
+      }
+    } catch (e: any) {
+      setPasswordMsg({ text: e.message || 'Failed to change password', ok: false });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleLogoutEverywhere = async () => {
+    try {
+      await apiFetch('/api/auth/logout-all', { method: 'POST' });
+    } catch {}
+    window.location.reload();
+  };
 
   const handleDeleteOwnAccount = async () => {
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      const res = await apiFetch('/api/auth/account', { method: 'DELETE' });
+      const res = await apiFetch('/api/auth/account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deletePassword }),
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         window.location.reload();
@@ -138,6 +180,31 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
                   <button
                     onClick={() => {
                       setShowUserMenu(false);
+                      setPasswordMsg(null);
+                      setShowPasswordModal(true);
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] flex items-center gap-2 font-medium transition cursor-pointer"
+                  >
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>Change Password</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      handleLogoutEverywhere();
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-xl text-[var(--text-secondary)] hover:bg-[var(--bg-surface)] flex items-center gap-2 font-medium transition cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out Everywhere</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      setDeletePassword('');
+                      setDeleteError(null);
                       setShowDeleteModal(true);
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl text-rose-400 hover:bg-rose-500/10 flex items-center gap-2 font-medium transition cursor-pointer"
@@ -301,6 +368,15 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
               </p>
             </div>
 
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              placeholder="Enter your password to confirm"
+              autoComplete="current-password"
+              className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
+            />
+
             {deleteError && (
               <p className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-xl font-medium">
                 {deleteError}
@@ -318,12 +394,69 @@ export const Header: React.FC<HeaderProps> = ({ selectedGroupName, onNotificatio
               </button>
               <button
                 type="button"
-                disabled={deleteLoading}
+                disabled={deleteLoading || !deletePassword}
                 onClick={handleDeleteOwnAccount}
                 className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
               >
                 {deleteLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
                 <span>{deleteLoading ? 'Deleting...' : 'Yes, Delete My Account'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-100"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !passwordLoading) setShowPasswordModal(false);
+          }}
+        >
+          <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-3xl shadow-2xl space-y-3 playful-card">
+            <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
+              <KeyRound className="w-4 h-4" />
+              <span>Change Password</span>
+            </div>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Current password"
+              autoComplete="current-password"
+              className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="New password (at least 10 characters)"
+              autoComplete="new-password"
+              className="w-full px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
+            />
+            {passwordMsg && (
+              <p className={`text-xs p-2.5 rounded-xl font-medium ${passwordMsg.ok ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'}`}>
+                {passwordMsg.text}
+              </p>
+            )}
+            <div className="pt-1 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={passwordLoading}
+                onClick={() => setShowPasswordModal(false)}
+                className="px-3 py-1.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={passwordLoading || !currentPassword || !newPassword}
+                onClick={handleChangePassword}
+                className="px-4 py-1.5 text-xs font-semibold rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 transition flex items-center gap-1.5 shadow-md disabled:opacity-50"
+              >
+                {passwordLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{passwordLoading ? 'Saving...' : 'Save'}</span>
               </button>
             </div>
           </div>

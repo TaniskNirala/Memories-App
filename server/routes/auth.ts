@@ -2,29 +2,32 @@ import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
-import { AuthenticatedRequest, checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts } from '../middleware/auth.ts';
+import { AuthenticatedRequest, checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, clearFailedAttempts } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { createRateLimiter } from '../security/rateLimit.ts';
+import { validatePassword, hashPassword, needsRehash, DUMMY_HASH } from '../security/passwords.ts';
+import { hashToken } from '../security/tokens.ts';
+import { createSession, clearSessionCookie } from '../security/session.ts';
 
 export const authRouter = Router();
 
-// Immediately clear any prior locked attempts on server load
+// Prune old login attempts on boot (recent failures are kept so a restart cannot reset rate limits)
 clearLoginAttempts();
 
-function setSessionCookie(res: Response, token: string, expires: Date) {
-  res.cookie('kinfolk_session', token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none',
-    expires,
-    path: '/',
-  });
-}
+const registerLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, max: 10, message: 'Too many sign-up attempts. Please try again later.' });
+const redeemLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10, message: 'Too many attempts. Please try again later.' });
+const sensitiveLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyFn: (req) => (req as AuthenticatedRequest).user?.id || req.ip || 'unknown',
+  message: 'Too many attempts. Please try again later.',
+});
 
 // Register
-authRouter.post('/register', async (req, res) => {
-  const { username, password, displayName } = req.body;
+authRouter.post('/register', registerLimiter, async (req, res) => {
+  const { username, password, displayName } = req.body || {};
 
-  if (!username || !password || !displayName) {
+  if (typeof username !== 'string' || typeof password !== 'string' || typeof displayName !== 'string' || !username || !password || !displayName.trim()) {
     return res.status(400).json({ error: 'Username, password and display name are required' });
   }
 
@@ -33,8 +36,12 @@ authRouter.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Username must be 3-30 characters, alphanumeric with - or _' });
   }
 
-  if (password.length < 6) {
-    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  const pwError = validatePassword(password, cleanUsername);
+  if (pwError) {
+    return res.status(400).json({ error: pwError });
+  }
+  if (displayName.trim().length > 60) {
+    return res.status(400).json({ error: 'Display name must be 60 characters or fewer' });
   }
 
   const existing = queryOne<{ id: string }>('SELECT id FROM users WHERE username = ?', [cleanUsername]);
@@ -44,10 +51,27 @@ authRouter.post('/register', async (req, res) => {
 
   const userCount = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM users');
   const isFirstUser = (userCount?.count || 0) === 0;
-  const role = isFirstUser ? 'admin' : 'pending';
+
+  // The very first account only becomes admin when explicitly allowed:
+  //  - BOOTSTRAP_ADMIN_USERNAME must match the username being registered, or
+  //  - (non-production only) no variable is set, which keeps local development convenient.
+  // Everyone else is created as 'pending' and must be approved by an admin.
+  let role: 'admin' | 'pending' = 'pending';
+  if (isFirstUser) {
+    const bootstrap = (process.env.BOOTSTRAP_ADMIN_USERNAME || '').trim().toLowerCase();
+    if (bootstrap) {
+      if (bootstrap === cleanUsername) role = 'admin';
+    } else if (process.env.NODE_ENV !== 'production') {
+      role = 'admin';
+    } else {
+      return res.status(503).json({
+        error: 'Initial setup required: the server owner must set BOOTSTRAP_ADMIN_USERNAME before the first account can be created.',
+      });
+    }
+  }
 
   const userId = crypto.randomUUID();
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await hashPassword(password);
   const colors = ['#f59e0b', '#f43f5e', '#ec4899', '#06b6d4', '#10b981', '#8b5cf6', '#3b82f6'];
   const avatarColor = colors[Math.floor(Math.random() * colors.length)];
   const now = new Date().toISOString();
@@ -91,15 +115,8 @@ authRouter.post('/register', async (req, res) => {
     }
   }
 
-  // Create session
-  const sessionToken = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-  run(
-    'INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
-    [sessionToken, userId, expiresAt.toISOString(), now]
-  );
-
-  setSessionCookie(res, sessionToken, expiresAt);
+  // Create session (token lives only in the httpOnly cookie; it is not returned in the body)
+  createSession(req, res, userId);
 
   return res.json({
     user: {
@@ -110,21 +127,25 @@ authRouter.post('/register', async (req, res) => {
       status: 'active',
       avatarColor,
     },
-    token: sessionToken,
     isPending: role === 'pending',
   });
 });
 
 // Login
 authRouter.post('/login', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password } = req.body || {};
   const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
 
-  if (!username || !password) {
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
   }
 
   const cleanUsername = username.trim().toLowerCase();
+
+  if (!checkLoginRateLimit(ip, cleanUsername)) {
+    res.setHeader('Retry-After', '900');
+    return res.status(429).json({ error: 'Too many failed login attempts. Please wait 15 minutes and try again.' });
+  }
 
   const user = queryOne<{
     id: string;
@@ -136,18 +157,15 @@ authRouter.post('/login', async (req, res) => {
     avatar_color: string;
   }>('SELECT * FROM users WHERE username = ?', [cleanUsername]);
 
-  if (!user) {
-    recordLoginAttempt(ip, cleanUsername, false);
-    return res.status(401).json({ error: 'Invalid username or password' });
-  }
-
-  const isValid = await bcrypt.compare(password, user.password_hash);
-  if (!isValid) {
+  // Always run bcrypt so response time does not reveal whether the username exists
+  const isValid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
+  if (!user || !isValid) {
     recordLoginAttempt(ip, cleanUsername, false);
     return res.status(401).json({ error: 'Invalid username or password' });
   }
 
   // Successful login
+  clearFailedAttempts(ip, cleanUsername);
   recordLoginAttempt(ip, cleanUsername, true);
 
   if (user.status === 'suspended') {
@@ -157,16 +175,14 @@ authRouter.post('/login', async (req, res) => {
     });
   }
 
-  const sessionToken = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const now = new Date().toISOString();
+  // Transparently upgrade old, cheaper hashes
+  if (needsRehash(user.password_hash)) {
+    try {
+      run('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(password), user.id]);
+    } catch {}
+  }
 
-  run(
-    'INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
-    [sessionToken, user.id, expiresAt.toISOString(), now]
-  );
-
-  setSessionCookie(res, sessionToken, expiresAt);
+  createSession(req, res, user.id);
 
   return res.json({
     user: {
@@ -177,41 +193,6 @@ authRouter.post('/login', async (req, res) => {
       status: user.status,
       avatarColor: user.avatar_color,
     },
-    token: sessionToken,
-    isPending: user.role === 'pending',
-  });
-});
-
-// Quick switch user endpoint for prototype demo
-authRouter.post('/switch-user', async (req, res) => {
-  const { username } = req.body;
-  if (!username) return res.status(400).json({ error: 'Username required' });
-
-  const cleanUsername = username.trim().toLowerCase();
-  const user = queryOne<any>('SELECT * FROM users WHERE username = ?', [cleanUsername]);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const sessionToken = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const now = new Date().toISOString();
-
-  run(
-    'INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
-    [sessionToken, user.id, expiresAt.toISOString(), now]
-  );
-
-  setSessionCookie(res, sessionToken, expiresAt);
-
-  return res.json({
-    user: {
-      id: user.id,
-      username: user.username,
-      displayName: user.display_name,
-      role: user.role,
-      status: user.status,
-      avatarColor: user.avatar_color,
-    },
-    token: sessionToken,
     isPending: user.role === 'pending',
   });
 });
@@ -220,16 +201,56 @@ authRouter.post('/switch-user', async (req, res) => {
 authRouter.post('/logout', (req: AuthenticatedRequest, res) => {
   const token = req.cookies?.kinfolk_session || req.headers.authorization?.replace(/^Bearer\s+/i, '');
   if (token) {
-    run('DELETE FROM sessions WHERE token = ?', [token]);
+    run('DELETE FROM sessions WHERE token = ?', [hashToken(token)]);
   }
-  res.clearCookie('kinfolk_session', { path: '/' });
+  clearSessionCookie(res);
   res.json({ success: true });
 });
 
-// Delete own account
-authRouter.delete('/account', async (req: AuthenticatedRequest, res) => {
+// Log out everywhere (all devices)
+authRouter.post('/logout-all', (req: AuthenticatedRequest, res) => {
   if (!req.user) {
     return res.status(401).json({ error: 'Not authenticated' });
+  }
+  run('DELETE FROM sessions WHERE user_id = ?', [req.user.id]);
+  clearSessionCookie(res);
+  res.json({ success: true });
+});
+
+// Change own password (requires current password; signs out all other sessions)
+authRouter.post('/change-password', sensitiveLimiter, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  const { currentPassword, newPassword } = req.body || {};
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+    return res.status(400).json({ error: 'Current and new password are required' });
+  }
+  const row = queryOne<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+  if (!row || !(await bcrypt.compare(currentPassword, row.password_hash))) {
+    return res.status(403).json({ error: 'Current password is incorrect' });
+  }
+  const pwError = validatePassword(newPassword, req.user.username);
+  if (pwError) {
+    return res.status(400).json({ error: pwError });
+  }
+  run('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(newPassword), req.user.id]);
+  // Keep the current session, drop every other one
+  run('DELETE FROM sessions WHERE user_id = ? AND token != ?', [req.user.id, hashToken(req.token || '')]);
+  res.json({ success: true, message: 'Password changed. Other devices have been signed out.' });
+});
+
+// Delete own account
+authRouter.delete('/account', sensitiveLimiter, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  // Re-authenticate: deleting an account is irreversible
+  const confirmPassword = req.body?.password;
+  const pwRow = queryOne<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+  if (typeof confirmPassword !== 'string' || !pwRow || !(await bcrypt.compare(confirmPassword, pwRow.password_hash))) {
+    return res.status(403).json({ error: 'Please enter your current password to delete your account.' });
   }
 
   const userId = req.user.id;
@@ -295,7 +316,7 @@ authRouter.delete('/account', async (req: AuthenticatedRequest, res) => {
   run('DELETE FROM login_attempts WHERE username = ?', [req.user.username]);
   run('DELETE FROM users WHERE id = ?', [userId]);
 
-  res.clearCookie('kinfolk_session', { path: '/' });
+  clearSessionCookie(res);
   return res.json({ success: true, message: 'Your account has been deleted' });
 });
 
@@ -313,19 +334,20 @@ authRouter.get('/me', (req: AuthenticatedRequest, res) => {
 });
 
 // Redeem one-time password reset link
-authRouter.post('/redeem-reset', async (req, res) => {
-  const { token, newPassword } = req.body;
+authRouter.post('/redeem-reset', redeemLimiter, async (req, res) => {
+  const { token, newPassword } = req.body || {};
 
-  if (!token || !newPassword || newPassword.length < 6) {
-    return res.status(400).json({ error: 'Valid reset token and password (min 6 chars) required' });
+  if (typeof token !== 'string' || !token || typeof newPassword !== 'string') {
+    return res.status(400).json({ error: 'Valid reset token and new password required' });
   }
 
+  // Tokens are stored hashed. The raw value is also checked so links issued before hashing was introduced still work once.
   const resetRecord = queryOne<{
     token: string;
     user_id: string;
     expires_at: string;
     used_at: string | null;
-  }>('SELECT * FROM password_resets WHERE token = ?', [token]);
+  }>('SELECT * FROM password_resets WHERE token IN (?, ?)', [hashToken(token), token]);
 
   if (!resetRecord) {
     return res.status(400).json({ error: 'Invalid or expired password reset link' });
@@ -339,13 +361,20 @@ authRouter.post('/redeem-reset', async (req, res) => {
     return res.status(400).json({ error: 'This reset link has expired' });
   }
 
-  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const target = queryOne<{ username: string }>('SELECT username FROM users WHERE id = ?', [resetRecord.user_id]);
+  const pwError = validatePassword(newPassword, target?.username);
+  if (pwError) {
+    return res.status(400).json({ error: pwError });
+  }
+
+  const passwordHash = await hashPassword(newPassword);
   const now = new Date().toISOString();
 
   run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, resetRecord.user_id]);
-  run('UPDATE password_resets SET used_at = ? WHERE token = ?', [now, token]);
-  // Invalidate any old sessions
+  run('UPDATE password_resets SET used_at = ? WHERE token = ?', [now, resetRecord.token]);
+  // Invalidate any old sessions and failed-login lockouts for this user
   run('DELETE FROM sessions WHERE user_id = ?', [resetRecord.user_id]);
+  if (target) run('DELETE FROM login_attempts WHERE username = ?', [target.username]);
 
   res.json({ success: true, message: 'Password updated successfully. You can now log in.' });
 });

@@ -1,4 +1,4 @@
-import { apiFetch, getAuthToken } from '../context/AuthContext.tsx';
+import { apiFetch } from '../context/AuthContext.tsx';
 
 export interface StorageCapabilitiesResponse {
   backend: 'telegram' | 's3' | 'local';
@@ -81,15 +81,11 @@ export async function uploadFileWithProgress(
 
   try {
     const url = uploadId ? `/api/posts/upload-file?uploadId=${encodeURIComponent(uploadId)}` : '/api/posts/upload-file';
-    const token = getAuthToken();
 
     const data = await new Promise<any>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url);
       xhr.withCredentials = true;
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
 
       if (onProgress) {
         xhr.upload.onprogress = (e) => {

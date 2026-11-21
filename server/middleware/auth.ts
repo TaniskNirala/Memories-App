@@ -1,5 +1,8 @@
+import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { queryOne, queryAll, run } from '../db.ts';
+import { hashToken } from '../security/tokens.ts';
+import { SESSION_TTL_MS, SESSION_RENEW_BELOW_MS, setSessionCookie } from '../security/session.ts';
 
 export interface AuthenticatedUser {
   id: string;
@@ -26,17 +29,19 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
   }
 
   try {
+    const tokenHash = hashToken(token);
     const session = queryOne<{ token: string; user_id: string; expires_at: string }>(
       'SELECT token, user_id, expires_at FROM sessions WHERE token = ?',
-      [token]
+      [tokenHash]
     );
 
     if (!session) {
       return next();
     }
 
-    if (new Date(session.expires_at) < new Date()) {
-      run('DELETE FROM sessions WHERE token = ?', [token]);
+    const expiresMs = new Date(session.expires_at).getTime();
+    if (expiresMs < Date.now()) {
+      run('DELETE FROM sessions WHERE token = ?', [tokenHash]);
       return next();
     }
 
@@ -62,6 +67,13 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
         avatarColor: user.avatar_color || '#f59e0b',
       };
       req.token = token;
+
+      // Sliding expiry: renew active sessions once less than half the lifetime remains
+      if (expiresMs - Date.now() < SESSION_RENEW_BELOW_MS) {
+        const renewed = new Date(Date.now() + SESSION_TTL_MS);
+        run('UPDATE sessions SET expires_at = ? WHERE token = ?', [renewed.toISOString(), tokenHash]);
+        if (req.cookies?.kinfolk_session === token) setSessionCookie(req, res, token, renewed);
+      }
     }
   } catch (err) {
     console.error('Error verifying session:', err);
@@ -105,14 +117,53 @@ export function requireAdmin(req: AuthenticatedRequest, res: Response, next: Nex
   next();
 }
 
-export function checkLoginRateLimit(_ip: string, _username: string): boolean {
-  // Rate limiting wait removed per user request
+const WINDOW_MS = 15 * 60 * 1000;
+
+function failuresSince(column: 'ip' | 'username' | 'both', ip: string, username: string): number {
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  let row: { c: number } | undefined;
+  if (column === 'both') {
+    row = queryOne<{ c: number }>(
+      'SELECT COUNT(*) as c FROM login_attempts WHERE success = 0 AND ip = ? AND username = ? AND attempted_at > ?',
+      [ip, username.toLowerCase(), since]
+    );
+  } else if (column === 'ip') {
+    row = queryOne<{ c: number }>(
+      'SELECT COUNT(*) as c FROM login_attempts WHERE success = 0 AND ip = ? AND attempted_at > ?',
+      [ip, since]
+    );
+  } else {
+    row = queryOne<{ c: number }>(
+      'SELECT COUNT(*) as c FROM login_attempts WHERE success = 0 AND username = ? AND attempted_at > ?',
+      [username.toLowerCase(), since]
+    );
+  }
+  return row?.c || 0;
+}
+
+/** Returns false when the login should be refused because of too many recent failures. */
+export function checkLoginRateLimit(ip: string, username: string): boolean {
+  try {
+    if (failuresSince('both', ip, username) >= 5) return false; // same client hammering one account
+    if (failuresSince('ip', ip, username) >= 30) return false; // one client spraying many accounts
+    if (failuresSince('username', ip, username) >= 20) return false; // distributed attack on one account
+  } catch (e) {
+    console.error('Login rate-limit check failed:', e);
+  }
   return true;
 }
 
+/** Drops attempt records older than 24h (called on boot). Recent failures are kept so a restart cannot reset limits. */
 export function clearLoginAttempts(): void {
   try {
-    run('DELETE FROM login_attempts');
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    run('DELETE FROM login_attempts WHERE attempted_at < ?', [cutoff]);
+  } catch (e) {}
+}
+
+export function clearFailedAttempts(ip: string, username: string): void {
+  try {
+    run('DELETE FROM login_attempts WHERE success = 0 AND ip = ? AND username = ?', [ip, username.toLowerCase()]);
   } catch (e) {}
 }
 

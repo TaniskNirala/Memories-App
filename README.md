@@ -157,7 +157,11 @@ NODE_ENV=production
 
 # Storage Backend: 'local' (default) or 's3' (for Cloudflare R2 / AWS S3)
 STORAGE_BACKEND=local
+# REQUIRED in production (32+ random chars). The server refuses to start without it.
 STORAGE_SIGNING_SECRET=generate-a-random-32-character-secret-key-here
+APP_URL=https://your-domain.example
+# Only for a brand-new empty database: who may become the first admin
+BOOTSTRAP_ADMIN_USERNAME=your-username
 
 # Cloudflare R2 / S3 Configuration (only needed if STORAGE_BACKEND=s3)
 S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com

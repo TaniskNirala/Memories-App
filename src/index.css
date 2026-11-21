@@ -62,12 +62,14 @@
     --paper-dot: rgba(255, 255, 255, 0.04);
     --pattern-ink: rgba(226, 222, 255, 0.15);
     --pattern-tint: rgba(246, 181, 68, 0.16);
-    --pattern-size: 760px auto;
+    --pattern-size: 540px auto;
     --blob-a: rgba(255, 112, 105, 0.2);
     --blob-b: rgba(94, 234, 212, 0.13);
     --blob-c: rgba(155, 155, 255, 0.17);
     --vignette: rgba(0, 0, 0, 0.55);
     --glass-tint: rgba(255, 255, 255, 0.045);
+    /* how much of a card's fill is opaque — lower lets the doodle sheet show */
+    --surface-opacity: 88%;
     --glass-border: rgba(255, 255, 255, 0.08);
     --btn-shadow: 0 12px 30px -14px rgba(246, 169, 43, 0.7);
     --gradient-ember: linear-gradient(135deg, #ffc86b 0%, #f6a92b 42%, #f9655f 100%);
@@ -99,12 +101,13 @@
     --paper-dot: rgba(26, 24, 38, 0.055);
     --pattern-ink: rgba(26, 24, 38, 0.17);
     --pattern-tint: rgba(196, 122, 9, 0.18);
-    --pattern-size: 760px auto;
+    --pattern-size: 540px auto;
     --blob-a: rgba(246, 169, 43, 0.24);
     --blob-b: rgba(13, 143, 132, 0.14);
     --blob-c: rgba(85, 81, 212, 0.12);
     --vignette: rgba(120, 96, 60, 0.07);
     --glass-tint: rgba(255, 255, 255, 0.6);
+    --surface-opacity: 86%;
     --glass-border: rgba(26, 24, 38, 0.07);
     --btn-shadow: 0 14px 30px -16px rgba(222, 120, 20, 0.75);
     --gradient-ember: linear-gradient(135deg, #ffcf7d 0%, #f6a92b 45%, #f9655f 100%);
@@ -227,7 +230,7 @@
   .surface {
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 55%),
-      var(--bg-card);
+      color-mix(in oklab, var(--bg-card) var(--surface-opacity), transparent);
     border: 1px solid var(--border-color);
     border-radius: 22px;
     box-shadow: var(--shadow-card);
@@ -253,7 +256,7 @@
   .card, .playful-card {
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 60%),
-      var(--bg-card);
+      color-mix(in oklab, var(--bg-card) var(--surface-opacity), transparent);
     border: 1px solid var(--border-color);
     border-radius: 24px;
     box-shadow: var(--shadow-card);
@@ -268,26 +271,21 @@
   }
 
   /* Login route: same doodle sheet, but finer and softer so the card leads */
-  .auth-page { --pattern-size: 460px auto; --pattern-ink: rgba(226, 222, 255, 0.085); }
-  :root.light .auth-page { --pattern-ink: rgba(26, 24, 38, 0.1); }
+  .auth-page { --pattern-ink: rgba(226, 222, 255, 0.11); }
+  :root.light .auth-page { --pattern-ink: rgba(26, 24, 38, 0.12); }
 
   /* ------------------------------------------------------- Auth / onboarding */
-  .auth-card {
-    position: relative;
-    border-radius: 30px;
+  .auth-panel {
+    border-radius: 28px;
     border: 1px solid var(--border-color);
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 45%),
-      color-mix(in oklab, var(--bg-card) 96%, transparent);
+      color-mix(in oklab, var(--bg-card) 72%, transparent);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.06) inset,
-      0 40px 90px -50px rgba(0, 0, 0, 0.95),
-      0 0 0 1px rgba(0, 0, 0, 0.15);
+      0 40px 90px -50px rgba(0, 0, 0, 0.95);
     backdrop-filter: blur(26px) saturate(1.15);
     -webkit-backdrop-filter: blur(26px) saturate(1.15);
-  }
-  @media (max-width: 1023.98px) {
-    .auth-card { border-radius: 26px; }
   }
 
   .card-glow {
@@ -690,7 +688,7 @@
   .tl-card {
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 55%),
-      var(--bg-card);
+      color-mix(in oklab, var(--bg-card) var(--surface-opacity), transparent);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-card);
     transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;

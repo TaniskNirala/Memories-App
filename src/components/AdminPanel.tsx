@@ -23,7 +23,7 @@ import {
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
 import { StorageCapabilitiesResponse } from '../utils/uploadWithProgress.ts';
-import { PageHero, StatTile } from './ui/kit.tsx';
+import { Avatar, PageHero, StatTile } from './ui/kit.tsx';
 
 export const AdminPanel: React.FC = () => {
   const { user, isAdmin } = useAuth();
@@ -611,12 +611,13 @@ export const AdminPanel: React.FC = () => {
                 className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
               >
                 <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xs"
-                    style={{ backgroundColor: u.avatar_color }}
-                  >
-                    {u.display_name.charAt(0)}
-                  </div>
+                  <Avatar
+                    name={u.display_name}
+                    color={u.avatar_color}
+                    src={u.avatarUrl}
+                    size={32}
+                    className="shadow-xs"
+                  />
                   <div>
                     <span className="font-bold text-[var(--text-primary)] block">
                       {u.display_name}
@@ -703,12 +704,13 @@ export const AdminPanel: React.FC = () => {
               className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-color)] flex items-center justify-between gap-3 text-xs"
             >
               <div className="flex items-center gap-2.5">
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-2xs"
-                  style={{ backgroundColor: u.avatar_color }}
-                >
-                  {u.display_name.charAt(0)}
-                </div>
+                <Avatar
+                  name={u.display_name}
+                  color={u.avatar_color}
+                  src={u.avatarUrl}
+                  size={28}
+                  className="shadow-2xs"
+                />
                 <div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="font-bold text-[var(--text-primary)]">{u.display_name}</span>

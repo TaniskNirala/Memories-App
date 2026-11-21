@@ -990,13 +990,15 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <FeedbackProvider>
-          <AuthProvider>
+      {/* Auth wraps Theme: the theme is stored on the account, so it needs the
+          signed-in user before it can decide which palette to paint. */}
+      <AuthProvider>
+        <ThemeProvider>
+          <FeedbackProvider>
             <MainContent />
-          </AuthProvider>
-        </FeedbackProvider>
-      </ThemeProvider>
+          </FeedbackProvider>
+        </ThemeProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }

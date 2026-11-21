@@ -17,7 +17,24 @@ interface AuthContextType {
     username?: string;
     avatarColor?: string;
     currentPassword?: string;
+    themePreference?: 'dark' | 'light';
   }) => Promise<{ success: boolean; error?: string; message?: string }>;
+  /** Upload a profile photo from the device */
+  uploadAvatar: (file: File) => Promise<{ success: boolean; error?: string }>;
+  /** Remove the uploaded photo and fall back to the colour avatar */
+  removeAvatar: () => Promise<{ success: boolean; error?: string }>;
+}
+
+/* The theme picked on the login card, when this browser has no account yet.
+   ThemeContext owns the flags; read them lazily to avoid an import cycle. */
+function readPendingThemeChoice(): 'dark' | 'light' | null {
+  try {
+    if (localStorage.getItem('kinfolk_theme_chosen') !== '1') return null;
+    const saved = localStorage.getItem('kinfolk_theme');
+    return saved === 'dark' || saved === 'light' ? saved : null;
+  } catch {
+    return null;
+  }
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -31,6 +48,8 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   refreshUser: async () => {},
   updateProfile: async () => ({ success: false }),
+  uploadAvatar: async () => ({ success: false }),
+  removeAvatar: async () => ({ success: false }),
 });
 
 // Sessions live in an httpOnly cookie that scripts cannot read. Remove any token left in
@@ -91,6 +110,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!res.ok) {
         return { success: false, error: data.error, isPending: data.isPending };
       }
+      // This device's first-ever theme choice wins for an account that has not
+      // saved one yet, so picking dark on the login card is not undone by login.
+      const pending = readPendingThemeChoice();
+      if (pending && !data.user?.themePreference) {
+        data.user.themePreference = pending;
+        void apiFetch('/api/auth/me', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ themePreference: pending }),
+        }).catch(() => {});
+      }
       setUser(data.user);
       return { success: true, isPending: data.isPending };
     } catch (err: any) {
@@ -108,6 +138,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = await res.json();
       if (!res.ok) {
         return { success: false, error: data.error };
+      }
+      const pending = readPendingThemeChoice();
+      if (pending && !data.user?.themePreference) {
+        data.user.themePreference = pending;
+        void apiFetch('/api/auth/me', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ themePreference: pending }),
+        }).catch(() => {});
       }
       setUser(data.user);
       return { success: true, isPending: data.isPending };
@@ -131,6 +170,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     username?: string;
     avatarColor?: string;
     currentPassword?: string;
+    themePreference?: 'dark' | 'light';
   }) => {
     try {
       const res = await apiFetch('/api/auth/me', {
@@ -144,6 +184,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true, message: data.message };
     } catch (err: any) {
       return { success: false, error: err.message || 'Could not save your profile' };
+    }
+  };
+
+  const uploadAvatar = async (file: File) => {
+    try {
+      const body = new FormData();
+      body.append('avatar', file);
+      const res = await apiFetch('/api/auth/avatar', { method: 'POST', body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { success: false, error: data.error || 'Could not upload that image' };
+      setUser((prev) => (prev ? { ...prev, avatarUrl: data.avatarUrl } : prev));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Could not upload that image' };
+    }
+  };
+
+  const removeAvatar = async () => {
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeAvatar: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { success: false, error: data.error || 'Could not remove your photo' };
+      setUser((prev) => (prev ? { ...prev, avatarUrl: undefined } : prev));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Could not remove your photo' };
     }
   };
 
@@ -164,6 +234,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         refreshUser,
         updateProfile,
+        uploadAvatar,
+        removeAvatar,
       }}
     >
       {children}

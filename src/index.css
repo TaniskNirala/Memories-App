@@ -59,8 +59,8 @@
     --shadow-float: 0 24px 60px -28px rgba(0, 0, 0, 0.95);
     --sticker: rgba(246, 181, 68, 0.1);
     --paper-dot: rgba(255, 255, 255, 0.04);
-    --pattern-ink: rgba(226, 222, 255, 0.085);
-    --pattern-tint: rgba(246, 181, 68, 0.09);
+    --pattern-ink: rgba(226, 222, 255, 0.15);
+    --pattern-tint: rgba(246, 181, 68, 0.16);
     --pattern-size: 378px auto;
     --blob-a: rgba(255, 112, 105, 0.2);
     --blob-b: rgba(94, 234, 212, 0.13);
@@ -99,8 +99,8 @@
     --shadow-float: 0 24px 60px -30px rgba(70, 50, 20, 0.4);
     --sticker: rgba(196, 122, 9, 0.12);
     --paper-dot: rgba(26, 24, 38, 0.055);
-    --pattern-ink: rgba(26, 24, 38, 0.095);
-    --pattern-tint: rgba(196, 122, 9, 0.1);
+    --pattern-ink: rgba(26, 24, 38, 0.17);
+    --pattern-tint: rgba(196, 122, 9, 0.18);
     --pattern-size: 378px auto;
     --blob-a: rgba(246, 169, 43, 0.24);
     --blob-b: rgba(13, 143, 132, 0.14);
@@ -115,13 +115,25 @@
     color-scheme: light;
   }
 
+  /* Layer order (bottom -> top), all pinned to the viewport so they hold still
+     through scrolling, tab changes and modals:
+       1. <html>      warm paper fill, painted by the canvas itself
+       2. body::before aurora blobs (z-index -2)
+       3. body::after  doodle line-art sheet (z-index -1)
+       4. app content  (z-index auto / positive)
+     The body itself stays TRANSPARENT on purpose: an opaque body background
+     paints after negative-z-index children, so it would hide the doodles. That
+     is exactly why the pattern went missing — the playfield was opaque. */
   html {
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
+    background-color: var(--bg-page);
+    transition: background-color 0.4s ease;
   }
 
   body {
-    background-color: var(--bg-page);
+    /* dot grid + paper grain, kept off the opaque fill so the art shows */
+    background-color: transparent;
     background-image:
       radial-gradient(var(--paper-dot) 1px, transparent 1px),
       url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.05'/></svg>");
@@ -162,7 +174,7 @@
     content: "";
     position: fixed;
     inset: 0;
-    /* Below every surface; the shell no longer paints an opaque fill */
+    /* Above the <html> page fill, below every in-flow surface */
     z-index: -1;
     pointer-events: none;
     background-color: var(--pattern-ink);
@@ -272,9 +284,11 @@
     transform: translateY(-2px);
   }
 
-  /* Login route: same doodle sheet, but finer and softer so the card leads */
-  .auth-page { --pattern-ink: rgba(226, 222, 255, 0.07); }
-  :root.light .auth-page { --pattern-ink: rgba(26, 24, 38, 0.08); }
+  /* Login route: the same doodle sheet, a touch finer and softer so the card
+     leads. `.auth-page` has to sit on <body> — that is the element whose
+     ::after paints the art and therefore where these tokens are read from. */
+  .auth-page { --pattern-ink: rgba(226, 222, 255, 0.11); }
+  :root.light .auth-page { --pattern-ink: rgba(26, 24, 38, 0.12); }
 
   /* ------------------------------------------------------- Auth / onboarding */
   .auth-panel {

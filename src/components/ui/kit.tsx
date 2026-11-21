@@ -23,17 +23,19 @@ const toneVar: Record<Tone, string> = {
 export const Avatar: React.FC<{
   name?: string;
   color?: string;
+  /** Uploaded profile photo — takes over from the initials when present */
+  src?: string;
   size?: number;
   ring?: boolean;
   className?: string;
   title?: string;
-}> = ({ name, color, size = 34, ring = false, className = '', title }) => {
+}> = ({ name, color, src, size = 34, ring = false, className = '', title }) => {
   const label = initials(name);
   const bg = avatarGradient(color, name);
   return (
     <span
       title={title || name}
-      className={`relative inline-flex shrink-0 items-center justify-center rounded-full font-bold uppercase tracking-tight text-white ${
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold uppercase tracking-tight text-white ${
         ring ? 'avatar-ring' : ''
       } ${className}`}
       style={{ width: size, height: size, fontSize: Math.max(9, size * 0.36) }}
@@ -42,7 +44,21 @@ export const Avatar: React.FC<{
         className="absolute inset-0 rounded-full"
         style={{ background: bg, boxShadow: '0 1px 0 rgba(255,255,255,0.28) inset' }}
       />
-      <span className="relative z-10 leading-none">{label}</span>
+      {src ? (
+        <img
+          src={src}
+          alt={name || 'avatar'}
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover"
+          style={{ borderRadius: 999 }}
+          /* a missing/corrupt file must fall back to the colour initials */
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          }}
+        />
+      ) : (
+        <span className="relative z-10 leading-none">{label}</span>
+      )}
     </span>
   );
 };

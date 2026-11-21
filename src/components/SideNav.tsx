@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, CalendarDays, Users, Shield, Trash2, Sparkles, Plus, Compass, KeyRound, Settings } from 'lucide-react';
+import { Home, CalendarDays, Users, Shield, Trash2, Sparkles, Plus, Compass, KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { Group } from '../types/index.ts';
 import { Avatar } from './ui/kit.tsx';
@@ -20,13 +20,14 @@ interface SideNavProps {
   eventCount: number;
 }
 
+/* Profile is reachable from the header avatar and the phone tab bar, so the
+   desktop rail stays focused on content (it is not listed here on purpose). */
 const NAV_ICONS = {
   feed: Home,
   collections: CalendarDays,
   groups: Users,
   admin: Shield,
   trash: Trash2,
-  profile: Settings,
 } as const;
 
 export const SideNav: React.FC<SideNavProps> = ({
@@ -49,7 +50,6 @@ export const SideNav: React.FC<SideNavProps> = ({
     { id: 'groups', label: 'Circles', count: groups.length, hint: 'Who sees what' },
     ...(isAdmin ? [{ id: 'admin' as Tab, label: 'Admin studio', hint: 'People, reports, audit' }] : []),
     { id: 'trash', label: 'Trash', hint: 'Recover for 30 days' },
-    { id: 'profile', label: 'Profile', hint: 'Name, handle, password' },
   ];
 
   return (
@@ -58,7 +58,7 @@ export const SideNav: React.FC<SideNavProps> = ({
         {/* Primary navigation */}
         <nav className="surface overflow-hidden p-1.5">
           {items.map((item) => {
-            const Icon = NAV_ICONS[item.id];
+            const Icon = NAV_ICONS[item.id as keyof typeof NAV_ICONS];
             const active = currentTab === item.id;
             return (
               <button

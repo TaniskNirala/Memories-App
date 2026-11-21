@@ -7,7 +7,12 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="116" fill="url(#ember)"/>
-  <g fill="#1d1204" transform="translate(84 136) scale(0.61)">
+  <!-- white inner box -->
+  <rect x="82" y="82" width="348" height="348" rx="86" fill="#ffffff"/>
+  <!-- Bird glyph. The artwork measures 565.3 x 503.3 units with its centre at
+       (282.66, 282.56); scaling by 0.52 and translating by 109 puts that centre
+       exactly on (256, 256) — the middle of the white box — at 294 x 262 px. -->
+  <g fill="#1d1204" transform="translate(109 109) scale(0.52)">
     <path d="M563.473,528.105c-6.438-20.959-11-37.96-21.216-57.463c-9.764-18.638-17.532-38.213-29.441-55.867
 			c-8.907-13.199-15.12-28.214-22.55-42.412c-4.003-7.653-7.716-15.52-16.74-18.764c-7.896-2.836-15.773-5.704-23.652-8.58
 			c-3.721-1.718-7.613-3.142-11.64-4.256c-2.946-1.077-5.892-2.154-8.842-3.231c-15.794-5.765-31.012-12.778-44.823-22.415

@@ -356,6 +356,13 @@ export async function createApp() {
         }
       }
 
+      // Profile photos never get the generic placeholder: a missing avatar must
+      // read as "gone" (404) so the UI can fall back to the colour initials.
+      if (cleanKey.startsWith('avatars/')) {
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(404).json({ error: 'Not found' });
+      }
+
       // 3. Fallback graceful SVG placeholder to avoid ugly broken image icon
       res.setHeader('Content-Type', 'image/svg+xml');
       res.setHeader('Cache-Control', 'no-cache');

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Group, GroupMember } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { Avatar } from './ui/kit.tsx';
 
 interface GroupManagementModalProps {
   isOpen: boolean;
@@ -39,6 +40,8 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [pendingSelectId, setPendingSelectId] = useState<string | null>(null);
   const [availableUsers, setAvailableUsers] = useState<any[]>([]);
 
   // Editing state
@@ -68,11 +71,17 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
     }
   };
 
+  /* `groups` is a fresh array on every parent render, so keying this effect on
+     the array itself would re-run (and re-select something) constantly. */
   useEffect(() => {
     if (isOpen) {
       fetchAvailableUsers();
       if (initialCreateMode) {
+        // Opening straight into "new circle": do not quietly select an existing
+        // circle behind the create sheet (it read as "your circles opening").
         setShowCreateModal(true);
+        setSelectedGroup(null);
+        return;
       }
       if (selectedGroup) {
         // Keep selected group updated with fresh props
@@ -86,7 +95,18 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         setSelectedGroup(groups[0]);
       }
     }
-  }, [isOpen, groups, initialCreateMode]);
+  }, [isOpen, initialCreateMode, groups.length]);
+
+  /* A circle that was just created is selected once the refetched list includes
+     it, so the sheet closes onto the circle you made rather than a blank pane. */
+  useEffect(() => {
+    if (!pendingSelectId) return;
+    const created = groups.find((g) => g.id === pendingSelectId);
+    if (created) {
+      setSelectedGroup(created);
+      setPendingSelectId(null);
+    }
+  }, [groups, pendingSelectId]);
 
   if (!isOpen) return null;
 
@@ -105,19 +125,23 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         }),
       });
 
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const data = await res.json();
+        setCreateError(null);
         setNewGroupName('');
         setNewGroupDesc('');
         setSelectedUserIds([]);
         setShowCreateModal(false);
         onRefreshGroups();
-        if (data.group) {
-          setSelectedGroup(data.group);
-        }
+        // POST /api/groups answers { groupId }; select it once the parent's
+        // refetch has delivered the new circle.
+        const createdId = data.group?.id || data.groupId;
+        if (createdId) setPendingSelectId(createdId);
+      } else {
+        setCreateError(data.error || 'Could not create that circle');
       }
-    } catch (e) {
-      console.error('Failed to create group', e);
+    } catch (e: any) {
+      setCreateError(e?.message || 'Could not create that circle');
     }
   };
 
@@ -240,18 +264,21 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-2xl bg-[var(--bg-card)] border border-[var(--border-color)] rounded-[26px] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)] flex flex-col max-h-[88vh] h-[80vh] overflow-hidden">
+      <div className="relative flex h-[80vh] max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-[var(--border-color)] bg-[var(--bg-card)] shadow-[0_24px_60px_-28px_rgba(0,0,0,0.85)]">
         {/* Header */}
         <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-[var(--accent-coral)]" />
             <h3 className="font-display font-bold text-base text-[var(--text-primary)]">
-              Your Circles
+              {showCreateModal ? 'New circle' : 'Your Circles'}
             </h3>
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                setCreateError(null);
+                setShowCreateModal(true);
+              }}
               className="px-3 py-1.5 rounded-xl bg-[var(--accent-coral)] text-white text-xs font-semibold hover:opacity-90 transition flex items-center gap-1.5 playful-btn"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -486,12 +513,13 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                           className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-surface)] text-xs border border-[var(--border-subtle)]"
                         >
                           <div className="flex items-center gap-2">
-                            <div
-                              className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs shrink-0"
-                              style={{ backgroundColor: mColor }}
-                            >
-                              {mInitial}
-                            </div>
+                            <Avatar
+                              name={mName}
+                              color={mColor}
+                              src={member.avatarUrl}
+                              size={24}
+                              className="shadow-2xs"
+                            />
                             <div>
                               <span className="font-semibold text-[var(--text-primary)] block">
                                 {mName}
@@ -533,10 +561,19 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
           >
             <div className="w-full max-w-sm p-5 bg-[var(--bg-card)] border border-[var(--border-color)] rounded-2xl shadow-2xl">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="font-display font-bold text-sm text-[var(--text-primary)]">
-                  Create Private Circle
-                </h4>
-                <button onClick={() => setShowCreateModal(false)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+                <div>
+                  <p className="eyebrow text-[0.62rem]">New circle</p>
+                  <h4 className="mt-0.5 font-display font-bold text-sm text-[var(--text-primary)]">
+                    Create Private Circle
+                  </h4>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setCreateError(null);
+                  }}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -605,10 +642,19 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                   </div>
                 </div>
 
+                {createError && (
+                  <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2 text-[11px] font-medium text-rose-400">
+                    {createError}
+                  </p>
+                )}
+
                 <div className="pt-2 flex justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setCreateError(null);
+                    }}
                     className="px-3 py-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                   >
                     Cancel

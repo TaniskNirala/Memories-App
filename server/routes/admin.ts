@@ -2,6 +2,7 @@ import { hashToken } from '../security/tokens.ts';
 import { getAppBaseUrl } from '../security/http.ts';
 import { Router } from 'express';
 import crypto from 'crypto';
+import { avatarUrlFor } from '../security/avatars.ts';
 import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync, restoreDatabaseFromCloud, flushNeonWrites } from '../db.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter, getStorageCapabilities } from '../storage/index.ts';
@@ -241,8 +242,8 @@ adminRouter.post('/purge-all-data', async (_req: AuthenticatedRequest, res) => {
 // 1. Pending signups
 adminRouter.get('/pending-signups', (req: AuthenticatedRequest, res) => {
   const pending = queryAll<any>(
-    "SELECT id, username, display_name, avatar_color, created_at FROM users WHERE role = 'pending' ORDER BY created_at ASC"
-  );
+    "SELECT id, username, display_name, avatar_color, avatar_url, created_at FROM users WHERE role = 'pending' ORDER BY created_at ASC"
+  ).map((u) => ({ ...u, avatarUrl: avatarUrlFor(u.avatar_url) }));
   res.json({ pending });
 });
 
@@ -318,11 +319,11 @@ adminRouter.post('/reject-user/:id', (req: AuthenticatedRequest, res) => {
 // 2. All users list & status management
 adminRouter.get('/users', (req: AuthenticatedRequest, res) => {
   const users = queryAll<any>(
-    `SELECT id, username, display_name, role, status, avatar_color, created_at,
+    `SELECT id, username, display_name, role, status, avatar_color, avatar_url, created_at,
             (SELECT COUNT(*) FROM posts WHERE owner_id = users.id AND deleted_at IS NULL) as post_count
      FROM users
      ORDER BY role ASC, created_at DESC`
-  );
+  ).map((u) => ({ ...u, avatarUrl: avatarUrlFor(u.avatar_url) }));
   res.json({ users });
 });
 

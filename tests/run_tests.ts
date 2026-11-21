@@ -1,4 +1,5 @@
 import { createApp } from '../server.ts';
+import { LocalDiskStorageAdapter } from '../server/storage/local.ts';
 import { queryOne, run } from '../server/db.ts';
 import http from 'http';
 import fs from 'fs';
@@ -548,13 +549,102 @@ async function runTests() {
     }
 
     // -------------------------------------------------------------
+    // Test 12: Profile photo upload, replace and remove
+    // -------------------------------------------------------------
+    console.log('\n[Test 12] Profile photo upload, replace and remove:');
+    try {
+      const mayaToken = await loginUser(baseUrl, 'maya', 'secret123');
+      const auth = { Authorization: `Bearer ${mayaToken}` };
+
+      // A 1x1 PNG is enough to exercise the whole path
+      const png = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64'
+      );
+      const asForm = (name: string, type: string, bytes: Buffer) => {
+        const fd = new FormData();
+        // Copy into a plain Uint8Array so the Blob constructor accepts it
+        fd.append('avatar', new Blob([new Uint8Array(bytes)], { type }), name);
+        return fd;
+      };
+
+      const up = await fetch(`${baseUrl}/api/auth/avatar`, { method: 'POST', headers: auth, body: asForm('a.png', 'image/png', png) });
+      const upBody: any = await up.json();
+      if (up.status !== 200 || !upBody.avatarUrl) {
+        throw new Error(`avatar upload failed: ${up.status} ${JSON.stringify(upBody)}`);
+      }
+
+      // The photo is served back to the signed-in owner…
+      const view = await fetch(`${baseUrl}${upBody.avatarUrl}`, { headers: auth });
+      if (view.status !== 200) throw new Error(`uploaded photo not readable (${view.status})`);
+      await view.arrayBuffer();
+
+      // …and is echoed by /me and by other people's feeds
+      const me: any = await (await fetch(`${baseUrl}/api/auth/me`, { headers: auth })).json();
+      if (me.user?.avatarUrl !== upBody.avatarUrl) throw new Error('/me does not expose avatarUrl');
+
+      const feedRes = await fetch(`${baseUrl}/api/feed`, { headers: auth });
+      const feed: any = await feedRes.json();
+      const ownPost = (feed.items || []).find((i: any) => i.owner?.username === 'maya');
+      if (!ownPost || ownPost.owner.avatarUrl !== upBody.avatarUrl) {
+        throw new Error('feed items do not carry the owner photo');
+      }
+
+      // Replacing returns a new file and the old one is gone
+      const up2 = await fetch(`${baseUrl}/api/auth/avatar`, { method: 'POST', headers: auth, body: asForm('b.png', 'image/png', png) });
+      const upBody2: any = await up2.json();
+      if (upBody2.avatarUrl === upBody.avatarUrl) throw new Error('replace returned the same file');
+
+      // Wrong type and oversize uploads are rejected with a JSON error
+      const gif = await fetch(`${baseUrl}/api/auth/avatar`, { method: 'POST', headers: auth, body: asForm('x.gif', 'image/gif', png) });
+      if (gif.status !== 400) throw new Error(`gif upload returned ${gif.status}`);
+      const gifBody: any = await gif.json();
+      if (!gifBody.error) throw new Error('gif rejection was not JSON');
+
+      const big = Buffer.concat([png, Buffer.alloc(2 * 1024 * 1024 + 16)]);
+      const tooBig = await fetch(`${baseUrl}/api/auth/avatar`, { method: 'POST', headers: auth, body: asForm('big.png', 'image/png', big) });
+      const tooBigBody: any = await tooBig.json();
+      if (tooBig.status !== 400 || !tooBigBody.error) {
+        throw new Error(`oversize upload returned ${tooBig.status} ${JSON.stringify(tooBigBody)}`);
+      }
+
+      // Anonymous uploads are refused
+      const anon = await fetch(`${baseUrl}/api/auth/avatar`, { method: 'POST', body: asForm('a.png', 'image/png', png) });
+      if (anon.status !== 401) throw new Error(`anonymous upload returned ${anon.status}`);
+
+      // Removing falls back to the colour initials
+      const del = await fetch(`${baseUrl}/api/auth/me`, {
+        method: 'PATCH',
+        headers: { ...auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeAvatar: true }),
+      });
+      if (del.status !== 200) throw new Error(`avatar removal returned ${del.status}`);
+      const me2: any = await (await fetch(`${baseUrl}/api/auth/me`, { headers: auth })).json();
+      if (me2.user?.avatarUrl) throw new Error('avatarUrl still set after removal');
+
+      // The object itself is deleted from storage (the view route then 404s)
+      const goneKey = decodeURIComponent(upBody2.avatarUrl.split('key=')[1]);
+      if (fs.existsSync(new LocalDiskStorageAdapter().getFilePath(goneKey))) {
+        throw new Error('removed avatar file is still on disk');
+      }
+      const gone = await fetch(`${baseUrl}${upBody2.avatarUrl}`, { headers: auth });
+      if (gone.status !== 404) throw new Error(`removed avatar requested back gave ${gone.status}, want 404`);
+      await gone.arrayBuffer();
+
+      results.push({ name: 'Profile photo upload / replace / remove', passed: true });
+    } catch (err: any) {
+      console.error('✗ FAIL: Test 12 failed:', err.message);
+      results.push({ name: 'Profile photo upload / replace / remove', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
     // Summary
     // -------------------------------------------------------------
     console.log('\n=======================================');
     console.log('TEST SUMMARY:');
     let allPassed = true;
     for (const r of results) {
-      console.log(`${r.passed ? '✓ PASS' : '✗ FAIL'} : ${r.name}`);
+      console.log(`${r.passed ? '✓ PASS' : '✗ FAIL'} : ${r.name}${r.passed || !r.error ? '' : ` — ${r.error}`}`);
       if (!r.passed) allPassed = false;
     }
     console.log('=======================================');

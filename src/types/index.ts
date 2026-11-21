@@ -5,6 +5,10 @@ export interface User {
   role: 'admin' | 'member' | 'pending';
   status: 'active' | 'suspended';
   avatarColor: string;
+  /** Uploaded profile photo; falls back to the colour avatar when absent */
+  avatarUrl?: string;
+  /** Appearance saved on the account, so new devices open in the same theme */
+  themePreference?: 'dark' | 'light';
 }
 
 export interface GroupMember {
@@ -12,6 +16,8 @@ export interface GroupMember {
   username: string;
   displayName: string;
   avatarColor: string;
+  /** Uploaded profile photo, when the member has one */
+  avatarUrl?: string;
   role: string;
   joinedAt?: string;
 }
@@ -75,6 +81,7 @@ export interface SinglePostFeedItem {
     username: string;
     displayName: string;
     avatarColor: string;
+    avatarUrl?: string;
   };
   files: PostFile[];
   placements: PostPlacement[];
@@ -101,6 +108,7 @@ export interface CollectionCardFeedItem {
     username: string;
     displayName: string;
     avatarColor: string;
+    avatarUrl?: string;
   };
   attendeesCount: number;
   userAttended: boolean;
@@ -125,6 +133,7 @@ export interface CommentItem {
     username: string;
     displayName: string;
     avatarColor: string;
+    avatarUrl?: string;
   };
   canDelete: boolean;
   canEdit: boolean;
@@ -135,6 +144,7 @@ export interface EventAttendee {
   username: string;
   displayName: string;
   avatarColor: string;
+  avatarUrl?: string;
   taggedBy: { id: string; username: string } | null;
   isSelf: boolean;
 }
@@ -151,6 +161,7 @@ export interface EventNote {
     username: string;
     displayName: string;
     avatarColor: string;
+    avatarUrl?: string;
   };
   canDelete: boolean;
 }

@@ -48,7 +48,7 @@ export const PendingApprovalScreen: React.FC = () => {
 
           <div className="space-y-4 px-6 py-5">
             <div className="flex items-center gap-3 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 p-3">
-              <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} size={38} ring />
+              <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} src={user?.avatarUrl} size={38} ring />
               <div className="min-w-0">
                 <p className="truncate text-[12.5px] font-bold">{user?.displayName}</p>
                 <p className="truncate font-mono text-[10px] text-[var(--text-muted)]">@{user?.username}</p>

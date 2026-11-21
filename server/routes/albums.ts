@@ -4,6 +4,7 @@ import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
 import { isDeleteProtected } from '../config.ts';
+import { avatarUrlFor } from '../security/avatars.ts';
 
 export const albumsRouter = Router();
 albumsRouter.use(requireApproved);
@@ -340,7 +341,7 @@ albumsRouter.get('/:id/attendance', (req: AuthenticatedRequest, res) => {
   const albumId = req.params.id;
   const attendees = queryAll<any>(
     `SELECT ea.user_id, ea.tagged_by, ea.created_at,
-            u.username, u.display_name, u.avatar_color,
+            u.username, u.display_name, u.avatar_color, u.avatar_url,
             tu.username as tagger_username
      FROM event_attendance ea
      JOIN users u ON ea.user_id = u.id
@@ -356,6 +357,7 @@ albumsRouter.get('/:id/attendance', (req: AuthenticatedRequest, res) => {
       username: a.username,
       displayName: a.display_name,
       avatarColor: a.avatar_color,
+      avatarUrl: avatarUrlFor(a.avatar_url),
       taggedBy: a.tagged_by ? { id: a.tagged_by, username: a.tagger_username } : null,
       isSelf: a.user_id === req.user!.id,
     })),
@@ -434,7 +436,7 @@ albumsRouter.get('/:id/notes', (req: AuthenticatedRequest, res) => {
   const isAdmin = req.user!.role === 'admin';
 
   const notes = queryAll<any>(
-    `SELECT en.*, u.username, u.display_name, u.avatar_color
+    `SELECT en.*, u.username, u.display_name, u.avatar_color, u.avatar_url
      FROM event_notes en
      JOIN users u ON en.author_id = u.id
      WHERE en.event_id = ?
@@ -457,7 +459,13 @@ albumsRouter.get('/:id/notes', (req: AuthenticatedRequest, res) => {
       author:
         isAnonymous && !isAdmin && !isAuthor
           ? { id: 'anonymous', username: 'anonymous_friend', displayName: 'Anonymous Friend', avatarColor: '#64748b' }
-          : { id: n.author_id, username: n.username, displayName: n.display_name, avatarColor: n.avatar_color },
+          : {
+              id: n.author_id,
+              username: n.username,
+              displayName: n.display_name,
+              avatarColor: n.avatar_color,
+              avatarUrl: avatarUrlFor(n.avatar_url),
+            },
       canDelete: isAuthor || isAdmin,
     };
   });

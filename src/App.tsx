@@ -221,12 +221,13 @@ const MainContent: React.FC = () => {
     }
   };
 
+  // Refresh feed and circle member avatars when user's profile photo/name/color changes
   useEffect(() => {
     if (user && !isPending) {
       fetchGroups();
       fetchFeed(true);
     }
-  }, [user, isPending, selectedGroupId]);
+  }, [user?.id, user?.avatarUrl, user?.avatarColor, user?.displayName, isPending, selectedGroupId]);
 
   // Global drag-and-drop support: dragging files into window initiates upload
   useEffect(() => {
@@ -321,6 +322,38 @@ const MainContent: React.FC = () => {
 
   const selectedGroup = groups.find((g) => g.id === selectedGroupId);
 
+  // Opening a password-reset link while another account is signed in on this
+  // device must show the reset screen instead of silently ignoring the link.
+  const hasUrlResetToken = (() => {
+    try {
+      return Boolean(
+        /(?:^|[#?&])token=([A-Za-z0-9_-]+)/.test(window.location.hash) ||
+          /(?:^|[#?&])token=([A-Za-z0-9_-]+)/.test(window.location.search)
+      );
+    } catch {
+      return false;
+    }
+  })();
+  const [forcingResetScreen, setForcingResetScreen] = useState(hasUrlResetToken);
+
+  useEffect(() => {
+    const checkHash = () => {
+      try {
+        const hasTok = Boolean(
+          /(?:^|[#?&])token=([A-Za-z0-9_-]+)/.test(window.location.hash) ||
+            /(?:^|[#?&])token=([A-Za-z0-9_-]+)/.test(window.location.search)
+        );
+        setForcingResetScreen(hasTok);
+      } catch {}
+    };
+    window.addEventListener('hashchange', checkHash);
+    window.addEventListener('popstate', checkHash);
+    return () => {
+      window.removeEventListener('hashchange', checkHash);
+      window.removeEventListener('popstate', checkHash);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="app-shell items-center justify-center gap-3">
@@ -332,8 +365,8 @@ const MainContent: React.FC = () => {
     );
   }
 
-  if (!user) {
-    return <AuthScreen />;
+  if (!user || forcingResetScreen) {
+    return <AuthScreen onResetComplete={() => setForcingResetScreen(false)} />;
   }
 
   if (isPending) {

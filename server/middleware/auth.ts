@@ -134,7 +134,7 @@ const WINDOW_MS = 15 * 60 * 1000;
 
 function failuresSince(column: 'ip' | 'username' | 'both', ip: string, username: string): number {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
-  let row: { c: number } | undefined;
+  let row: { c: number } | null | undefined;
   if (column === 'both') {
     row = queryOne<{ c: number }>(
       'SELECT COUNT(*) as c FROM login_attempts WHERE success = 0 AND ip = ? AND username = ? AND attempted_at > ?',

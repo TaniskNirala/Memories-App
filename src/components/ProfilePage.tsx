@@ -204,7 +204,7 @@ export const ProfilePage: React.FC = () => {
         subtitle="Your name, handle, avatar colour, password and session — all in one place."
         aside={
           <div className="flex items-center gap-2.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 px-3 py-2">
-            <Avatar name={previewName} color={previewColor} size={34} ring />
+            <Avatar name={previewName} color={previewColor} src={user?.avatarUrl} size={34} ring />
             <div className="leading-tight">
               <p className="text-[11.5px] font-bold">{previewName}</p>
               <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">

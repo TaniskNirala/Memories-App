@@ -169,6 +169,8 @@ const SCHEMA_STATEMENTS: string[] = [
     avatar_color TEXT,
     created_at TEXT NOT NULL
   )`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference TEXT`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

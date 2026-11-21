@@ -32,6 +32,14 @@ export const Avatar: React.FC<{
 }> = ({ name, color, src, size = 34, ring = false, className = '', title }) => {
   const label = initials(name);
   const bg = avatarGradient(color, name);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [src]);
+
+  const showImg = Boolean(src && !imgFailed);
+
   return (
     <span
       title={title || name}
@@ -44,16 +52,17 @@ export const Avatar: React.FC<{
         className="absolute inset-0 rounded-full"
         style={{ background: bg, boxShadow: '0 1px 0 rgba(255,255,255,0.28) inset' }}
       />
-      {src ? (
+      {showImg ? (
         <img
+          key={src}
           src={src}
           alt={name || 'avatar'}
           loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 z-10 h-full w-full object-cover"
           style={{ borderRadius: 999 }}
           /* a missing/corrupt file must fall back to the colour initials */
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
+          onError={() => {
+            setImgFailed(true);
           }}
         />
       ) : (

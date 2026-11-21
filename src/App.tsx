@@ -562,7 +562,7 @@ const MainContent: React.FC = () => {
   };
 
   return (
-    <div className="app-shell bg-[var(--bg-page)] text-[var(--text-primary)] pb-24 transition-colors lg:pb-8">
+    <div className="app-shell text-[var(--text-primary)] pb-24 transition-colors lg:pb-8">
       <Header
         selectedGroupName={selectedGroup?.name}
         onSelectGroup={(gid) => setSelectedGroupId(gid)}

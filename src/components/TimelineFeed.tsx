@@ -32,7 +32,7 @@ import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 import { Avatar, Badge, Modal, ModalHeader, Dropdown, MenuItem, EmptyState, Dot } from './ui/kit.tsx';
-import { dayNumber, monthShort, monthYearLabel, relativeTime, accentFromName, plural } from '../lib/format.ts';
+import { dayNumber, monthShort, monthYearLabel, relativeTime, accentFromName } from '../lib/format.ts';
 
 interface TimelineFeedProps {
   items: FeedItem[];
@@ -1086,14 +1086,6 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
       }));
   }, [items]);
 
-  const quote = useMemo(() => {
-    const total = items.length;
-    const authors = new Set(
-      items.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))
-    );
-    return { total, authors: authors.size };
-  }, [items]);
-
   const handleShareClick = async (item: FeedItem, targetGroupId: string) => {
     setSharingLoadingId(item.id);
     try {
@@ -1300,25 +1292,6 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
         )
       ) : (
         <>
-          {/* Timeline summary band */}
-          <div className="tl-summary">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="tl-summary-icon">
-                <Layers className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="tl-summary-title truncate">
-                  {quote.total === 1 ? '1 memory' : `${quote.total} memories`} on the rail
-                </p>
-                <p className="tl-summary-sub truncate">
-                  {plural(quote.authors, 'contributor')} · {plural(sections.length, 'chapter')} ·{' '}
-                  {plural(sections.reduce((n, sec) => n + sec.days.length, 0), 'day')}
-                </p>
-              </div>
-            </div>
-            <span className="tl-summary-order">newest → oldest</span>
-          </div>
-
           <div className="tl-root">
             <div className="tl-rail" aria-hidden="true" />
 

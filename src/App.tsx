@@ -18,6 +18,7 @@ import { SharePlacementModal } from './components/SharePlacementModal.tsx';
 import { ProposeCollectionModal } from './components/ProposeCollectionModal.tsx';
 import { PendingReferencesBanner } from './components/PendingReferencesBanner.tsx';
 import { TrashView } from './components/TrashView.tsx';
+import { ProfilePage } from './components/ProfilePage.tsx';
 import { EventsPage } from './components/EventsPage.tsx';
 import { CirclesPage } from './components/CirclesPage.tsx';
 import { CommandPalette, PaletteAction } from './components/CommandPalette.tsx';
@@ -40,7 +41,7 @@ const MainContent: React.FC = () => {
   const { toggleTheme } = useTheme();
 
   // Navigation tab
-  const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash'>('feed');
+  const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash' | 'profile'>('feed');
 
   // Circle deletion modal state
   const [circleToDelete, setCircleToDelete] = useState<Group | null>(null);
@@ -323,10 +324,7 @@ const MainContent: React.FC = () => {
   if (loading) {
     return (
       <div className="app-shell items-center justify-center gap-3">
-        <span className="relative flex h-12 w-12 items-center justify-center">
-          <span className="absolute inset-0 rounded-2xl opacity-80" style={{ background: 'var(--gradient-ember)' }} />
-          <img src="/icon.svg" alt="" className="relative z-10 h-6 w-6" />
-        </span>
+        <img src="/icon.svg" alt="" className="h-12 w-12 rounded-2xl shadow-[0_14px_30px_-18px_rgba(249,101,95,0.9)]" />
         <span className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
           <RefreshCw className="h-3.5 w-3.5 animate-spin" /> opening nest
         </span>
@@ -569,6 +567,7 @@ const MainContent: React.FC = () => {
         onNotificationClick={handleNotificationClick}
         onOpenDuplicates={() => setIsDuplicatesModalOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenProfile={() => setCurrentTab('profile')}
         onUserSwitched={() => {
           setSelectedGroupId(undefined);
           fetchGroups();
@@ -723,6 +722,9 @@ const MainContent: React.FC = () => {
 
           {/* TAB: TRASH BIN */}
           {currentTab === 'trash' && <TrashView />}
+
+          {/* TAB: PROFILE & SETTINGS */}
+          {currentTab === 'profile' && <ProfilePage />}
           </div>
 
           {/* Right hand rail — mirrors the nav so the timeline reads centred */}

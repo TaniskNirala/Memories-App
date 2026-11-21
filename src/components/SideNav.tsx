@@ -1,11 +1,11 @@
 import React from 'react';
-import { Home, CalendarDays, Users, Shield, Trash2, Sparkles, Plus, Compass, KeyRound } from 'lucide-react';
+import { Home, CalendarDays, Users, Shield, Trash2, Sparkles, Plus, Compass, KeyRound, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { Group } from '../types/index.ts';
 import { Avatar } from './ui/kit.tsx';
 import { accentFromName } from '../lib/format.ts';
 
-export type Tab = 'feed' | 'collections' | 'groups' | 'admin' | 'trash';
+export type Tab = 'feed' | 'collections' | 'groups' | 'admin' | 'trash' | 'profile';
 
 interface SideNavProps {
   currentTab: Tab;
@@ -26,6 +26,7 @@ const NAV_ICONS = {
   groups: Users,
   admin: Shield,
   trash: Trash2,
+  profile: Settings,
 } as const;
 
 export const SideNav: React.FC<SideNavProps> = ({
@@ -48,6 +49,7 @@ export const SideNav: React.FC<SideNavProps> = ({
     { id: 'groups', label: 'Circles', count: groups.length, hint: 'Who sees what' },
     ...(isAdmin ? [{ id: 'admin' as Tab, label: 'Admin studio', hint: 'People, reports, audit' }] : []),
     { id: 'trash', label: 'Trash', hint: 'Recover for 30 days' },
+    { id: 'profile', label: 'Profile', hint: 'Name, handle, password' },
   ];
 
   return (

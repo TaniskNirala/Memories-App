@@ -127,19 +127,12 @@ export const AuthScreen: React.FC = () => {
         />
         <div className="relative flex h-full flex-col justify-between p-10">
           <div className="flex items-center gap-2.5">
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-[14px] border border-white/25 bg-white/10 backdrop-blur-md">
-              <span
-                aria-hidden
-                className="absolute inset-0 rounded-[14px] opacity-90"
-                style={{ background: 'var(--gradient-ember)' }}
-              />
-              <img src="/icon.svg" alt="" className="relative z-10 h-5 w-5" />
-            </span>
+            <img src="/icon.svg" alt="" className="h-10 w-10 rounded-[14px] shadow-[0_10px_24px_-12px_rgba(0,0,0,0.8)]" />
             <span className="font-display text-[1.35rem] leading-none text-white">Nest</span>
           </div>
 
           <h1 className="max-w-md font-display text-[2.1rem] leading-[1.1] text-white">
-            Your photos, <span className="glow-text">in the order life happened.</span>
+            Replace your worst memories with <span className="glow-text">the best ones.</span>
           </h1>
         </div>
       </aside>
@@ -164,14 +157,7 @@ export const AuthScreen: React.FC = () => {
             <div className="relative">
               {/* compact brand row for phones */}
               <div className="mb-5 flex items-center gap-2.5 lg:hidden">
-                <span className="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-[12px] border border-[var(--border-color)] bg-[var(--bg-card)]">
-                  <span
-                    aria-hidden
-                    className="absolute inset-0 opacity-90"
-                    style={{ background: 'var(--gradient-ember)' }}
-                  />
-                  <img src="/icon.svg" alt="" className="relative z-10 h-4 w-4" />
-                </span>
+                <img src="/icon.svg" alt="" className="h-9 w-9 rounded-[12px]" />
                 <span className="font-display text-base leading-none">Nest</span>
               </div>
 

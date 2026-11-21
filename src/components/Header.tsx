@@ -25,6 +25,7 @@ import { Avatar, Modal, ModalHeader, MenuItem } from './ui/kit.tsx';
 import { relativeTime } from '../lib/format.ts';
 
 interface HeaderProps {
+  onOpenProfile?: () => void;
   onOpenNotifications?: () => void;
   onSelectGroup?: (groupId: string | undefined) => void;
   selectedGroupName?: string;
@@ -36,6 +37,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   selectedGroupName,
+  onOpenProfile,
   onNotificationClick,
   onOpenDuplicates,
   onOpenPalette,
@@ -46,10 +48,6 @@ export const Header: React.FC<HeaderProps> = ({
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotif, setShowNotif] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [deletePassword, setDeletePassword] = useState('');
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
@@ -86,28 +84,6 @@ export const Header: React.FC<HeaderProps> = ({
       await apiFetch('/api/auth/logout-all', { method: 'POST' });
     } catch {}
     window.location.reload();
-  };
-
-  const handleDeleteOwnAccount = async () => {
-    setDeleteLoading(true);
-    setDeleteError(null);
-    try {
-      const res = await apiFetch('/api/auth/account', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: deletePassword }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        window.location.reload();
-      } else {
-        setDeleteError(data.error || 'Failed to delete account');
-      }
-    } catch (e: any) {
-      setDeleteError(e.message || 'Failed to delete account');
-    } finally {
-      setDeleteLoading(false);
-    }
   };
 
   const fetchNotifications = async () => {
@@ -173,10 +149,11 @@ export const Header: React.FC<HeaderProps> = ({
               className="group flex min-w-0 shrink-0 items-center gap-2 text-[var(--text-primary)] transition hover:opacity-95"
               aria-label="Nest home"
             >
-              <span className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-[11px] border border-[var(--border-color)] bg-[var(--bg-surface)]">
-                <span aria-hidden className="absolute inset-0 opacity-85" style={{ background: 'var(--gradient-ember)' }} />
-                <img src="/icon.svg" alt="" className="relative z-10 h-4 w-4 drop-shadow" />
-              </span>
+              <img
+                src="/icon.svg"
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-[11px] shadow-[0_6px_16px_-10px_rgba(249,101,95,0.9)]"
+              />
               <span className="hidden font-display text-[1.05rem] font-bold leading-none tracking-tight sm:block">Nest</span>
             </a>
 
@@ -362,6 +339,18 @@ export const Header: React.FC<HeaderProps> = ({
                         </div>
 
                         <div className="p-1.5">
+                          {onOpenProfile && (
+                            <MenuItem
+                              icon={<Settings2 className="h-3.5 w-3.5" />}
+                              label="Profile & settings"
+                              hint="⌘"
+                              onClick={() => {
+                                setShowUserMenu(false);
+                                onOpenProfile();
+                              }}
+                            />
+                          )}
+                          <div className="my-1 h-px bg-[var(--border-subtle)]" />
                           <MenuItem
                             icon={<KeyRound className="h-3.5 w-3.5" />}
                             label="Change password"
@@ -386,9 +375,7 @@ export const Header: React.FC<HeaderProps> = ({
                             tone="danger"
                             onClick={() => {
                               setShowUserMenu(false);
-                              setDeletePassword('');
-                              setDeleteError(null);
-                              setShowDeleteModal(true);
+                              if (onOpenProfile) onOpenProfile();
                             }}
                           />
                           <MenuItem
@@ -410,59 +397,6 @@ export const Header: React.FC<HeaderProps> = ({
         </header>
       </div>
 
-      {/* ---------------------------------------------------------- Account deletion */}
-      <Modal open={showDeleteModal} onClose={() => !deleteLoading && setShowDeleteModal(false)} size="sm" label="Delete account">
-        <ModalHeader
-          icon={<AlertTriangle className="h-4 w-4" />}
-          eyebrow="Danger zone"
-          title="Delete my account"
-          onClose={() => !deleteLoading && setShowDeleteModal(false)}
-        />
-        <div className="space-y-3 p-5">
-          <p className="text-[12px] leading-relaxed text-[var(--text-secondary)]">
-            This permanently removes <strong>@{user?.username}</strong> along with every memory, album, comment and circle
-            membership attached to it.
-          </p>
-          <p className="rounded-xl border border-rose-500/25 bg-rose-500/8 px-3 py-2.5 text-[11px] leading-relaxed text-rose-300">
-            This cannot be undone and there is no recovery window.
-          </p>
-          <div>
-            <label className="label" htmlFor="delete-account-password">
-              Confirm with your password
-            </label>
-            <input
-              id="delete-account-password"
-              type="password"
-              value={deletePassword}
-              onChange={(e) => setDeletePassword(e.target.value)}
-              placeholder="Password"
-              autoComplete="current-password"
-              className="field"
-            />
-          </div>
-          {deleteError && (
-            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] font-medium text-rose-300">
-              {deleteError}
-            </p>
-          )}
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" disabled={deleteLoading} onClick={() => setShowDeleteModal(false)} className="btn btn-ghost btn-sm">
-              Cancel
-            </button>
-            <button
-              type="button"
-              disabled={deleteLoading || !deletePassword}
-              onClick={handleDeleteOwnAccount}
-              className="btn btn-danger btn-sm"
-            >
-              {deleteLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
-              {deleteLoading ? 'Deleting…' : 'Delete permanently'}
-            </button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ---------------------------------------------------------- Password change */}
       <Modal
         open={showPasswordModal}
         onClose={() => !passwordLoading && setShowPasswordModal(false)}

@@ -37,7 +37,6 @@
    1. Tokens
    -------------------------------------------------------------------------- */
 @layer base {
-  :root,
   :root.dark {
     --bg-page: #0a0c14;
     --bg-page-soft: #0e111b;
@@ -60,8 +59,8 @@
     --shadow-float: 0 24px 60px -28px rgba(0, 0, 0, 0.95);
     --sticker: rgba(246, 181, 68, 0.1);
     --paper-dot: rgba(255, 255, 255, 0.04);
-    --pattern-ink: rgba(226, 222, 255, 0.15);
-    --pattern-tint: rgba(246, 181, 68, 0.16);
+    --pattern-ink: rgba(226, 222, 255, 0.085);
+    --pattern-tint: rgba(246, 181, 68, 0.09);
     --pattern-size: 378px auto;
     --blob-a: rgba(255, 112, 105, 0.2);
     --blob-b: rgba(94, 234, 212, 0.13);
@@ -77,6 +76,7 @@
     color-scheme: dark;
   }
 
+  :root,
   :root.light {
     --bg-page: #f7f2e9;
     --bg-page-soft: #fdfaf4;
@@ -99,8 +99,8 @@
     --shadow-float: 0 24px 60px -30px rgba(70, 50, 20, 0.4);
     --sticker: rgba(196, 122, 9, 0.12);
     --paper-dot: rgba(26, 24, 38, 0.055);
-    --pattern-ink: rgba(26, 24, 38, 0.17);
-    --pattern-tint: rgba(196, 122, 9, 0.18);
+    --pattern-ink: rgba(26, 24, 38, 0.095);
+    --pattern-tint: rgba(196, 122, 9, 0.1);
     --pattern-size: 378px auto;
     --blob-a: rgba(246, 169, 43, 0.24);
     --blob-b: rgba(13, 143, 132, 0.14);
@@ -273,8 +273,8 @@
   }
 
   /* Login route: same doodle sheet, but finer and softer so the card leads */
-  .auth-page { --pattern-ink: rgba(226, 222, 255, 0.11); }
-  :root.light .auth-page { --pattern-ink: rgba(26, 24, 38, 0.12); }
+  .auth-page { --pattern-ink: rgba(226, 222, 255, 0.07); }
+  :root.light .auth-page { --pattern-ink: rgba(26, 24, 38, 0.08); }
 
   /* ------------------------------------------------------- Auth / onboarding */
   .auth-panel {

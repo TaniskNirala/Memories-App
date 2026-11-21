@@ -1,13 +1,14 @@
-<?xml version="1.0" encoding="iso-8859-1"?>
-<!-- Generator: Adobe Illustrator 16.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- License: CC0. Made by SVG Repo: https://www.svgrepo.com/svg/110933/bird-albatross-flying-shape -->
-<svg version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 width="564.377px" height="564.377px" viewBox="0 0 564.377 564.377" style="enable-background:new 0 0 564.377 564.377;"
-	 xml:space="preserve" fill="#FFFFFF">
-<g>
-	<g>
-		<path d="M563.473,528.105c-6.438-20.959-11-37.96-21.216-57.463c-9.764-18.638-17.532-38.213-29.441-55.867
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Nest">
+  <defs>
+    <linearGradient id="ember" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffc86b"/>
+      <stop offset="0.42" stop-color="#f6a92b"/>
+      <stop offset="1" stop-color="#f9655f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#ember)"/>
+  <g fill="#1d1204" transform="translate(84 136) scale(0.61)">
+    <path d="M563.473,528.105c-6.438-20.959-11-37.96-21.216-57.463c-9.764-18.638-17.532-38.213-29.441-55.867
 			c-8.907-13.199-15.12-28.214-22.55-42.412c-4.003-7.653-7.716-15.52-16.74-18.764c-7.896-2.836-15.773-5.704-23.652-8.58
 			c-3.721-1.718-7.613-3.142-11.64-4.256c-2.946-1.077-5.892-2.154-8.842-3.231c-15.794-5.765-31.012-12.778-44.823-22.415
 			c-8.809-6.148-17.078-13.064-25.63-19.588c-3.664-2.795-5.101-5.904-3.505-10.702c1.122-3.37,0.722-7.229,1.122-10.857
@@ -44,6 +45,5 @@
 			c2.285,0.71,3.986,3.452,5.822,5.394c1.702,1.8,2.995,4.048,4.876,5.603c6.769,5.589,13.709,10.967,20.388,16.267
 			c-0.045,0.216,0.131-0.648,0.388-1.918c2.9,5.912,2.35-0.656,3.811-0.905c1.326,5.896,4.097,10.481,9.939,12.57
 			c4.01,0.926,2.908-1.979,2.994-3.994C564.027,528.905,563.611,528.546,563.473,528.105z"/>
-	</g>
-</g>
+  </g>
 </svg>

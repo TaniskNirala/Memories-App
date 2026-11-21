@@ -627,6 +627,7 @@ const MainContent: React.FC = () => {
                   setIsCreateGroupMode(false);
                   setIsGroupsModalOpen(true);
                 }}
+                onClearGroup={() => setSelectedGroupId(undefined)}
               />
             </div>
           )}
@@ -742,6 +743,7 @@ const MainContent: React.FC = () => {
                   setIsCreateGroupMode(false);
                   setIsGroupsModalOpen(true);
                 }}
+                onClearGroup={() => setSelectedGroupId(undefined)}
               />
             </div>
           )}

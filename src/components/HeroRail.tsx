@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Users, Sparkles, CalendarDays, Bookmark } from 'lucide-react';
+import { Plus, Users, Sparkles, CalendarDays, Bookmark, X } from 'lucide-react';
 import { Avatar } from './ui/kit.tsx';
 import { greeting } from '../lib/format.ts';
 
@@ -21,6 +21,8 @@ export interface HeroRailProps {
   selectedGroupMembers?: number;
   onOpenUpload: () => void;
   onOpenGroupsManager: () => void;
+  /** Clears the circle filter and returns to the full timeline */
+  onClearGroup?: () => void;
   compact?: boolean;
 }
 
@@ -43,29 +45,44 @@ export const HeroRail: React.FC<HeroRailProps> = ({
   selectedGroupMembers,
   onOpenUpload,
   onOpenGroupsManager,
+  onClearGroup,
   compact = false,
 }) => {
   const firstName = user?.displayName?.split(' ')[0] || user?.username || 'friend';
+  const memberCount = selectedGroupMembers || 0;
+
+  const eyebrow = selectedGroupName
+    ? `Your circle${memberCount ? ` · ${memberCount} ${memberCount === 1 ? 'person' : 'people'}` : ''}`
+    : `${greeting()} · ${new Date().toLocaleDateString([], { weekday: 'long' })}`;
+
   const subtitle = selectedGroupName
     ? selectedGroupDescription ||
-      `${selectedGroupMembers || 0} people in this circle — everything below is only visible to them.`
+      `Only what ${memberCount ? 'these ' + memberCount + ' people have' : 'this circle has'} shared with each other shows below.`
     : 'Your memories, stacked by the day they happened.';
 
   if (compact) {
     return (
       <header className="relative overflow-hidden rounded-[24px] border border-[var(--border-color)] bg-[var(--bg-card)]/80 p-4 backdrop-blur-xl">
-        <p className="eyebrow">
-          {greeting()} · {new Date().toLocaleDateString([], { weekday: 'long' })}
+        <p className="eyebrow flex items-center gap-1.5">
+          {selectedGroupName && <Users className="h-3 w-3 text-[var(--accent-cyan)]" />}
+          {eyebrow}
         </p>
-        <h1 className="mt-1.5 font-display text-[1.5rem] leading-[1.1] tracking-tight">
+        <h1 className="mt-1.5 flex flex-wrap items-center gap-2 font-display text-[1.5rem] leading-[1.1] tracking-tight">
           {selectedGroupName ? (
-            <>
-              Inside <span className="glow-text">{selectedGroupName}</span>
-            </>
+            <span className="glow-text">{selectedGroupName}</span>
           ) : (
             <>
               Hello, <span className="glow-text">{firstName}</span>
             </>
+          )}
+          {selectedGroupName && onClearGroup && (
+            <button
+              type="button"
+              onClick={onClearGroup}
+              className="inline-flex items-center gap-1 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-2 py-0.5 text-[10px] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
+            >
+              <X className="h-2.5 w-2.5" /> All circles
+            </button>
           )}
         </h1>
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-[var(--text-secondary)]">{subtitle}</p>
@@ -92,14 +109,13 @@ export const HeroRail: React.FC<HeroRailProps> = ({
           style={{ background: 'var(--gradient-ember)' }}
         />
 
-        <p className="eyebrow">
-          {greeting()} · {new Date().toLocaleDateString([], { weekday: 'short' })}
+        <p className="eyebrow flex items-center gap-1.5">
+          {selectedGroupName && <Users className="h-2.5 w-2.5 text-[var(--accent-cyan)]" />}
+          {eyebrow}
         </p>
         <h1 className="mt-1.5 font-display text-[1.35rem] leading-[1.12] tracking-tight">
           {selectedGroupName ? (
-            <>
-              Inside <span className="glow-text">{selectedGroupName}</span>
-            </>
+            <span className="glow-text">{selectedGroupName}</span>
           ) : (
             <>
               Hello, <span className="glow-text">{firstName}</span>
@@ -107,6 +123,23 @@ export const HeroRail: React.FC<HeroRailProps> = ({
           )}
         </h1>
         <p className="mt-1.5 text-[10.5px] leading-relaxed text-[var(--text-muted)]">{subtitle}</p>
+
+        {selectedGroupName && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            {onClearGroup && (
+              <button
+                type="button"
+                onClick={onClearGroup}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-2 py-1 text-[9.5px] font-semibold text-[var(--text-secondary)] transition hover:border-[var(--accent-amber)]/50 hover:text-[var(--text-primary)]"
+              >
+                <X className="h-2.5 w-2.5" /> Leave filter
+              </button>
+            )}
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border-subtle)] px-2 py-1 text-[9.5px] font-semibold text-[var(--text-muted)]">
+              <Sparkles className="h-2.5 w-2.5 text-[var(--accent-amber)]" /> private to this circle
+            </span>
+          </div>
+        )}
 
         {/* who you are */}
         <div className="mt-3.5 flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-2 py-1.5">

@@ -15,12 +15,13 @@ import {
   CornerDownLeft,
   Sparkles,
   ArrowUpRight,
+  Settings,
 } from 'lucide-react';
 import { Group } from '../types/index.ts';
 import { useTheme } from '../context/ThemeContext.tsx';
 
 export type PaletteAction =
-  | { kind: 'tab'; tab: 'feed' | 'collections' | 'groups' | 'admin' | 'trash' }
+  | { kind: 'tab'; tab: 'feed' | 'collections' | 'groups' | 'admin' | 'trash' | 'profile' }
   | { kind: 'group'; groupId: string }
   | { kind: 'upload' }
   | { kind: 'duplicates' }
@@ -68,6 +69,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose, r
       { id: 'feed', label: 'Go to timeline', hint: 'Page', icon: <Home className="h-4 w-4" />, action: { kind: 'tab', tab: 'feed' }, keywords: 'home memories stream' },
       { id: 'events', label: 'Go to events', hint: 'Page', icon: <CalendarDays className="h-4 w-4" />, action: { kind: 'tab', tab: 'collections' }, keywords: 'albums trips trips collections' },
       { id: 'circles', label: 'Go to circles', hint: 'Page', icon: <Users className="h-4 w-4" />, action: { kind: 'tab', tab: 'groups' }, keywords: 'friends groups people' },
+      { id: 'profile', label: 'Profile & settings', hint: 'Page', icon: <Settings className="h-4 w-4" />, action: { kind: 'tab', tab: 'profile' }, keywords: 'account name username password avatar delete' },
       { id: 'trash', label: 'Open trash bin', hint: 'Page', icon: <Trash2 className="h-4 w-4" />, action: { kind: 'tab', tab: 'trash' }, keywords: 'deleted restore recover' },
       ...(isAdmin
         ? ([

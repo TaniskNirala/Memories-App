@@ -18,6 +18,7 @@ import { SharePlacementModal } from './components/SharePlacementModal.tsx';
 import { ProposeCollectionModal } from './components/ProposeCollectionModal.tsx';
 import { PendingReferencesBanner } from './components/PendingReferencesBanner.tsx';
 import { TrashView } from './components/TrashView.tsx';
+import { ProfilePage } from './components/ProfilePage.tsx';
 import { EventsPage } from './components/EventsPage.tsx';
 import { CirclesPage } from './components/CirclesPage.tsx';
 import { CommandPalette, PaletteAction } from './components/CommandPalette.tsx';
@@ -40,7 +41,7 @@ const MainContent: React.FC = () => {
   const { toggleTheme } = useTheme();
 
   // Navigation tab
-  const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash'>('feed');
+  const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash' | 'profile'>('feed');
 
   // Circle deletion modal state
   const [circleToDelete, setCircleToDelete] = useState<Group | null>(null);
@@ -569,6 +570,7 @@ const MainContent: React.FC = () => {
         onNotificationClick={handleNotificationClick}
         onOpenDuplicates={() => setIsDuplicatesModalOpen(true)}
         onOpenPalette={() => setPaletteOpen(true)}
+        onOpenProfile={() => setCurrentTab('profile')}
         onUserSwitched={() => {
           setSelectedGroupId(undefined);
           fetchGroups();
@@ -723,6 +725,9 @@ const MainContent: React.FC = () => {
 
           {/* TAB: TRASH BIN */}
           {currentTab === 'trash' && <TrashView />}
+
+          {/* TAB: PROFILE & SETTINGS */}
+          {currentTab === 'profile' && <ProfilePage />}
           </div>
 
           {/* Right hand rail — mirrors the nav so the timeline reads centred */}

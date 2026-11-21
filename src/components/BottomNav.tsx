@@ -1,8 +1,8 @@
 import React from 'react';
-import { Home, CalendarDays, Plus, Users, Shield, Trash2 } from 'lucide-react';
+import { Home, CalendarDays, Plus, Users, Shield, Trash2, Settings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 
-type Tab = 'feed' | 'collections' | 'groups' | 'admin' | 'trash';
+type Tab = 'feed' | 'collections' | 'groups' | 'admin' | 'trash' | 'profile';
 
 interface BottomNavProps {
   currentTab: Tab;
@@ -13,6 +13,7 @@ interface BottomNavProps {
 const ICONS = {
   feed: Home,
   collections: CalendarDays,
+  profile: Settings,
   groups: Users,
   admin: Shield,
   trash: Trash2,
@@ -23,9 +24,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, o
 
   if (!user || isPending) return null;
 
-  const last: { id: Tab; label: string } = isAdmin
-    ? { id: 'admin', label: 'Admin' }
-    : { id: 'trash', label: 'Trash' };
+  const last: { id: Tab; label: string } = { id: 'profile', label: 'Profile' };
 
   const left: { id: Tab; label: string }[] = [
     { id: 'feed', label: 'Timeline' },

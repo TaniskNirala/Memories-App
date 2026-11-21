@@ -11,6 +11,13 @@ interface AuthContextType {
   register: (username: string, password: string, displayName: string) => Promise<{ success: boolean; error?: string; isPending?: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  /** Patch the signed-in user's profile and refresh local state */
+  updateProfile: (patch: {
+    displayName?: string;
+    username?: string;
+    avatarColor?: string;
+    currentPassword?: string;
+  }) => Promise<{ success: boolean; error?: string; message?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,6 +30,7 @@ const AuthContext = createContext<AuthContextType>({
   register: async () => ({ success: false }),
   logout: async () => {},
   refreshUser: async () => {},
+  updateProfile: async () => ({ success: false }),
 });
 
 // Sessions live in an httpOnly cookie that scripts cannot read. Remove any token left in
@@ -118,6 +126,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (patch: {
+    displayName?: string;
+    username?: string;
+    avatarColor?: string;
+    currentPassword?: string;
+  }) => {
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { success: false, error: data.error || 'Could not save your profile' };
+      if (data.user) setUser(data.user);
+      return { success: true, message: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Could not save your profile' };
+    }
+  };
+
   const isPending = user?.role === 'pending';
   const isSuspended = user?.status === 'suspended';
   const isAdmin = user?.role === 'admin';
@@ -134,6 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         refreshUser,
+        updateProfile,
       }}
     >
       {children}

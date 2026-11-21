@@ -9,6 +9,19 @@ import { validatePassword, hashPassword, needsRehash, DUMMY_HASH } from '../secu
 import { hashToken } from '../security/tokens.ts';
 import { createSession, clearSessionCookie } from '../security/session.ts';
 
+const PALETTE = [
+  '#f6b544',
+  '#ff7069',
+  '#5eead4',
+  '#9b9bff',
+  '#34d399',
+  '#f472b6',
+  '#38bdf8',
+  '#fb923c',
+  '#a3e635',
+  '#c084fc',
+];
+
 export const authRouter = Router();
 
 // Prune old login attempts on boot (recent failures are kept so a restart cannot reset rate limits)
@@ -215,6 +228,101 @@ authRouter.post('/logout-all', (req: AuthenticatedRequest, res) => {
   run('DELETE FROM sessions WHERE user_id = ?', [req.user.id]);
   clearSessionCookie(res);
   res.json({ success: true });
+});
+
+// Update own profile (display name, username, avatar colour)
+authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+
+  const { displayName, username, avatarColor, currentPassword } = req.body || {};
+  const touchesIdentity = typeof username === 'string' && username.trim().toLowerCase() !== req.user.username;
+
+  // Changing the handle you sign in with is a credential change: prove it is you.
+  if (touchesIdentity) {
+    if (typeof currentPassword !== 'string' || !currentPassword) {
+      return res.status(403).json({ error: 'Enter your current password to change your username' });
+    }
+    const row = queryOne<{ password_hash: string }>('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
+    if (!row || !(await bcrypt.compare(currentPassword, row.password_hash))) {
+      return res.status(403).json({ error: 'Current password is incorrect' });
+    }
+  }
+
+  let nextUsername = req.user.username;
+  if (touchesIdentity) {
+    const clean = String(username).trim().toLowerCase();
+    if (clean.length < 3 || clean.length > 30 || !/^[a-z0-9_-]+$/.test(clean)) {
+      return res.status(400).json({ error: 'Username must be 3-30 characters, alphanumeric with - or _' });
+    }
+    const taken = queryOne<{ id: string }>('SELECT id FROM users WHERE username = ? AND id != ?', [
+      clean,
+      req.user.id,
+    ]);
+    if (taken) {
+      return res.status(409).json({ error: 'That username is already taken' });
+    }
+    nextUsername = clean;
+  }
+
+  let nextDisplayName: string | undefined;
+  if (displayName !== undefined) {
+    if (typeof displayName !== 'string' || !displayName.trim()) {
+      return res.status(400).json({ error: 'Display name cannot be empty' });
+    }
+    if (displayName.trim().length > 60) {
+      return res.status(400).json({ error: 'Display name must be 60 characters or fewer' });
+    }
+    nextDisplayName = displayName.trim();
+  }
+
+  let nextAvatar: string | undefined;
+  if (avatarColor !== undefined) {
+    if (typeof avatarColor !== 'string' || !/^#[0-9a-f]{6}$/i.test(avatarColor)) {
+      return res.status(400).json({ error: 'Pick a valid avatar colour' });
+    }
+    nextAvatar = avatarColor.toLowerCase();
+  }
+
+  if (nextUsername !== req.user.username) {
+    // The username is part of the password-strength check and the login rate-limit key
+    run('UPDATE login_attempts SET username = ? WHERE username = ?', [nextUsername, req.user.username]);
+    run('UPDATE users SET username = ? WHERE id = ?', [nextUsername, req.user.id]);
+  }
+  if (nextDisplayName !== undefined) {
+    run('UPDATE users SET display_name = ? WHERE id = ?', [nextDisplayName, req.user.id]);
+  }
+  if (nextAvatar !== undefined) {
+    run('UPDATE users SET avatar_color = ? WHERE id = ?', [nextAvatar, req.user.id]);
+  }
+
+  const fresh = queryOne<{
+    id: string;
+    username: string;
+    display_name: string;
+    role: string;
+    status: string;
+    avatar_color: string;
+    created_at: string;
+  }>('SELECT * FROM users WHERE id = ?', [req.user.id]);
+
+  if (!fresh) {
+    return res.status(404).json({ error: 'Account not found' });
+  }
+
+  return res.json({
+    success: true,
+    message: nextUsername !== req.user.username ? 'Profile updated — sign in with your new username next time.' : 'Profile updated',
+    user: {
+      id: fresh.id,
+      username: fresh.username,
+      displayName: fresh.display_name,
+      role: fresh.role,
+      status: fresh.status,
+      avatarColor: fresh.avatar_color,
+    },
+  });
 });
 
 // Change own password (requires current password; signs out all other sessions)

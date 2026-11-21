@@ -2,12 +2,16 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 
 interface ThemeContextType {
   isDark: boolean;
+  theme: 'dark' | 'light';
   toggleTheme: () => void;
+  setTheme: (next: 'dark' | 'light') => void;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
   isDark: true,
+  theme: 'dark',
   toggleTheme: () => {},
+  setTheme: () => {},
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -40,9 +44,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [isDark]);
 
   const toggleTheme = () => setIsDark((prev) => !prev);
+  const setTheme = (next: 'dark' | 'light') => setIsDark(next === 'dark');
 
   return (
-    <ThemeContext.Provider value={{ isDark, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDark, theme: isDark ? 'dark' : 'light', toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
   );

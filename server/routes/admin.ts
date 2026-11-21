@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync } from '../db.ts';
-import { saveTursoCredentials, flushTursoWrites } from '../tursoSync.ts';
+import { queryOne, queryAll, run, getDatabaseStatus, triggerDatabaseSync, restoreDatabaseFromCloud, flushNeonWrites } from '../db.ts';
 import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter, getStorageCapabilities } from '../storage/index.ts';
 import { syncStorageToDatabase, repairPostFileKeys } from '../storage/sync.ts';
@@ -74,34 +73,22 @@ adminRouter.post('/db-sync', async (_req: AuthenticatedRequest, res) => {
   }
 });
 
-// Restore all state from Turso Cloud
+// Rebuild the local cache entirely from Neon
 adminRouter.post('/restore-turso', async (_req: AuthenticatedRequest, res) => {
   try {
-    const result = await triggerDatabaseSync();
+    const result = await restoreDatabaseFromCloud();
     await repairPostFileKeys().catch(() => {});
     res.json(result);
   } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to restore database from Turso Cloud' });
+    res.status(500).json({ error: err.message || 'Failed to restore database from Neon' });
   }
 });
 
-// Update and persist Turso credentials
-adminRouter.post('/db-config', async (req: AuthenticatedRequest, res) => {
-  try {
-    const { tursoUrl, tursoToken } = req.body;
-    if (!tursoUrl || !tursoToken) {
-      return res.status(400).json({ error: 'Both Turso URL and Auth Token are required' });
-    }
-    saveTursoCredentials(tursoUrl, tursoToken);
-    const syncResult = await triggerDatabaseSync();
-    res.json({
-      success: true,
-      message: 'Turso credentials saved and database synchronized!',
-      sync: syncResult,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || 'Failed to configure Turso' });
-  }
+// Database credentials are configured via the DATABASE_URL environment variable (Neon)
+adminRouter.post('/db-config', async (_req: AuthenticatedRequest, res) => {
+  res.status(400).json({
+    error: 'The database is configured with the DATABASE_URL environment variable (Neon). Set it in the Render dashboard and redeploy.',
+  });
 });
 
 // Read-only storage backend diagnostics (never exposes secrets or tokens)
@@ -184,7 +171,7 @@ adminRouter.post('/clear-feed', async (_req: AuthenticatedRequest, res) => {
     run('DELETE FROM albums');
     run('PRAGMA foreign_keys = ON');
 
-    await flushTursoWrites().catch(() => {});
+    await flushNeonWrites().catch(() => {});
 
     res.json({
       success: true,
@@ -221,7 +208,7 @@ adminRouter.post('/purge-all-data', async (_req: AuthenticatedRequest, res) => {
     run('DELETE FROM albums');
     run('PRAGMA foreign_keys = ON');
 
-    await flushTursoWrites().catch(() => {});
+    await flushNeonWrites().catch(() => {});
 
     res.json({
       success: true,

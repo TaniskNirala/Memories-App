@@ -70,10 +70,6 @@ export const AdminPanel: React.FC = () => {
   const [showDbModal, setShowDbModal] = useState(false);
   const [dbSyncLoading, setDbSyncLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
-  const [showCredForm, setShowCredForm] = useState(false);
-  const [customTursoUrl, setCustomTursoUrl] = useState('');
-  const [customTursoToken, setCustomTursoToken] = useState('');
-  const [saveCredLoading, setSaveCredLoading] = useState(false);
 
   // Read-only Storage diagnostics state (credentials are strictly server env-only)
   const [storageStatus, setStorageStatus] = useState<
@@ -139,10 +135,10 @@ export const AdminPanel: React.FC = () => {
       const res = await apiFetch('/api/admin/db-sync', { method: 'POST' });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
-        setActionToast({ message: data.message || 'Successfully synced with Turso Cloud!', type: 'success' });
+        setActionToast({ message: data.message || 'Successfully synced with Neon!', type: 'success' });
         fetchDbStatus();
       } else {
-        setActionToast({ message: data.message || 'Turso sync notice updated', type: 'error' });
+        setActionToast({ message: data.message || 'Neon sync notice updated', type: 'error' });
         fetchDbStatus();
       }
     } catch (e: any) {
@@ -159,7 +155,7 @@ export const AdminPanel: React.FC = () => {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         setActionToast({
-          message: data.message || `Successfully restored ${data.totalRestored ?? 'all'} record(s) from Turso Cloud!`,
+          message: data.message || `Successfully restored ${data.totalRestored ?? 'all'} record(s) from Neon!`,
           type: 'success',
         });
         fetchDbStatus();
@@ -167,44 +163,13 @@ export const AdminPanel: React.FC = () => {
         fetchCircles();
         fetchSignups();
       } else {
-        setActionToast({ message: data.message || 'Failed to restore from Turso Cloud', type: 'error' });
+        setActionToast({ message: data.message || 'Failed to restore from Neon', type: 'error' });
         fetchDbStatus();
       }
     } catch (e: any) {
-      setActionToast({ message: e.message || 'Error restoring from Turso Cloud', type: 'error' });
+      setActionToast({ message: e.message || 'Error restoring from Neon', type: 'error' });
     } finally {
       setRestoreLoading(false);
-    }
-  };
-
-  const handleSaveTursoCredentials = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customTursoUrl.trim() || !customTursoToken.trim()) {
-      setActionToast({ message: 'Please provide both Turso URL and Auth Token', type: 'error' });
-      return;
-    }
-    setSaveCredLoading(true);
-    try {
-      const res = await apiFetch('/api/admin/db-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tursoUrl: customTursoUrl.trim(), tursoToken: customTursoToken.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        setActionToast({ message: data.message || 'Turso credentials saved & restored successfully!', type: 'success' });
-        setShowCredForm(false);
-        setCustomTursoToken('');
-        fetchDbStatus();
-        fetchUsers();
-        fetchCircles();
-      } else {
-        setActionToast({ message: data.error || 'Failed to save Turso credentials', type: 'error' });
-      }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Error configuring Turso', type: 'error' });
-    } finally {
-      setSaveCredLoading(false);
     }
   };
 
@@ -511,10 +476,10 @@ export const AdminPanel: React.FC = () => {
                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                   : 'bg-neutral-800 border-neutral-700 text-neutral-400'
               }`}
-              title="Click to view Turso Cloud Database diagnostics & trigger sync"
+              title="Click to view Neon database diagnostics & trigger sync"
             >
               <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.isTursoSynced ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-              <span>{dbStatus.isTursoSynced ? 'Turso Cloud Synced' : dbStatus.tursoConfigured ? 'Turso Sync Status' : 'Local SQLite'}</span>
+              <span>{dbStatus.isTursoSynced ? 'Neon Synced' : dbStatus.tursoConfigured ? 'Neon Sync Status' : 'Local only (no DATABASE_URL)'}</span>
             </button>
           )}
           {storageStatus && (
@@ -1153,7 +1118,7 @@ export const AdminPanel: React.FC = () => {
                 Are you sure you want to <strong>clear all test memories and collections from the feed</strong>?
               </p>
               <p className="text-[11px] text-amber-300 bg-amber-950/40 p-2.5 rounded-xl border border-amber-500/30">
-                This will remove the current feed posts and sync the clean state to Turso so you can start fresh. All user accounts, circles, and stored files are kept completely safe.
+                This will remove the current feed posts and sync the clean state to Neon so you can start fresh. All user accounts, circles, and stored files are kept completely safe.
               </p>
             </div>
 
@@ -1236,7 +1201,7 @@ export const AdminPanel: React.FC = () => {
         </div>
       )}
 
-      {/* Turso Database Diagnostics Modal */}
+      {/* Neon Database Diagnostics Modal */}
       {showDbModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-100"
@@ -1248,7 +1213,7 @@ export const AdminPanel: React.FC = () => {
             <div className="flex items-center justify-between pb-2 border-b border-[var(--border-subtle)]">
               <div className="flex items-center gap-2 font-bold text-sm text-[var(--text-primary)]">
                 <Shield className="w-4 h-4 text-amber-500" />
-                <span>Turso Cloud Database Status</span>
+                <span>Neon Database Status</span>
               </div>
               <button
                 onClick={() => setShowDbModal(false)}
@@ -1272,19 +1237,19 @@ export const AdminPanel: React.FC = () => {
                     }`}
                   >
                     <span className={`w-2 h-2 rounded-full ${dbStatus?.isTursoSynced ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                    {dbStatus?.isTursoSynced ? 'Connected & Synced' : dbStatus?.tursoConfigured ? 'Connecting / Notice' : 'Local SQLite Only'}
+                    {dbStatus?.isTursoSynced ? 'Connected & Synced' : dbStatus?.tursoConfigured ? 'Connecting / Notice' : 'Local only - set DATABASE_URL'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-muted)] font-medium">Turso URL</span>
+                  <span className="text-[var(--text-muted)] font-medium">Neon database</span>
                   <span className="font-mono text-[11px] text-[var(--text-secondary)] truncate max-w-[220px]" title={dbStatus?.tursoUrl || 'Not configured'}>
                     {dbStatus?.tursoUrl || 'Not configured'}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--text-muted)] font-medium">Last Cloud Sync</span>
+                  <span className="text-[var(--text-muted)] font-medium">Last Neon Sync</span>
                   <span className="text-[var(--text-secondary)]">
                     {dbStatus?.lastSync ? new Date(dbStatus.lastSync).toLocaleString() : 'Not yet synced'}
                   </span>
@@ -1307,72 +1272,15 @@ export const AdminPanel: React.FC = () => {
                   <pre className="font-mono whitespace-pre-wrap break-all text-[10px] text-neutral-300">
                     {dbStatus.error}
                   </pre>
-                  {dbStatus.error.includes('SyncNotSupported') && (
-                    <p className="text-[10px] text-amber-300/80">
-                      The server fell back to local storage on boot. Click &quot;Restore from Turso Cloud&quot; below to re-establish the Turso Cloud replica connection.
-                    </p>
-                  )}
-                  {dbStatus.error.includes('Handshake') && (
-                    <p className="text-[10px] text-amber-300/80">
-                      Network handshake timed out. Click &quot;Restore from Turso Cloud&quot; to connect via Turso&apos;s HTTPS REST endpoint.
-                    </p>
-                  )}
                 </div>
               )}
 
-              {/* Collapsible Turso Credentials Settings */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowCredForm(!showCredForm)}
-                  className="text-[11px] text-amber-400 hover:text-amber-300 font-medium underline flex items-center gap-1 cursor-pointer"
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  <span>{showCredForm ? 'Hide Turso Credentials Form' : 'Update / Enter Turso Credentials'}</span>
-                </button>
-
-                {showCredForm && (
-                  <form onSubmit={handleSaveTursoCredentials} className="mt-2.5 p-3 rounded-xl bg-[var(--bg-surface)] border border-[var(--border-subtle)] space-y-2.5">
-                    <div>
-                      <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1">
-                        Turso Database URL
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="libsql://your-db-org.turso.io or https://..."
-                        value={customTursoUrl}
-                        onChange={(e) => setCustomTursoUrl(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-[11px] text-[var(--text-primary)] font-mono outline-none focus:border-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold text-[var(--text-secondary)] mb-1">
-                        Turso Auth Token
-                      </label>
-                      <input
-                        type="password"
-                        placeholder="eyJhbGciOi..."
-                        value={customTursoToken}
-                        onChange={(e) => setCustomTursoToken(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--bg-card)] border border-[var(--border-color)] text-[11px] text-[var(--text-primary)] font-mono outline-none focus:border-amber-500"
-                      />
-                    </div>
-                    <div className="flex justify-end pt-1">
-                      <button
-                        type="submit"
-                        disabled={saveCredLoading}
-                        className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-[11px] transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                      >
-                        {saveCredLoading && <RefreshCw className="w-3 h-3 animate-spin" />}
-                        <span>Save & Restore from Cloud</span>
-                      </button>
-                    </div>
-                  </form>
-                )}
-              </div>
+              <p className="text-[10px] text-[var(--text-muted)] leading-relaxed">
+                Database connection is set with the <span className="font-mono">DATABASE_URL</span> environment variable (Neon). Change it in the Render dashboard and redeploy.
+              </p>
 
               <p className="text-[11px] text-[var(--text-muted)] leading-relaxed">
-                When restored and synced, all your accounts, permanent permissions, friend circles, photos, captions, and albums are fetched directly from Turso Cloud.
+                When restored and synced, all your accounts, permanent permissions, friend circles, photos, captions, and albums are fetched directly from Neon.
               </p>
             </div>
 
@@ -1392,7 +1300,7 @@ export const AdminPanel: React.FC = () => {
                 className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-[var(--bg-surface)] hover:bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] text-[var(--text-primary)] transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {dbSyncLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>Sync Cloud Database</span>
+                <span>Sync with Neon</span>
               </button>
               <button
                 type="button"
@@ -1405,7 +1313,7 @@ export const AdminPanel: React.FC = () => {
                 ) : (
                   <Download className="w-3.5 h-3.5" />
                 )}
-                <span>{restoreLoading ? 'Restoring from Turso...' : 'Restore All Data from Turso Cloud'}</span>
+                <span>{restoreLoading ? 'Restoring from Neon...' : 'Rebuild Cache from Neon'}</span>
               </button>
             </div>
           </div>

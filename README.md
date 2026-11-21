@@ -1,5 +1,10 @@
 # Kinfolk Memories 🌿
 
+> **Database update:** the app now stores all data in **Neon PostgreSQL** (`DATABASE_URL`), with tables created
+> automatically on boot. See [NEON_SETUP.md](./NEON_SETUP.md) for the Render environment changes.
+> (Older sections of this README that mention SQLite/sql.js describe the local read cache or earlier versions.)
+
+
 A private, zero-quota memory and photo sharing web app engineered for 6 to 10 close friends. Designed for free hosting on Render (with ephemeral disk) using Supabase/Neon PostgreSQL and Cloudflare R2 / S3-compatible object storage, while running seamlessly offline or locally with pure SQLite and local-disk storage.
 
 ---

@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# local SQLite cache (Neon is the real database)
+data/*.sqlite
+data/*.sqlite-*
+uploads/

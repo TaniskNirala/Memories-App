@@ -2,73 +2,107 @@ import Database from 'libsql';
 import fs from 'fs';
 import path from 'path';
 import {
-  getTursoCredentials,
-  normalizeTursoUrl,
-  restoreAllFromTurso,
-  pushAllLocalToTurso,
-  syncWithTursoCloud,
-  pushWriteToTurso,
-  flushTursoWrites,
-  shouldForwardToTurso,
-} from './tursoSync.ts';
+  isNeonConfigured,
+  getMaskedNeonTarget,
+  connectNeon,
+  countNeonRows,
+  restoreAllFromNeon,
+  pushAllLocalToNeon,
+  pushWriteToNeon,
+  flushNeonWrites,
+  shouldForwardToNeon,
+  getWriteStats,
+} from './neon.ts';
+
+/**
+ * Database architecture
+ * ---------------------
+ *  - Neon PostgreSQL (DATABASE_URL) is the durable source of truth.
+ *  - A local SQLite file/cache serves fast synchronous reads for the whole app.
+ *  - Every INSERT / UPDATE / DELETE goes to the local cache AND is queued, in order, to Neon.
+ *  - On every boot the Neon tables are created automatically and the cache is rebuilt from Neon,
+ *    so a restart, redeploy or a login from a new device always sees the same data.
+ *  - Without DATABASE_URL the app runs on local SQLite only (development).
+ */
 
 let dbInstance: any = null;
-let isTursoSynced = false;
+let initPromise: Promise<any> | null = null;
+let isCloudSynced = false;
 let lastSyncTimestamp: string | null = null;
-let tursoSyncError: string | null = null;
+let cloudSyncError: string | null = null;
 
 function getDbFilePath(): string {
   const dir = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
   return process.env.DB_PATH || path.join(dir, 'kinfolk.sqlite');
 }
 
-export async function getDb(): Promise<any> {
-  if (dbInstance) return dbInstance;
+function localCount(db: any, table: string): number {
+  try {
+    return db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get()?.count || 0;
+  } catch {
+    return 0;
+  }
+}
 
+async function initDb(): Promise<any> {
   const dbFile = getDbFilePath();
   const targetDir = path.dirname(dbFile);
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
 
-  // Open local SQLite database
-  dbInstance = new Database(dbFile);
-  initSchema(dbInstance);
+  const local = new Database(dbFile);
+  initSchema(local);
 
-  const { url: tursoUrl, token: tursoToken } = getTursoCredentials();
+  if (isNeonConfigured()) {
+    console.log(`🔌 [Neon] Connecting to ${getMaskedNeonTarget()} ...`);
+    // Throws (and stops the boot) if Neon is unreachable: starting with an empty cache would
+    // look like data loss, and we must never write over Neon from a stale/empty copy.
+    await connectNeon();
 
-  if (tursoUrl && tursoToken) {
-    const normalizedUrl = normalizeTursoUrl(tursoUrl);
-    console.log(`🔌 Turso Cloud Database detected (${normalizedUrl}). Synchronizing state...`);
+    const neonUsers = await countNeonRows('users');
+    const localUsers = localCount(local, 'users');
 
-    try {
-      // Safe restore merges cloud state without wiping local records
-      const restoreResult = await restoreAllFromTurso(dbInstance, { clearLocalFirst: false });
-      if (restoreResult.success) {
-        isTursoSynced = true;
-        lastSyncTimestamp = new Date().toISOString();
-        tursoSyncError = null;
-        console.log(`✅ Successfully restored and synchronized with Turso Cloud! (${restoreResult.totalRestored} records)`);
-      } else {
-        console.warn('⚠️ Turso Cloud restore notice on boot:', restoreResult.error);
-        tursoSyncError = restoreResult.error || 'Restore notice';
-        isTursoSynced = false;
-      }
-    } catch (err: any) {
-      console.error('❌ Failed to restore from Turso Cloud on boot:', err.message || err);
-      tursoSyncError = err.message || String(err);
-      isTursoSynced = false;
+    if (neonUsers === 0 && localUsers > 0) {
+      // First ever boot on Neon: migrate whatever the local database file already contains.
+      console.log(`🚚 [Neon] Neon is empty - migrating ${localUsers} existing local user(s) and their data into Neon...`);
+      const pushed = await pushAllLocalToNeon(local);
+      if (!pushed.success) throw new Error(`Initial migration to Neon failed: ${pushed.error}`);
+    } else {
+      const restored = await restoreAllFromNeon(local, { clearLocalFirst: true });
+      if (!restored.success) throw new Error(`Restore from Neon failed: ${restored.error}`);
     }
+
+    isCloudSynced = true;
+    lastSyncTimestamp = new Date().toISOString();
+    cloudSyncError = null;
   } else {
-    console.log(`📂 Using local SQLite database at ${dbFile} (Turso credentials not configured)`);
-    isTursoSynced = false;
+    console.warn(
+      '⚠️  [DB] DATABASE_URL is not set - using LOCAL SQLite only. Data will be LOST when the server restarts on ephemeral hosting (Render). Set DATABASE_URL to your Neon connection string.'
+    );
   }
 
-  return dbInstance;
+  try {
+    local.exec('PRAGMA foreign_keys = ON;');
+  } catch {}
+
+  dbInstance = local;
+  return local;
+}
+
+export async function getDb(): Promise<any> {
+  if (dbInstance) return dbInstance;
+  if (!initPromise) {
+    initPromise = initDb().catch((err) => {
+      initPromise = null;
+      throw err;
+    });
+  }
+  return initPromise;
 }
 
 export function saveDb(): void {
-  // Local writes are persistent via libsql/sqlite WAL mode.
+  // Local writes are persistent via SQLite; durable copy is mirrored to Neon by run().
 }
 
 export function getDatabaseStatus(): {
@@ -80,39 +114,34 @@ export function getDatabaseStatus(): {
   userCount: number;
   postCount: number;
   albumCount: number;
+  provider: 'neon' | 'sqlite';
+  pendingWrites: number;
+  failedWrites: number;
+  lastWriteOkAt: string | null;
 } {
-  const { url } = getTursoCredentials();
-  let userCount = 0;
-  let postCount = 0;
-  let albumCount = 0;
-
-  if (dbInstance) {
-    try {
-      const u = dbInstance.prepare('SELECT COUNT(*) as count FROM users').get();
-      userCount = u?.count || 0;
-    } catch {}
-    try {
-      const p = dbInstance.prepare('SELECT COUNT(*) as count FROM posts WHERE deleted_at IS NULL').get();
-      postCount = p?.count || 0;
-    } catch {}
-    try {
-      const a = dbInstance.prepare('SELECT COUNT(*) as count FROM albums WHERE deleted_at IS NULL').get();
-      albumCount = a?.count || 0;
-    } catch {}
-  }
-
+  const stats = getWriteStats();
   return {
-    isTursoSynced,
-    tursoConfigured: Boolean(url),
+    // (field names kept for the existing admin UI; they now describe Neon)
+    isTursoSynced: isCloudSynced && stats.failedWrites === 0,
+    tursoConfigured: isNeonConfigured(),
     lastSync: lastSyncTimestamp,
-    error: tursoSyncError,
-    tursoUrl: url ? normalizeTursoUrl(url) : null,
-    userCount,
-    postCount,
-    albumCount,
+    error: cloudSyncError || stats.lastWriteError,
+    tursoUrl: getMaskedNeonTarget(),
+    userCount: dbInstance ? localCount(dbInstance, 'users') : 0,
+    postCount: dbInstance
+      ? (dbInstance.prepare('SELECT COUNT(*) as count FROM posts WHERE deleted_at IS NULL').get()?.count || 0)
+      : 0,
+    albumCount: dbInstance
+      ? (dbInstance.prepare('SELECT COUNT(*) as count FROM albums WHERE deleted_at IS NULL').get()?.count || 0)
+      : 0,
+    provider: isNeonConfigured() ? 'neon' : 'sqlite',
+    pendingWrites: stats.pendingWrites,
+    failedWrites: stats.failedWrites,
+    lastWriteOkAt: stats.lastWriteOkAt,
   };
 }
 
+/** Admin "Sync" button: flush pending writes and re-push the local cache to Neon (idempotent upserts). */
 export async function triggerDatabaseSync(): Promise<{
   success: boolean;
   message: string;
@@ -121,54 +150,72 @@ export async function triggerDatabaseSync(): Promise<{
   counts?: Record<string, number>;
   status: any;
 }> {
-  if (!dbInstance) {
-    throw new Error('Database not initialized');
-  }
-  const { url: tursoUrl, token: tursoToken } = getTursoCredentials();
-  if (!tursoUrl || !tursoToken) {
+  if (!dbInstance) throw new Error('Database not initialized');
+  if (!isNeonConfigured()) {
     return {
       success: false,
-      message: 'TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be configured in environment variables or Admin Settings.',
+      message: 'DATABASE_URL (Neon) is not configured. Add it in the Render environment variables.',
       status: getDatabaseStatus(),
     };
   }
-
   try {
-    console.log(`🔄 Performing bidirectional sync with Turso Cloud...`);
-    const syncResult = await syncWithTursoCloud(dbInstance);
-
-    if (syncResult.success) {
-      isTursoSynced = true;
+    await flushNeonWrites();
+    const res = await pushAllLocalToNeon(dbInstance);
+    if (res.success) {
+      isCloudSynced = true;
       lastSyncTimestamp = new Date().toISOString();
-      tursoSyncError = null;
+      cloudSyncError = null;
       return {
         success: true,
-        message: `Successfully synchronized with Turso Cloud! (Pushed: ${syncResult.totalPushed}, Restored: ${syncResult.totalRestored})`,
-        totalPushed: syncResult.totalPushed,
-        totalRestored: syncResult.totalRestored,
-        status: getDatabaseStatus(),
-      };
-    } else {
-      tursoSyncError = syncResult.error || 'Sync failed';
-      isTursoSynced = false;
-      return {
-        success: false,
-        message: `Turso Cloud sync failed: ${syncResult.error}`,
+        message: `Synchronized with Neon (${res.totalPushed} row(s) verified)`,
+        totalPushed: res.totalPushed,
+        counts: res.counts,
         status: getDatabaseStatus(),
       };
     }
+    cloudSyncError = res.error || 'Sync failed';
+    return { success: false, message: `Neon sync failed: ${res.error}`, status: getDatabaseStatus() };
   } catch (err: any) {
-    tursoSyncError = err.message || String(err);
-    isTursoSynced = false;
-    return {
-      success: false,
-      message: `Turso sync exception: ${err.message || err}`,
-      status: getDatabaseStatus(),
-    };
+    cloudSyncError = err?.message || String(err);
+    return { success: false, message: `Neon sync exception: ${cloudSyncError}`, status: getDatabaseStatus() };
   }
 }
 
-export { restoreAllFromTurso, pushAllLocalToTurso, flushTursoWrites };
+/** Admin "Restore" button: discard the local cache and rebuild it entirely from Neon. */
+export async function restoreDatabaseFromCloud(): Promise<{
+  success: boolean;
+  message: string;
+  totalRestored?: number;
+  counts?: Record<string, number>;
+  status: any;
+}> {
+  if (!dbInstance) throw new Error('Database not initialized');
+  if (!isNeonConfigured()) {
+    return {
+      success: false,
+      message: 'DATABASE_URL (Neon) is not configured. Add it in the Render environment variables.',
+      status: getDatabaseStatus(),
+    };
+  }
+  await flushNeonWrites();
+  const res = await restoreAllFromNeon(dbInstance, { clearLocalFirst: true });
+  if (res.success) {
+    isCloudSynced = true;
+    lastSyncTimestamp = new Date().toISOString();
+    cloudSyncError = null;
+    return {
+      success: true,
+      message: `Restored ${res.totalRestored} record(s) from Neon`,
+      totalRestored: res.totalRestored,
+      counts: res.counts,
+      status: getDatabaseStatus(),
+    };
+  }
+  cloudSyncError = res.error || 'Restore failed';
+  return { success: false, message: `Restore from Neon failed: ${res.error}`, status: getDatabaseStatus() };
+}
+
+export { flushNeonWrites };
 
 function cleanRow<T = any>(row: any): T {
   if (!row || typeof row !== 'object') return row;
@@ -203,9 +250,9 @@ export function run(sql: string, params: any[] = []): void {
   }
   saveDb();
 
-  // Forward data mutation to Turso Cloud for permanent persistence
-  if (shouldForwardToTurso(sql)) {
-    pushWriteToTurso(sql, params);
+  // Mirror every data mutation to Neon (ordered queue, flushed before the HTTP response ends)
+  if (shouldForwardToNeon(sql)) {
+    pushWriteToNeon(sql, params);
   }
 }
 

@@ -6,6 +6,7 @@ import { PassThrough } from 'stream';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb } from './server/db.ts';
+import { flushNeonWrites, closeNeon } from './server/neon.ts';
 import { seedDatabase } from './server/seed.ts';
 import { authMiddleware } from './server/middleware/auth.ts';
 import { LocalDiskStorageAdapter } from './server/storage/local.ts';
@@ -56,6 +57,21 @@ export async function createApp() {
   });
 
   app.use(cookieParser());
+
+  // Durability guarantee: for every write request (POST/PUT/PATCH/DELETE) the response is only
+  // sent after all queued database writes have been committed to Neon. When the browser sees
+  // "success", the data is already permanently stored.
+  app.use((req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    const originalEnd = res.end.bind(res) as (...args: any[]) => any;
+    (res as any).end = (...args: any[]) => {
+      flushNeonWrites()
+        .catch(() => {})
+        .finally(() => originalEnd(...args));
+      return res;
+    };
+    next();
+  });
   // No size limits on requests
   app.use(express.json({ limit: '500mb' }));
   app.use(express.urlencoded({ extended: true, limit: '500mb' }));
@@ -401,7 +417,7 @@ export async function createApp() {
 
 async function startServer() {
   const app = await createApp();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   const distDir = path.resolve(__dirname, 'dist');
   const distIndexHtml = path.join(distDir, 'index.html');
@@ -428,6 +444,9 @@ async function startServer() {
   });
 
   const gracefulShutdown = async () => {
+    try {
+      await closeNeon(); // flush any pending database writes to Neon before exiting
+    } catch {}
     try {
       await getStorageAdapter().disconnect?.();
     } catch {}

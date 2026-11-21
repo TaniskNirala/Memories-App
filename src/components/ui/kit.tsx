@@ -433,7 +433,7 @@ export const PageHero: React.FC<{
         className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
         style={{ background: 'linear-gradient(90deg, transparent, var(--border-color), transparent)' }}
       />
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="min-w-0">
           {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
           <h1 className="font-display text-[1.6rem] leading-[1.12] tracking-tight sm:text-[2rem]">{title}</h1>

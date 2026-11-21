@@ -682,6 +682,8 @@ const MainContent: React.FC = () => {
         />
 
         <main className="min-w-0 flex-1">
+          {/* Feed pages ride a centred column beside the nav; other tabs stay full width */}
+          <div className={currentTab === 'feed' ? 'mx-auto w-full max-w-[820px]' : ''}>
           {currentTab === 'feed' && (
             <div className="mb-4">
               <HeroBand
@@ -755,6 +757,7 @@ const MainContent: React.FC = () => {
               )}
             </div>
           )}
+          </div>
 
           {/* TAB: EVENTS */}
           {currentTab === 'collections' && (

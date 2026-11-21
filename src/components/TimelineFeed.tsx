@@ -400,11 +400,15 @@ const MonthMarker: React.FC<{ label: string; count: number; people: number }> = 
 );
 
 /* ---------------------------------------------------------------------------
-   Day node that sits on the vertical rail
+   Day marker that sits on the spine — carries the day number itself
    --------------------------------------------------------------------------- */
 
 const DayNode: React.FC<{ date?: string; color: string }> = ({ date, color }) => (
-  <div className="tl-dot" style={{ background: color, color }}>
+  <div
+    className="tl-day-node"
+    style={{ color, borderColor: `color-mix(in oklab, ${color} 55%, var(--border-color))` }}
+  >
+    <span>{dayNumber(date)}</span>
     <span className="sr-only">{date || 'memory'}</span>
   </div>
 );
@@ -1048,9 +1052,13 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   const dateOf = (item: FeedItem) =>
     item.type === 'single_post' ? item.takenAt : item.eventDate || item.sortDate;
 
-  /* month sections, newest month first */
+  /* month sections → day clusters inside each month, newest first */
   const sections = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; sort: number; items: FeedItem[] }>();
+    type DayCluster = { key: string; date?: string; items: FeedItem[] };
+    const months = new Map<
+      string,
+      { key: string; label: string; sort: number; items: FeedItem[]; days: Map<string, DayCluster> }
+    >();
 
     for (const item of items) {
       const raw = item.type === 'single_post' ? item.takenAt : item.eventDate || item.sortDate;
@@ -1059,11 +1067,23 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
       const key = valid ? `${d!.getFullYear()}-${String(d!.getMonth()).padStart(2, '0')}` : 'undated';
       const label = valid ? monthYearLabel(d) : 'Undated memories';
       const sort = valid ? d!.getFullYear() * 12 + d!.getMonth() : -1;
-      if (!map.has(key)) map.set(key, { key, label, sort, items: [] });
-      map.get(key)!.items.push(item);
+      if (!months.has(key)) months.set(key, { key, label, sort, items: [], days: new Map() });
+      const month = months.get(key)!;
+      month.items.push(item);
+
+      const dayKey = valid ? d!.toISOString().slice(0, 10) : 'undated';
+      if (!month.days.has(dayKey)) month.days.set(dayKey, { key: dayKey, date: valid ? raw : undefined, items: [] });
+      month.days.get(dayKey)!.items.push(item);
     }
 
-    return Array.from(map.values()).sort((a, b) => b.sort - a.sort);
+    return Array.from(months.values())
+      .sort((a, b) => b.sort - a.sort)
+      .map((m) => ({
+        key: m.key,
+        label: m.label,
+        items: m.items,
+        days: Array.from(m.days.values()).sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0)),
+      }));
   }, [items]);
 
   const quote = useMemo(() => {
@@ -1216,6 +1236,32 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     }
   };
 
+
+  /** "Wed" for the day chip in the rail header */
+  const weekdayLabel = (value?: string) => {
+    const d = value ? new Date(value) : null;
+    if (!d || Number.isNaN(d.getTime())) return 'Undated';
+    return d.toLocaleDateString([], { weekday: 'short' });
+  };
+
+  /** the person who owns most of a day's memories — tints the spine node */
+  const dayOwnerName = (dayItems: FeedItem[]) => {
+    const counts = new Map<string, number>();
+    for (const i of dayItems) {
+      const name = i.type === 'single_post' ? i.owner.displayName : i.creator.displayName;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    let best = '';
+    let bestN = 0;
+    counts.forEach((n, name) => {
+      if (n > bestN) {
+        best = name;
+        bestN = n;
+      }
+    });
+    return best;
+  };
+
   return (
     <div className="relative">
       {/* toast */}
@@ -1254,19 +1300,23 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
         )
       ) : (
         <>
-          {/* Timeline summary strip */}
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/40 px-3.5 py-2">
-            <span className="flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-              <Layers className="h-3.5 w-3.5 text-[var(--accent-amber)]" />
-              {plural(quote.total, 'memory', 'memories')}
-              <Dot />
-              {plural(quote.authors, 'contributor')}
-              <Dot />
-              {plural(sections.length, 'chapter')}
-            </span>
-            <span className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[var(--text-muted)]">
-              newest → oldest
-            </span>
+          {/* Timeline summary band */}
+          <div className="tl-summary">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span className="tl-summary-icon">
+                <Layers className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="tl-summary-title truncate">
+                  {quote.total === 1 ? '1 memory' : `${quote.total} memories`} on the rail
+                </p>
+                <p className="tl-summary-sub truncate">
+                  {plural(quote.authors, 'contributor')} · {plural(sections.length, 'chapter')} ·{' '}
+                  {plural(sections.reduce((n, sec) => n + sec.days.length, 0), 'day')}
+                </p>
+              </div>
+            </div>
+            <span className="tl-summary-order">newest → oldest</span>
           </div>
 
           <div className="tl-root">
@@ -1278,109 +1328,103 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
               ).size;
 
               return (
-                <section key={section.key} className="mb-9">
+                <section key={section.key} className="tl-section">
                   <MonthMarker label={section.label} count={section.items.length} people={people} />
 
-                  <div className="tl-items space-y-6">
-                    {section.items.map((item) => {
-                      const accent =
-                        item.type === 'single_post'
-                          ? accentFromName(item.owner.displayName)
-                          : 'var(--accent-coral)';
-                      const dateStr = dateOf(item);
-                      const ownerId = item.type === 'single_post' ? item.owner.id : item.creator.id;
-                      const canManage = user?.id === ownerId || user?.role === 'admin';
-
-                      return (
-                        <div key={item.id} className="tl-item">
-                          <DayNode date={dateStr} color={accent} />
-
-                          {/* Day chip above card — gives the rail a real rhythm */}
-                          <div className="mb-1.5 flex items-center gap-2 pl-0.5">
-                            <span
-                              className="inline-flex items-baseline gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold"
-                              style={{
-                                color: accent,
-                                borderColor: `color-mix(in oklab, ${accent} 32%, transparent)`,
-                                background: `color-mix(in oklab, ${accent} 10%, transparent)`,
-                              }}
-                            >
-                              <span className="text-[11px] font-bold">{dayNumber(dateStr)}</span>
-                              <span className="uppercase tracking-[0.1em]">{monthShort(dateStr)}</span>
-                            </span>
-                            {item.type === 'single_post' && item.files.length > 1 && (
-                              <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-[var(--text-muted)]">
-                                {item.files.length} media
-                              </span>
-                            )}
-                          </div>
-
-                          {item.type === 'single_post' ? (
-                            item.isLockedPlaceholder ? (
-                              <div className="card relative overflow-hidden p-5 text-center">
-                                <div className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-500/35 bg-amber-500/12 text-[var(--accent-amber)]">
-                                  <Lock className="h-5 w-5" />
-                                </div>
-                                <p className="font-display text-sm">Locked memory</p>
-                                <p className="mx-auto mt-1 max-w-xs text-[11px] leading-relaxed text-[var(--text-muted)]">
-                                  {item.lockedReason ||
-                                    `${item.owner.displayName} hasn’t approved sharing this into this circle yet.`}
-                                </p>
-                              </div>
-                            ) : (
-                              <MemoryCard
-                                item={item}
-                                groups={groups}
-                                selectedGroupId={selectedGroupId}
-                                open={openOptionsMenuId === item.id}
-                                onToggleOptions={() =>
-                                  setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
-                                }
-                                closeOptions={() => setOpenOptionsMenuId(null)}
-                                onOpenViewer={onOpenViewer}
-                                onOpenComments={onOpenComments}
-                                onOpenCollection={onOpenCollection}
-                                onShare={handleShareClick}
-                                sharing={sharingLoadingId === item.id}
-                                onEdit={() =>
-                                  setEditItem({
-                                    id: item.id,
-                                    caption: item.caption || '',
-                                    takenAt: item.takenAt
-                                      ? new Date(item.takenAt).toISOString().slice(0, 10)
-                                      : new Date().toISOString().slice(0, 10),
-                                  })
-                                }
-                                onConvert={() => openConvert(item)}
-                                onPermissions={() => setPermissionsItem(item)}
-                                onDelete={() => setDeleteConfirmItem(item)}
-                                onReport={() => setReportItem(item)}
-                                onRemoveFromCircle={(gid) => handleRemoveFromCircle(item, gid)}
-                                isDeleteProtected={isDeleteProtected}
-                              />
-                            )
-                          ) : (
-                            <EventCard
-                              item={item}
-                              onOpenCollection={onOpenCollection}
-                              onOpenComments={onOpenComments}
-                              onConvert={() => openConvert(item)}
-                              onPermissions={() => setPermissionsItem(item)}
-                              onDelete={() => setDeleteConfirmItem(item)}
-                              onEditEvent={() => openConvert(item)}
-                              open={openOptionsMenuId === item.id}
-                              onToggleOptions={() =>
-                                setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
-                              }
-                              closeOptions={() => setOpenOptionsMenuId(null)}
-                              isDeleteProtected={isDeleteProtected}
-                              canManage={canManage}
-                            />
-                          )}
+                  {section.days.map((day) => {
+                    const dayCount = day.items.length;
+                    return (
+                      <div key={day.key} className="tl-day">
+                        <div className="tl-day-head">
+                          <span className="tl-day-weekday">{weekdayLabel(day.date)}</span>
+                          <span className="tl-day-count">
+                            {dayCount === 1 ? '1 memory' : `${dayCount} memories`}
+                          </span>
+                          <span className="tl-day-rule" aria-hidden />
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        <div className="tl-day-cards">
+                          {day.items.map((item) => {
+                            const accent =
+                              item.type === 'single_post'
+                                ? accentFromName(item.owner.displayName)
+                                : 'var(--accent-coral)';
+                            const ownerId = item.type === 'single_post' ? item.owner.id : item.creator.id;
+                            const canManage = user?.id === ownerId || user?.role === 'admin';
+
+                            return (
+                              <div key={item.id} className="tl-entry">
+                                {item.type === 'single_post' ? (
+                                  item.isLockedPlaceholder ? (
+                                    <div className="card relative overflow-hidden p-5 text-center">
+                                      <div className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-2xl border border-amber-500/35 bg-amber-500/12 text-[var(--accent-amber)]">
+                                        <Lock className="h-5 w-5" />
+                                      </div>
+                                      <p className="font-display text-sm">Locked memory</p>
+                                      <p className="mx-auto mt-1 max-w-xs text-[11px] leading-relaxed text-[var(--text-muted)]">
+                                        {item.lockedReason ||
+                                          `${item.owner.displayName} hasn’t approved sharing this into this circle yet.`}
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    <MemoryCard
+                                      item={item}
+                                      groups={groups}
+                                      selectedGroupId={selectedGroupId}
+                                      open={openOptionsMenuId === item.id}
+                                      onToggleOptions={() =>
+                                        setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
+                                      }
+                                      closeOptions={() => setOpenOptionsMenuId(null)}
+                                      onOpenViewer={onOpenViewer}
+                                      onOpenComments={onOpenComments}
+                                      onOpenCollection={onOpenCollection}
+                                      onShare={handleShareClick}
+                                      sharing={sharingLoadingId === item.id}
+                                      onEdit={() =>
+                                        setEditItem({
+                                          id: item.id,
+                                          caption: item.caption || '',
+                                          takenAt: item.takenAt
+                                            ? new Date(item.takenAt).toISOString().slice(0, 10)
+                                            : new Date().toISOString().slice(0, 10),
+                                        })
+                                      }
+                                      onConvert={() => openConvert(item)}
+                                      onPermissions={() => setPermissionsItem(item)}
+                                      onDelete={() => setDeleteConfirmItem(item)}
+                                      onReport={() => setReportItem(item)}
+                                      onRemoveFromCircle={(gid) => handleRemoveFromCircle(item, gid)}
+                                      isDeleteProtected={isDeleteProtected}
+                                    />
+                                  )
+                                ) : (
+                                  <EventCard
+                                    item={item}
+                                    onOpenCollection={onOpenCollection}
+                                    onOpenComments={onOpenComments}
+                                    onConvert={() => openConvert(item)}
+                                    onPermissions={() => setPermissionsItem(item)}
+                                    onDelete={() => setDeleteConfirmItem(item)}
+                                    onEditEvent={() => openConvert(item)}
+                                    open={openOptionsMenuId === item.id}
+                                    onToggleOptions={() =>
+                                      setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
+                                    }
+                                    closeOptions={() => setOpenOptionsMenuId(null)}
+                                    isDeleteProtected={isDeleteProtected}
+                                    canManage={canManage}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <DayNode date={day.date} color={accentFromName(dayOwnerName(day.items))} />
+                      </div>
+                    );
+                  })}
                 </section>
               );
             })}

@@ -149,10 +149,11 @@ export const Header: React.FC<HeaderProps> = ({
               className="group flex min-w-0 shrink-0 items-center gap-2 text-[var(--text-primary)] transition hover:opacity-95"
               aria-label="Nest home"
             >
-              <span className="relative flex h-8 w-8 items-center justify-center overflow-hidden rounded-[11px] border border-[var(--border-color)] bg-[var(--bg-surface)]">
-                <span aria-hidden className="absolute inset-0 opacity-85" style={{ background: 'var(--gradient-ember)' }} />
-                <img src="/icon.svg" alt="" className="relative z-10 h-4 w-4 drop-shadow" />
-              </span>
+              <img
+                src="/icon.svg"
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-[11px] shadow-[0_6px_16px_-10px_rgba(249,101,95,0.9)]"
+              />
               <span className="hidden font-display text-[1.05rem] font-bold leading-none tracking-tight sm:block">Nest</span>
             </a>
 

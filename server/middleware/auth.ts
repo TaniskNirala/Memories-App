@@ -11,6 +11,8 @@ export interface AuthenticatedUser {
   role: 'admin' | 'member' | 'pending';
   status: 'active' | 'suspended';
   avatarColor: string;
+  /** Uploaded profile photo URL, resolved from the stored storage key */
+  avatarUrl?: string;
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -52,8 +54,9 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
       role: string;
       status: string;
       avatar_color: string;
+      avatar_url: string | null;
     }>(
-      'SELECT id, username, display_name, role, status, avatar_color FROM users WHERE id = ?',
+      'SELECT id, username, display_name, role, status, avatar_color, avatar_url FROM users WHERE id = ?',
       [session.user_id]
     );
 
@@ -65,6 +68,9 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
         role: user.role as any,
         status: user.status as any,
         avatarColor: user.avatar_color || '#f59e0b',
+        avatarUrl: user.avatar_url
+          ? `/api/storage/view?key=${encodeURIComponent(user.avatar_url)}`
+          : undefined,
       };
       req.token = token;
 

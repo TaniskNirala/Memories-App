@@ -36,6 +36,8 @@ function alternateKeys(key: string): string[] {
  * Per-file authorization for session users:
  *  - admins can read everything
  *  - owners can read anything under posts/<their id>/
+ *  - profile photos are public to signed-in members (they appear beside every
+ *    comment, member list and timeline card)
  *  - everyone else needs a post that references this file AND that they may view
  */
 export function canAccessStorageKey(viewer: Viewer, rawKey: string): boolean {
@@ -46,6 +48,9 @@ export function canAccessStorageKey(viewer: Viewer, rawKey: string): boolean {
   if (!key || key.includes('..')) return false;
 
   if (key.startsWith(`posts/${viewer.id}/`)) return true;
+
+  // Profile photos: readable by any active member, writable only via /api/auth/avatar
+  if (key.startsWith('avatars/')) return true;
 
   const candidates = alternateKeys(key);
   const placeholders = candidates.map(() => '?').join(',');

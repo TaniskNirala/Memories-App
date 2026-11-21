@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Lock,
   User,
@@ -26,6 +26,14 @@ import { useTheme } from '../context/ThemeContext.tsx';
 export const AuthScreen: React.FC = () => {
   const { login, register } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+
+  /* `.auth-page` holds the softer pattern tokens, but `body::after` reads them
+     from <body> — so the class only works when it lands on the body itself.
+     This flag also lets the login page keep its own finer pattern density. */
+  useEffect(() => {
+    document.body.classList.add('auth-page');
+    return () => document.body.classList.remove('auth-page');
+  }, []);
 
   const initialResetToken = (() => {
     try {

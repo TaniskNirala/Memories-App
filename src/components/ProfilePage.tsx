@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   User as UserIcon,
   AtSign,
@@ -11,6 +11,8 @@ import {
   Trash2,
   ArrowRight,
   BellRing,
+  ImagePlus,
+  X,
 } from 'lucide-react';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
@@ -38,7 +40,7 @@ const PALETTE = [
 ];
 
 export const ProfilePage: React.FC = () => {
-  const { user, logout, refreshUser, updateProfile } = useAuth();
+  const { user, logout, refreshUser, updateProfile, uploadAvatar, removeAvatar } = useAuth();
   const { theme, setTheme } = useTheme();
 
   /* ---------------------------------------------------------------- profile */
@@ -54,6 +56,38 @@ export const ProfilePage: React.FC = () => {
     setUsername(user?.username || '');
     setAvatarColor(user?.avatarColor || PALETTE[0]);
   }, [user?.id, user?.displayName, user?.username, user?.avatarColor]);
+
+  /* ---------------------------------------------------------------- avatar */
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+
+  const handleAvatarUpload = async (file: File) => {
+    setAvatarMsg(null);
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setAvatarMsg({ tone: 'error', text: 'Pick a PNG, JPEG or WebP image' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarMsg({ tone: 'error', text: 'That image is larger than 2 MB' });
+      return;
+    }
+    setAvatarBusy(true);
+    const res = await uploadAvatar(file);
+    setAvatarBusy(false);
+    setAvatarMsg(
+      res.success ? { tone: 'ok', text: 'Profile photo updated' } : { tone: 'error', text: res.error || 'Upload failed' }
+    );
+  };
+
+  const handleAvatarRemove = async () => {
+    setAvatarBusy(true);
+    const res = await removeAvatar();
+    setAvatarBusy(false);
+    setAvatarMsg(
+      res.success ? { tone: 'ok', text: 'Photo removed — using your initials' } : { tone: 'error', text: res.error || 'Could not remove' }
+    );
+  };
 
   const usernameChanged = username.trim().toLowerCase() !== (user?.username || '');
   const profileDirty =
@@ -196,6 +230,65 @@ export const ProfilePage: React.FC = () => {
         </div>
 
         <div className="space-y-3.5 p-4">
+          {/* profile photo */}
+          <div className="flex flex-wrap items-center gap-3.5 rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/45 p-3">
+            <div className="relative">
+              <Avatar name={previewName} color={previewColor} src={user?.avatarUrl} size={64} ring />
+              {avatarBusy && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/45">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                </span>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11.5px] font-bold">Profile photo</p>
+              <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--text-muted)]">
+                PNG, JPEG or WebP up to 2 MB. Falls back to your colour initials.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleAvatarUpload(f);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarBusy}
+                  className="btn btn-soft btn-sm"
+                >
+                  <ImagePlus className="h-3.5 w-3.5" />
+                  {user?.avatarUrl ? 'Replace photo' : 'Upload photo'}
+                </button>
+                {user?.avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => void handleAvatarRemove()}
+                    disabled={avatarBusy}
+                    className="btn btn-ghost btn-sm"
+                  >
+                    <X className="h-3.5 w-3.5" /> Remove
+                  </button>
+                )}
+              </div>
+              {avatarMsg && (
+                <p
+                  className={`mt-1.5 text-[10px] font-medium ${
+                    avatarMsg.tone === 'ok' ? 'text-emerald-400' : 'text-rose-400'
+                  }`}
+                >
+                  {avatarMsg.text}
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="grid gap-3.5 sm:grid-cols-2">
             <div>
               <label className="label" htmlFor="profile-name">

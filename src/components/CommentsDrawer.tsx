@@ -3,6 +3,7 @@ import { ReactionIcon } from './Icons.tsx';
 import { X, Send, Trash2, Edit2, CornerDownRight, Check, Smile } from 'lucide-react';
 import { FeedItem, CommentItem, GroupMember } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { Avatar } from './ui/kit.tsx';
 
 interface CommentsDrawerProps {
   isOpen: boolean;
@@ -256,12 +257,13 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-1.5">
-                      <div
-                        className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs"
-                        style={{ backgroundColor: comment.author.avatarColor }}
-                      >
-                        {comment.author.displayName.charAt(0).toUpperCase()}
-                      </div>
+                      <Avatar
+                        name={comment.author.displayName}
+                        color={comment.author.avatarColor}
+                        src={comment.author.avatarUrl}
+                        size={20}
+                        className="shadow-2xs"
+                      />
                       <span className="font-bold text-[var(--text-primary)]">
                         {comment.author.displayName}
                       </span>
@@ -387,12 +389,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
                   onClick={() => insertMention(m.username)}
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-[var(--bg-card)] text-xs text-[var(--text-primary)]"
                 >
-                  <div
-                    className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                    style={{ backgroundColor: m.avatarColor }}
-                  >
-                    {m.displayName.charAt(0)}
-                  </div>
+                  <Avatar name={m.displayName} color={m.avatarColor} src={m.avatarUrl} size={16} />
                   <span className="font-semibold">{m.displayName}</span>
                   <span className="text-[10px] text-[var(--text-muted)] font-mono">@{m.username}</span>
                 </button>

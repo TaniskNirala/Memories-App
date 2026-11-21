@@ -9,6 +9,7 @@ import { AuthenticatedRequest, requireApproved, requireAdmin } from '../middlewa
 import { getStorageAdapter, getStorageCapabilities, isCloudStorageBackend, isTelegramKey } from '../storage/index.ts';
 import { syncStorageToDatabase } from '../storage/sync.ts';
 import { isDeleteProtected } from '../config.ts';
+import { avatarUrlFor } from '../security/avatars.ts';
 
 // Multer disk storage setup for reliable multipart file uploads
 const uploadsBaseDir = path.resolve(process.cwd(), 'uploads');
@@ -517,7 +518,7 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     }))
   );
 
-  const owner = queryOne<any>('SELECT id, username, display_name, avatar_color FROM users WHERE id = ?', [post.owner_id]);
+  const owner = queryOne<any>('SELECT id, username, display_name, avatar_color, avatar_url FROM users WHERE id = ?', [post.owner_id]);
 
   // Placements for this post
   const placements = queryAll<any>(
@@ -546,6 +547,7 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
         username: owner.username,
         displayName: owner.display_name,
         avatarColor: owner.avatar_color,
+        avatarUrl: avatarUrlFor(owner.avatar_url),
       },
       files: filesWithUrls,
       placements: placements.map((p) => ({

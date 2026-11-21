@@ -487,6 +487,11 @@ function initSchema(db: any) {
     db.exec('ALTER TABLE post_files ADD COLUMN checksum TEXT');
   } catch {}
 
+  // Optional uploaded profile photo (storage key) — falls back to the colour avatar
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+  } catch {}
+
   // Set when the backing Telegram message was deleted from the channel
   try {
     db.exec('ALTER TABLE post_files ADD COLUMN tg_deleted_at TEXT');

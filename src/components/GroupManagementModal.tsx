@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Group, GroupMember } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { Avatar } from './ui/kit.tsx';
 
 interface GroupManagementModalProps {
   isOpen: boolean;
@@ -486,12 +487,13 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                           className="flex items-center justify-between p-2 rounded-xl bg-[var(--bg-surface)] text-xs border border-[var(--border-subtle)]"
                         >
                           <div className="flex items-center gap-2">
-                            <div
-                              className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-2xs shrink-0"
-                              style={{ backgroundColor: mColor }}
-                            >
-                              {mInitial}
-                            </div>
+                            <Avatar
+                              name={mName}
+                              color={mColor}
+                              src={member.avatarUrl}
+                              size={24}
+                              className="shadow-2xs"
+                            />
                             <div>
                               <span className="font-semibold text-[var(--text-primary)] block">
                                 {mName}

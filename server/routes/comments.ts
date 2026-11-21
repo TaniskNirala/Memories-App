@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
+import { avatarUrlFor } from '../security/avatars.ts';
 
 export const commentsRouter = Router();
 commentsRouter.use(requireApproved);
@@ -29,7 +30,7 @@ commentsRouter.get('/', (req: AuthenticatedRequest, res) => {
   }
 
   const comments = queryAll<any>(
-    `SELECT c.*, u.username, u.display_name, u.avatar_color
+    `SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_url
      FROM comments c
      JOIN users u ON c.author_id = u.id
      WHERE c.target_type = ? AND c.target_id = ? AND c.group_id = ?
@@ -58,6 +59,7 @@ commentsRouter.get('/', (req: AuthenticatedRequest, res) => {
         username: c.username,
         displayName: c.display_name,
         avatarColor: c.avatar_color,
+        avatarUrl: avatarUrlFor(c.avatar_url),
       },
       canDelete,
       canEdit,
@@ -194,7 +196,7 @@ commentsRouter.get('/group-members/:groupId', (req: AuthenticatedRequest, res) =
   }
 
   const members = queryAll<any>(
-    `SELECT u.id, u.username, u.display_name, u.avatar_color
+    `SELECT u.id, u.username, u.display_name, u.avatar_color, u.avatar_url
      FROM group_members gm
      JOIN users u ON gm.user_id = u.id
      WHERE gm.group_id = ? AND u.status = 'active'
@@ -207,6 +209,7 @@ commentsRouter.get('/group-members/:groupId', (req: AuthenticatedRequest, res) =
     display_name: m.display_name,
     avatarColor: m.avatar_color,
     avatar_color: m.avatar_color,
+    avatarUrl: avatarUrlFor(m.avatar_url),
   }));
 
   res.json({ members });

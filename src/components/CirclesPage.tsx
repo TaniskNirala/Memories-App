@@ -161,7 +161,7 @@ export const CirclesPage: React.FC<CirclesPageProps> = ({
                     <div className="flex items-center">
                       {(g.members || []).slice(0, 5).map((m, idx) => (
                         <span key={m.id} style={{ marginLeft: idx === 0 ? 0 : -8, zIndex: 10 - idx }}>
-                          <Avatar name={m.displayName || m.username} color={m.avatarColor} size={22} className="border-2 border-[var(--bg-card)]" />
+                          <Avatar name={m.displayName || m.username} color={m.avatarColor} src={m.avatarUrl} size={22} className="border-2 border-[var(--bg-card)]" />
                         </span>
                       ))}
                       {memberCount > 5 && (

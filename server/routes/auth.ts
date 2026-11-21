@@ -1,10 +1,14 @@
 import { Router, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, clearFailedAttempts } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
 import { createRateLimiter } from '../security/rateLimit.ts';
+import { avatarUrlFor } from '../security/avatars.ts';
 import { validatePassword, hashPassword, needsRehash, DUMMY_HASH } from '../security/passwords.ts';
 import { hashToken } from '../security/tokens.ts';
 import { createSession, clearSessionCookie } from '../security/session.ts';
@@ -26,6 +30,45 @@ export const authRouter = Router();
 
 // Prune old login attempts on boot (recent failures are kept so a restart cannot reset rate limits)
 clearLoginAttempts();
+
+/* --------------------------------------------------------------- avatar upload
+   Small, image-only multipart upload. Files land next to post media so the
+   existing /api/storage/view access rules keep working; only a 2 MB image is
+   accepted and the stored key is what the user row keeps. */
+const avatarDir = path.join(process.cwd(), 'uploads', 'avatars');
+if (!fs.existsSync(avatarDir)) {
+  fs.mkdirSync(avatarDir, { recursive: true });
+}
+
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, avatarDir),
+    filename: (_req, file, cb) => {
+      const ext = ['.png', '.jpg', '.jpeg', '.webp'].includes(path.extname(file.originalname).toLowerCase())
+        ? path.extname(file.originalname).toLowerCase()
+        : '.jpg';
+      cb(null, `${Date.now()}_${crypto.randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)),
+});
+
+// Multer failures must surface as JSON (a bare 500 HTML page breaks the UI)
+function handleAvatarUpload(req: any, res: any, next: any) {
+  avatarUpload.single('avatar')(req, res, (err: any) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({
+        error:
+          err.code === 'LIMIT_FILE_SIZE'
+            ? 'That image is larger than 2 MB — pick a smaller one.'
+            : 'Could not upload that image.',
+      });
+    }
+    return res.status(400).json({ error: 'Could not upload that image.' });
+  });
+}
 
 const registerLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, max: 10, message: 'Too many sign-up attempts. Please try again later.' });
 const redeemLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10, message: 'Too many attempts. Please try again later.' });
@@ -205,6 +248,7 @@ authRouter.post('/login', async (req, res) => {
       role: user.role,
       status: user.status,
       avatarColor: user.avatar_color,
+      avatarUrl: avatarUrlFor((user as any).avatar_url),
     },
     isPending: user.role === 'pending',
   });
@@ -236,7 +280,7 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const { displayName, username, avatarColor, currentPassword } = req.body || {};
+  const { displayName, username, avatarColor, currentPassword, removeAvatar } = req.body || {};
   const touchesIdentity = typeof username === 'string' && username.trim().toLowerCase() !== req.user.username;
 
   // Changing the handle you sign in with is a credential change: prove it is you.
@@ -297,6 +341,18 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     run('UPDATE users SET avatar_color = ? WHERE id = ?', [nextAvatar, req.user.id]);
   }
 
+  let removedKey: string | null = null;
+  if (removeAvatar === true) {
+    const row = queryOne<{ avatar_url: string | null }>('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
+    removedKey = row?.avatar_url || null;
+    run('UPDATE users SET avatar_url = NULL WHERE id = ?', [req.user.id]);
+    if (removedKey && removedKey.startsWith('avatars/')) {
+      try {
+        await getStorageAdapter().deleteObject(removedKey);
+      } catch {}
+    }
+  }
+
   const fresh = queryOne<{
     id: string;
     username: string;
@@ -304,6 +360,7 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     role: string;
     status: string;
     avatar_color: string;
+    avatar_url: string | null;
     created_at: string;
   }>('SELECT * FROM users WHERE id = ?', [req.user.id]);
 
@@ -321,8 +378,49 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
       role: fresh.role,
       status: fresh.status,
       avatarColor: fresh.avatar_color,
+      avatarUrl: avatarUrlFor(fresh.avatar_url),
     },
   });
+});
+
+// Upload (or replace) the signed-in user's profile photo
+authRouter.post('/avatar', handleAvatarUpload, async (req: AuthenticatedRequest, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  const file = (req as any).file as { filename: string; path: string; mimetype: string; originalname: string } | undefined;
+  if (!file) {
+    return res.status(400).json({ error: 'Pick a PNG, JPEG or WebP image under 2 MB' });
+  }
+
+  const storageKey = `avatars/${file.filename}`;
+  let finalKey = storageKey;
+  try {
+    const storage = getStorageAdapter();
+    if (storage.putObject) {
+      const returned = await storage.putObject(storageKey, fs.readFileSync(file.path), file.mimetype, {
+        filePath: file.path,
+        fileName: file.originalname,
+        fileSize: fs.statSync(file.path).size,
+      });
+      if (typeof returned === 'string' && returned.length > 0) finalKey = returned;
+    }
+  } catch (err: any) {
+    try {
+      fs.unlink(file.path, () => {});
+    } catch {}
+    return res.status(500).json({ error: err?.message || 'Could not store that image' });
+  }
+
+  const previous = queryOne<{ avatar_url: string | null }>('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
+  run('UPDATE users SET avatar_url = ? WHERE id = ?', [finalKey, req.user.id]);
+  if (previous?.avatar_url && previous.avatar_url !== finalKey && previous.avatar_url.startsWith('avatars/')) {
+    try {
+      await getStorageAdapter().deleteObject(previous.avatar_url);
+    } catch {}
+  }
+
+  return res.json({ success: true, avatarUrl: avatarUrlFor(finalKey) });
 });
 
 // Change own password (requires current password; signs out all other sessions)

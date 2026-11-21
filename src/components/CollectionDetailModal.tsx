@@ -6,6 +6,7 @@ import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 import { TgDeletedBadge } from './TgDeletedBadge.tsx';
+import { Avatar } from './ui/kit.tsx';
 
 interface CollectionDetailModalProps {
   collectionId: string | null;
@@ -472,12 +473,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                     key={att.userId}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--bg-card)] border border-[var(--border-subtle)] text-xs text-[var(--text-primary)]"
                   >
-                    <div
-                      className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                      style={{ backgroundColor: att.avatarColor }}
-                    >
-                      {att.displayName.charAt(0)}
-                    </div>
+                    <Avatar name={att.displayName} color={att.avatarColor} src={att.avatarUrl} size={16} />
                     <span>{att.displayName}</span>
                     {att.taggedBy && !att.isSelf && (
                       <span className="text-[10px] text-[var(--text-muted)] italic">

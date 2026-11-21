@@ -143,7 +143,7 @@ export const HeroRail: React.FC<HeroRailProps> = ({
 
         {/* who you are */}
         <div className="mt-3.5 flex items-center gap-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-2 py-1.5">
-          <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} size={28} ring />
+          <Avatar name={user?.displayName || user?.username} color={user?.avatarColor} src={user?.avatarUrl} size={28} ring />
           <div className="min-w-0 leading-tight">
             <p className="truncate text-[10.5px] font-bold">@{user?.username}</p>
             <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-[var(--text-muted)]">

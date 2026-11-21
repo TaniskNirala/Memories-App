@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { queryOne, queryAll } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { avatarUrlFor } from '../security/avatars.ts';
 
 export const feedRouter = Router();
 feedRouter.use(requireApproved);
@@ -28,7 +29,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
   // 1. Fetch Single Posts (posts where is_standalone = 1 and deleted_at IS NULL)
   let postSql = `
-    SELECT DISTINCT p.*, u.username as owner_username, u.display_name as owner_display_name, u.avatar_color as owner_avatar_color,
+    SELECT DISTINCT p.*, u.username as owner_username, u.display_name as owner_display_name, u.avatar_color as owner_avatar_color, u.avatar_url as owner_avatar_url,
       CASE WHEN p.date_basis = 'uploaded_at' THEN p.uploaded_at ELSE p.taken_at END as sort_date
     FROM posts p
     JOIN users u ON p.owner_id = u.id
@@ -56,7 +57,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
   // 2. Fetch Collection Cards (albums where status = 'approved')
   let albumSql = `
-    SELECT DISTINCT a.*, u.username as creator_username, u.display_name as creator_display_name, u.avatar_color as creator_avatar_color,
+    SELECT DISTINCT a.*, u.username as creator_username, u.display_name as creator_display_name, u.avatar_color as creator_avatar_color, u.avatar_url as creator_avatar_url,
       COALESCE(a.event_date, a.created_at) as sort_date,
       COALESCE((
         SELECT COUNT(pf.id)
@@ -149,6 +150,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
             username: p.owner_username,
             displayName: p.owner_display_name,
             avatarColor: p.owner_avatar_color,
+            avatarUrl: avatarUrlFor(p.owner_avatar_url),
           },
           caption: p.caption,
           placements,
@@ -232,6 +234,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
           username: p.owner_username,
           displayName: p.owner_display_name,
           avatarColor: p.owner_avatar_color,
+          avatarUrl: avatarUrlFor(p.owner_avatar_url),
         },
         files: filesWithUrls,
         placements,
@@ -295,6 +298,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
           username: alb.creator_username,
           displayName: alb.creator_display_name,
           avatarColor: alb.creator_avatar_color,
+          avatarUrl: avatarUrlFor(alb.creator_avatar_url),
         },
         attendeesCount,
         userAttended,

@@ -173,7 +173,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({
 
         <div className="mt-3 flex items-center justify-between border-t border-[var(--border-subtle)] pt-2.5">
           <span className="flex min-w-0 items-center gap-1.5">
-            <Avatar name={c.creator.displayName} color={c.creator.avatarColor} size={18} />
+            <Avatar name={c.creator.displayName} color={c.creator.avatarColor} src={c.creator.avatarUrl} size={18} />
             <span className="truncate text-[10px] font-medium text-[var(--text-secondary)]">{c.creator.displayName}</span>
           </span>
           <button

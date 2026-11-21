@@ -18,6 +18,10 @@ interface AuthContextType {
     avatarColor?: string;
     currentPassword?: string;
   }) => Promise<{ success: boolean; error?: string; message?: string }>;
+  /** Upload a profile photo from the device */
+  uploadAvatar: (file: File) => Promise<{ success: boolean; error?: string }>;
+  /** Remove the uploaded photo and fall back to the colour avatar */
+  removeAvatar: () => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -31,6 +35,8 @@ const AuthContext = createContext<AuthContextType>({
   logout: async () => {},
   refreshUser: async () => {},
   updateProfile: async () => ({ success: false }),
+  uploadAvatar: async () => ({ success: false }),
+  removeAvatar: async () => ({ success: false }),
 });
 
 // Sessions live in an httpOnly cookie that scripts cannot read. Remove any token left in
@@ -147,6 +153,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const uploadAvatar = async (file: File) => {
+    try {
+      const body = new FormData();
+      body.append('avatar', file);
+      const res = await apiFetch('/api/auth/avatar', { method: 'POST', body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { success: false, error: data.error || 'Could not upload that image' };
+      setUser((prev) => (prev ? { ...prev, avatarUrl: data.avatarUrl } : prev));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Could not upload that image' };
+    }
+  };
+
+  const removeAvatar = async () => {
+    try {
+      const res = await apiFetch('/api/auth/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removeAvatar: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { success: false, error: data.error || 'Could not remove your photo' };
+      setUser((prev) => (prev ? { ...prev, avatarUrl: undefined } : prev));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Could not remove your photo' };
+    }
+  };
+
   const isPending = user?.role === 'pending';
   const isSuspended = user?.status === 'suspended';
   const isAdmin = user?.role === 'admin';
@@ -164,6 +200,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         refreshUser,
         updateProfile,
+        uploadAvatar,
+        removeAvatar,
       }}
     >
       {children}

@@ -30,6 +30,7 @@ import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 import { CaptionSuggestionsModal } from './CaptionSuggestionsModal.tsx';
+import { Avatar } from './ui/kit.tsx';
 import { isVideoMedia, isAudioMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 
 interface MediaViewerModalProps {
@@ -361,12 +362,13 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between p-3.5 sm:p-4 bg-gradient-to-b from-black/90 via-black/60 to-transparent">
         {/* Left: Author & Album info */}
         <div className="flex items-center gap-3">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xs shrink-0"
-            style={{ backgroundColor: item.owner.avatarColor }}
-          >
-            {item.owner.displayName.charAt(0).toUpperCase()}
-          </div>
+          <Avatar
+            name={item.owner.displayName}
+            color={item.owner.avatarColor}
+            src={item.owner.avatarUrl}
+            size={32}
+            className="shadow-xs"
+          />
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-white block">{item.owner.displayName}</span>

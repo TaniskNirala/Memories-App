@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Moon,
   Sun,
@@ -6,8 +6,6 @@ import {
   LogOut,
   CheckCircle2,
   Copy,
-  Trash2,
-  AlertTriangle,
   RefreshCw,
   ChevronDown,
   KeyRound,
@@ -48,43 +46,35 @@ export const Header: React.FC<HeaderProps> = ({
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotif, setShowNotif] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const notifRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null);
-  const [passwordLoading, setPasswordLoading] = useState(false);
-
-  const handleChangePassword = async () => {
-    setPasswordLoading(true);
-    setPasswordMsg(null);
-    try {
-      const res = await apiFetch('/api/auth/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setPasswordMsg({ text: data.message || 'Password changed.', ok: true });
-        setCurrentPassword('');
-        setNewPassword('');
-      } else {
-        setPasswordMsg({ text: data.error || 'Failed to change password', ok: false });
+  /* Any click outside the menus closes them — including clicks on the page,
+     other header controls and the overlay used behind the panels. */
+  useEffect(() => {
+    if (!showUserMenu && !showNotif) return;
+    const onPointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (notifRef.current?.contains(target) || userMenuRef.current?.contains(target)) return;
+      setShowUserMenu(false);
+      setShowNotif(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowUserMenu(false);
+        setShowNotif(false);
       }
-    } catch (e: any) {
-      setPasswordMsg({ text: e.message || 'Failed to change password', ok: false });
-    } finally {
-      setPasswordLoading(false);
-    }
-  };
-
-  const handleLogoutEverywhere = async () => {
-    try {
-      await apiFetch('/api/auth/logout-all', { method: 'POST' });
-    } catch {}
-    window.location.reload();
-  };
+    };
+    document.addEventListener('mousedown', onPointerDown, true);
+    document.addEventListener('touchstart', onPointerDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown, true);
+      document.removeEventListener('touchstart', onPointerDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showUserMenu, showNotif]);
 
   const fetchNotifications = async () => {
     if (!user || isPending) return;
@@ -213,7 +203,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
 
                 {user && !isPending && (
-                  <div className="relative">
+                  <div className="relative" ref={notifRef}>
                     <button
                       type="button"
                       onClick={() => {
@@ -308,7 +298,7 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
 
               {user && !isPending && (
-                <div className="relative ml-0.5">
+                <div className="relative ml-0.5" ref={userMenuRef}>
                   <button
                     type="button"
                     onClick={() => {
@@ -318,7 +308,7 @@ export const Header: React.FC<HeaderProps> = ({
                     aria-label="Account menu"
                     className="flex h-9 items-center gap-1.5 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]/55 pl-1 pr-1.5 transition hover:border-[var(--accent-amber)]/45 hover:bg-[var(--bg-surface-elevated)]"
                   >
-                    <Avatar name={user.displayName || user.username} color={user.avatarColor} size={26} ring />
+                    <Avatar name={user.displayName || user.username} color={user.avatarColor} src={user.avatarUrl} size={26} ring />
                     <span className="hidden max-w-[104px] truncate text-[11.5px] font-semibold md:block">
                       {user.displayName || user.username}
                     </span>
@@ -331,7 +321,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <div className="fixed inset-0 z-[55]" onClick={() => setShowUserMenu(false)} />
                       <div className="absolute right-0 z-[60] mt-2 w-64 overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
                         <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-3.5 py-3">
-                          <Avatar name={user.displayName || user.username} color={user.avatarColor} size={38} ring />
+                          <Avatar name={user.displayName || user.username} color={user.avatarColor} src={user.avatarUrl} size={38} ring />
                           <div className="min-w-0">
                             <p className="truncate text-[12.5px] font-bold">{user.displayName}</p>
                             <p className="truncate font-mono text-[10px] text-[var(--text-muted)]">@{user.username}</p>
@@ -353,26 +343,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <div className="my-1 h-px bg-[var(--border-subtle)]" />
                           <MenuItem
                             icon={<KeyRound className="h-3.5 w-3.5" />}
-                            label="Change password"
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              setPasswordMsg(null);
-                              setShowPasswordModal(true);
-                            }}
-                          />
-                          <MenuItem
-                            icon={<LogOut className="h-3.5 w-3.5" />}
-                            label="Sign out everywhere"
-                            onClick={() => {
-                              setShowUserMenu(false);
-                              handleLogoutEverywhere();
-                            }}
-                          />
-                          <div className="my-1 h-px bg-[var(--border-subtle)]" />
-                          <MenuItem
-                            icon={<Trash2 className="h-3.5 w-3.5" />}
-                            label="Delete my account"
-                            tone="danger"
+                            label="Account & security"
                             onClick={() => {
                               setShowUserMenu(false);
                               if (onOpenProfile) onOpenProfile();
@@ -397,73 +368,6 @@ export const Header: React.FC<HeaderProps> = ({
         </header>
       </div>
 
-      <Modal
-        open={showPasswordModal}
-        onClose={() => !passwordLoading && setShowPasswordModal(false)}
-        size="sm"
-        label="Change password"
-      >
-        <ModalHeader
-          icon={<KeyRound className="h-4 w-4" />}
-          eyebrow="Security"
-          title="Change password"
-          subtitle="Use at least 10 characters"
-          onClose={() => !passwordLoading && setShowPasswordModal(false)}
-        />
-        <div className="space-y-3 p-5">
-          <div>
-            <label className="label" htmlFor="current-password">
-              Current password
-            </label>
-            <input
-              id="current-password"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              className="field"
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="new-password">
-              New password
-            </label>
-            <input
-              id="new-password"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-              className="field"
-            />
-          </div>
-          {passwordMsg && (
-            <p
-              className={`rounded-xl border px-3 py-2 text-[11px] font-medium ${
-                passwordMsg.ok
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                  : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-              }`}
-            >
-              {passwordMsg.text}
-            </p>
-          )}
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" disabled={passwordLoading} onClick={() => setShowPasswordModal(false)} className="btn btn-ghost btn-sm">
-              Close
-            </button>
-            <button
-              type="button"
-              disabled={passwordLoading || !currentPassword || !newPassword}
-              onClick={handleChangePassword}
-              className="btn btn-primary btn-sm"
-            >
-              {passwordLoading && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
-              {passwordLoading ? 'Saving…' : 'Save password'}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 };

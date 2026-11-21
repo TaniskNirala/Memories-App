@@ -746,6 +746,11 @@ const MainContent: React.FC = () => {
                     )}
                   </button>
                   <p className="mt-2 text-[10px] text-[var(--text-muted)]">Scroll further back into the archive</p>
+                  {feedItems.length <= 3 && (
+                    <p className="mx-auto mt-1 max-w-xs text-[9.5px] leading-relaxed text-[var(--text-muted)]/70">
+                      Tip: drop photos anywhere on the window to add them instantly · press ⌘K for the palette
+                    </p>
+                  )}
                 </div>
               )}
             </div>

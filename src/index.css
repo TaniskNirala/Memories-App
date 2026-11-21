@@ -37,7 +37,6 @@
    1. Tokens
    -------------------------------------------------------------------------- */
 @layer base {
-  :root,
   :root.dark {
     --bg-page: #0a0c14;
     --bg-page-soft: #0e111b;
@@ -77,6 +76,7 @@
     color-scheme: dark;
   }
 
+  :root,
   :root.light {
     --bg-page: #f7f2e9;
     --bg-page-soft: #fdfaf4;

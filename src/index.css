@@ -61,7 +61,7 @@
     --sticker: rgba(246, 181, 68, 0.1);
     --paper-dot: rgba(255, 255, 255, 0.04);
     --pattern-ink: rgba(255, 255, 255, 0.055);
-    --pattern-size: 620px auto;
+    --pattern-size: 760px auto;
     --blob-a: rgba(255, 112, 105, 0.18);
     --blob-b: rgba(94, 234, 212, 0.12);
     --blob-c: rgba(155, 155, 255, 0.14);
@@ -96,7 +96,7 @@
     --sticker: rgba(196, 122, 9, 0.12);
     --paper-dot: rgba(26, 24, 38, 0.055);
     --pattern-ink: rgba(26, 24, 38, 0.075);
-    --pattern-size: 620px auto;
+    --pattern-size: 760px auto;
     --blob-a: rgba(246, 169, 43, 0.22);
     --blob-b: rgba(13, 143, 132, 0.13);
     --blob-c: rgba(85, 81, 212, 0.1);

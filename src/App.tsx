@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react';
 import { AuthProvider, useAuth, apiFetch } from './context/AuthContext.tsx';
 import { ThemeProvider, useTheme } from './context/ThemeContext.tsx';
 import { Header } from './components/Header.tsx';
@@ -101,13 +101,14 @@ const MainContent: React.FC = () => {
     endDate: '',
   };
   const [feedFilters, setFeedFilters] = useState<FeedFilterState>(initialFeedFilters);
+  const deferredSearchQuery = useDeferredValue(feedFilters.searchQuery);
 
   // Filtered feed items based on search query, contributor, tag, and date range
   const filteredFeedItems = useMemo(() => {
+    const q = deferredSearchQuery.trim().toLowerCase();
     return feedItems.filter((item) => {
       // 1. Text Search Query
-      if (feedFilters.searchQuery.trim()) {
-        const q = feedFilters.searchQuery.trim().toLowerCase();
+      if (q) {
         const caption = (item.type === 'single_post' ? item.caption : `${item.title} ${item.description || ''}`).toLowerCase();
         const author = item.type === 'single_post' ? item.owner : item.creator;
         const authorName = (author?.displayName || '').toLowerCase();
@@ -166,7 +167,7 @@ const MainContent: React.FC = () => {
 
       return true;
     });
-  }, [feedItems, feedFilters]);
+  }, [feedItems, deferredSearchQuery, feedFilters.contributorId, feedFilters.tag, feedFilters.startDate, feedFilters.endDate]);
 
   const isFiltersActive = Boolean(
     feedFilters.searchQuery.trim() ||
@@ -176,7 +177,7 @@ const MainContent: React.FC = () => {
     feedFilters.endDate
   );
 
-  const handleOpenViewer = (item: FeedItem, initialIndex: number = 0, initialMode?: 'grid' | 'expanded') => {
+  const handleOpenViewer = useCallback((item: FeedItem, initialIndex: number = 0, initialMode?: 'grid' | 'expanded') => {
     setViewerItem(item);
     setViewerIndex(initialIndex);
     if (initialMode) {
@@ -186,7 +187,29 @@ const MainContent: React.FC = () => {
     } else {
       setViewerMode('expanded');
     }
-  };
+  }, []);
+
+  const handleOpenComments = useCallback((item: FeedItem) => {
+    setCommentsItem(item);
+  }, []);
+
+  const handleOpenCollection = useCallback((colId: string) => {
+    setActiveCollectionId(colId);
+  }, []);
+
+  const handleOpenUploadModal = useCallback(() => {
+    setIsUploadOpen(true);
+  }, []);
+
+  const handleResetFilters = useCallback(() => {
+    setFeedFilters({
+      searchQuery: '',
+      contributorId: 'all',
+      tag: 'all',
+      startDate: '',
+      endDate: '',
+    });
+  }, []);
 
   // Fetch circles/groups
   const fetchGroups = async () => {
@@ -390,7 +413,7 @@ const MainContent: React.FC = () => {
   }
 
   // Handle direct sharing from timeline card dropdown
-  const handleDirectShare = async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
+  const handleDirectShare = useCallback(async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
     try {
       const res = await apiFetch('/api/placements/bunch', {
         method: 'POST',
@@ -407,7 +430,7 @@ const MainContent: React.FC = () => {
     } catch (e) {
       console.error('Share to group failed', e);
     }
-  };
+  }, [selectedGroupId, user, isPending]);
 
   const handleDeletePost = async (postId: string, permanent: boolean = false) => {
     try {
@@ -602,8 +625,13 @@ const MainContent: React.FC = () => {
     setCurrentTab('feed');
   };
 
+  const contributorsCount = useMemo(
+    () => new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size,
+    [feedItems]
+  );
+
   return (
-    <div className="app-shell text-[var(--text-primary)] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] transition-colors lg:h-dvh lg:overflow-hidden lg:pb-0">
+    <div className="app-shell text-[var(--text-primary)] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] lg:h-dvh lg:overflow-hidden lg:pb-0">
       <Header
         selectedGroupName={selectedGroup?.name}
         onSelectGroup={(gid) => setSelectedGroupId(gid)}
@@ -667,13 +695,11 @@ const MainContent: React.FC = () => {
                 user={user}
                 groupsCount={groups.length}
                 memories={feedItems.length}
-                contributors={
-                  new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size
-                }
+                contributors={contributorsCount}
                 selectedGroupName={selectedGroup?.name}
                 selectedGroupDescription={selectedGroup?.description}
                 selectedGroupMembers={selectedGroup?.members?.length || selectedGroup?.memberCount}
-                onOpenUpload={() => setIsUploadOpen(true)}
+                onOpenUpload={handleOpenUploadModal}
                 onOpenGroupsManager={() => {
                   setIsCreateGroupMode(false);
                   setIsGroupsModalOpen(true);
@@ -818,13 +844,11 @@ const MainContent: React.FC = () => {
                 user={user}
                 groupsCount={groups.length}
                 memories={feedItems.length}
-                contributors={
-                  new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size
-                }
+                contributors={contributorsCount}
                 selectedGroupName={selectedGroup?.name}
                 selectedGroupDescription={selectedGroup?.description}
                 selectedGroupMembers={selectedGroup?.members?.length || selectedGroup?.memberCount}
-                onOpenUpload={() => setIsUploadOpen(true)}
+                onOpenUpload={handleOpenUploadModal}
                 onOpenGroupsManager={() => {
                   setIsCreateGroupMode(false);
                   setIsGroupsModalOpen(true);

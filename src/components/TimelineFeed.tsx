@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { FeedItem, SinglePostFeedItem, Group } from '../types/index.ts';
 import {
   Lock,
@@ -53,11 +53,13 @@ interface TimelineFeedProps {
 interface PostCollageProps {
   item: SinglePostFeedItem;
   onOpenViewer: (item: FeedItem, initialIndex?: number, initialMode?: 'grid' | 'expanded') => void;
+  priority?: boolean;
 }
 
-const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
+const PostCollage: React.FC<PostCollageProps> = React.memo(({ item, onOpenViewer, priority = false }) => {
   const files = item.files || [];
   const count = files.length;
+  const imgLoading = priority ? 'eager' : 'lazy';
 
   if (count === 0) {
     return (
@@ -104,6 +106,8 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
             <img
               src={posterUrl}
               alt={alt}
+              loading={imgLoading}
+              decoding="async"
               referrerPolicy="no-referrer"
               onError={(e) => handleImageError(e, f.thumbKey || f.storageKey)}
               className={imgClassName}
@@ -113,12 +117,12 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
               src={f.viewUrl ? `${f.viewUrl}#t=0.1` : undefined}
               muted
               playsInline
-              preload="metadata"
+              preload="none"
               className={imgClassName}
             />
           )}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-10 h-10 rounded-full bg-black/70 backdrop-blur-xs border border-white/25 flex items-center justify-center text-white shadow-lg">
+            <div className="w-10 h-10 rounded-full bg-black/75 border border-white/25 flex items-center justify-center text-white shadow-lg">
               <Play className="w-4 h-4 fill-current text-amber-400 ml-0.5" />
             </div>
           </div>
@@ -133,10 +137,12 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
     return (
       <>
         <img
-          src={f.viewUrl || f.thumbUrl}
+          src={f.thumbUrl || f.viewUrl}
           alt={alt}
+          loading={imgLoading}
+          decoding="async"
           referrerPolicy="no-referrer"
-          onError={(e) => handleImageError(e, f.storageKey)}
+          onError={(e) => handleImageError(e, f.thumbKey || f.storageKey)}
           className={imgClassName}
         />
         {f.tgDeleted && <TgDeletedBadge compact />}
@@ -156,7 +162,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
             poster={posterUrl}
             controls
             playsInline
-            preload="metadata"
+            preload={posterUrl ? 'none' : 'metadata'}
             onClick={(e) => e.stopPropagation()}
             className="w-full h-full object-contain bg-black"
           />
@@ -166,7 +172,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
               e.stopPropagation();
               onOpenViewer(item, 0, 'expanded');
             }}
-            className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1 shadow-lg transition cursor-pointer"
+            className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/80 hover:bg-black/90 border border-white/20 text-white text-[11px] font-medium flex items-center gap-1 shadow-lg transition cursor-pointer"
             title="Open video in full viewer"
           >
             <Maximize2 className="w-3 h-3 text-amber-400" />
@@ -183,11 +189,14 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
         className="relative w-full aspect-16/9 sm:aspect-2/1 rounded-xl overflow-hidden cursor-pointer bg-neutral-900 border border-[var(--border-color)] mb-3 group/media"
       >
         <img
-          src={f.viewUrl || f.thumbUrl}
+          src={f.thumbUrl || f.viewUrl}
           alt={item.caption || 'Memory photo'}
+          loading={imgLoading}
+          decoding="async"
+          fetchPriority={priority ? 'high' : 'auto'}
           referrerPolicy="no-referrer"
-          onError={(e) => handleImageError(e, f.storageKey)}
-          className="w-full h-full object-cover group-hover/media:scale-[1.02] transition-transform duration-300"
+          onError={(e) => handleImageError(e, f.thumbKey || f.storageKey)}
+          className="w-full h-full object-cover sm:group-hover/media:scale-[1.02] transition-transform duration-300"
         />
         {f.tgDeleted && <TgDeletedBadge />}
       </div>
@@ -222,7 +231,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
             e.stopPropagation();
             onOpenViewer(item, 0, 'grid');
           }}
-          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/80 hover:bg-black/90 border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
           <span>2 Items</span>
@@ -278,7 +287,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
             e.stopPropagation();
             onOpenViewer(item, 0, 'grid');
           }}
-          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/80 hover:bg-black/90 border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
           <span>3 Items</span>
@@ -315,7 +324,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
             e.stopPropagation();
             onOpenViewer(item, 0, 'grid');
           }}
-          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+          className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/80 hover:bg-black/90 border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
         >
           <Images className="w-3.5 h-3.5 text-amber-400" />
           <span>4 Items</span>
@@ -353,7 +362,7 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
               )}
 
               {isFourth && (
-                <div className="absolute inset-0 bg-black/65 backdrop-blur-xs flex flex-col items-center justify-center text-white hover:bg-black/55 transition">
+                <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-white hover:bg-black/60 transition">
                   <span className="font-display font-bold text-xl sm:text-2xl text-amber-300">
                     +{extraCount + 1}
                   </span>
@@ -373,14 +382,14 @@ const PostCollage: React.FC<PostCollageProps> = ({ item, onOpenViewer }) => {
           e.stopPropagation();
           onOpenViewer(item, 0, 'grid');
         }}
-        className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/75 hover:bg-black/90 backdrop-blur-md border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
+        className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-full bg-black/80 hover:bg-black/90 border border-white/20 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-lg transition"
       >
         <Images className="w-3.5 h-3.5 text-amber-400" />
         <span>{count} Photos</span>
       </button>
     </div>
   );
-};
+});
 /* ---------------------------------------------------------------------------
    Month rail marker — the anchor for each timeline block
    --------------------------------------------------------------------------- */
@@ -425,31 +434,32 @@ const MediaFrame: React.FC<{
   item: SinglePostFeedItem;
   onOpenViewer: TimelineFeedProps['onOpenViewer'];
   onOpenComments: (item: FeedItem) => void;
-}> = ({ item, onOpenViewer, onOpenComments }) => (
+  priority?: boolean;
+}> = ({ item, onOpenViewer, onOpenComments, priority = false }) => (
   <div className="group/media relative">
-    <PostCollage item={item} onOpenViewer={onOpenViewer} />
+    <PostCollage item={item} onOpenViewer={onOpenViewer} priority={priority} />
 
     {/* multi-photo badge (always visible on mobile, full prompt on hover) */}
     <div className="pointer-events-none absolute inset-x-2.5 top-2.5 flex items-start justify-between gap-2 sm:inset-x-3 sm:top-3">
-      <span className="hidden items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1 text-[10px] font-semibold text-white opacity-0 backdrop-blur-md transition-opacity duration-200 group-hover/media:opacity-100 group-focus-within/media:opacity-100 sm:flex">
+      <span className="hidden items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white opacity-0 transition-opacity duration-200 group-hover/media:opacity-100 group-focus-within/media:opacity-100 sm:flex">
         <Eye className="h-3 w-3" /> Tap to open
       </span>
       {item.files.length > 1 && (
-        <span className="ml-auto flex items-center gap-1.5 rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-white backdrop-blur-md">
+        <span className="ml-auto flex items-center gap-1.5 rounded-full border border-white/15 bg-black/75 px-2.5 py-1 text-[10px] font-semibold text-white">
           <Images className="h-3 w-3" /> {item.files.length}
         </span>
       )}
     </div>
 
     {/* quick actions */}
-    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 opacity-100 transition-all duration-200 sm:bottom-3 sm:left-3 sm:opacity-0 sm:group-hover/media:translate-y-0 sm:group-hover/media:opacity-100">
+    <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 opacity-100 transition-opacity duration-200 sm:bottom-3 sm:left-3 sm:opacity-0 sm:group-hover/media:opacity-100">
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation();
           onOpenComments(item);
         }}
-        className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1.5 text-[10px] font-semibold text-white backdrop-blur-md transition hover:bg-black/70"
+        className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-2.5 py-1.5 text-[10px] font-semibold text-white transition hover:bg-black/85"
       >
         <MessageSquare className="h-3 w-3" /> {item.commentsCount || 'Comment'}
       </button>
@@ -459,7 +469,7 @@ const MediaFrame: React.FC<{
           e.stopPropagation();
           onOpenViewer(item, 0, item.files.length > 1 ? 'grid' : 'expanded');
         }}
-        className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/55 px-2.5 py-1.5 text-[10px] font-semibold text-white backdrop-blur-md transition hover:bg-black/70"
+        className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-2.5 py-1.5 text-[10px] font-semibold text-white transition hover:bg-black/85"
       >
         <Maximize2 className="h-3 w-3" /> View
       </button>
@@ -475,27 +485,24 @@ const MemoryCard: React.FC<{
   item: SinglePostFeedItem;
   groups: Group[];
   selectedGroupId?: string;
-  open: boolean;
-  onToggleOptions: () => void;
+  priority?: boolean;
   onOpenViewer: TimelineFeedProps['onOpenViewer'];
   onOpenComments: (item: FeedItem) => void;
   onOpenCollection: (id: string) => void;
   onShare: (item: FeedItem, groupId: string) => void;
   sharing: boolean;
-  onEdit: () => void;
-  onConvert: () => void;
-  onPermissions: () => void;
-  onDelete: () => void;
-  onReport: () => void;
-  onRemoveFromCircle: (groupId: string) => void;
+  onEdit: (item: SinglePostFeedItem) => void;
+  onConvert: (item: FeedItem) => void;
+  onPermissions: (item: FeedItem) => void;
+  onDelete: (item: FeedItem) => void;
+  onReport: (item: FeedItem) => void;
+  onRemoveFromCircle: (item: FeedItem, groupId: string) => void;
   isDeleteProtected: boolean;
-  closeOptions: () => void;
-}> = ({
+}> = React.memo(({
   item,
   groups,
   selectedGroupId,
-  open,
-  onToggleOptions,
+  priority = false,
   onOpenViewer,
   onOpenComments,
   onShare,
@@ -507,7 +514,6 @@ const MemoryCard: React.FC<{
   onReport,
   onRemoveFromCircle,
   isDeleteProtected,
-  closeOptions,
 }) => {
   const { user } = useAuth();
   const isOwner = user?.id === item.owner.id || item.isOwner;
@@ -543,13 +549,10 @@ const MemoryCard: React.FC<{
 
         <Dropdown
           width={252}
-          trigger={({ toggle }) => (
+          trigger={({ open, toggle }) => (
             <button
               type="button"
-              onClick={() => {
-                onToggleOptions();
-                toggle();
-              }}
+              onClick={toggle}
               aria-label="Memory options"
               aria-expanded={open}
               className="btn-icon !h-8 !w-8 shrink-0"
@@ -565,7 +568,6 @@ const MemoryCard: React.FC<{
                 label="Open full view"
                 onClick={() => {
                   close();
-                  closeOptions();
                   onOpenViewer(item, 0, item.files.length > 1 ? 'grid' : 'expanded');
                 }}
               />
@@ -575,7 +577,6 @@ const MemoryCard: React.FC<{
                 hint={String(item.commentsCount || '')}
                 onClick={() => {
                   close();
-                  closeOptions();
                   onOpenComments(item);
                 }}
               />
@@ -587,8 +588,7 @@ const MemoryCard: React.FC<{
                     label="Edit date & caption"
                     onClick={() => {
                       close();
-                      closeOptions();
-                      onEdit();
+                      onEdit(item);
                     }}
                   />
                   <MenuItem
@@ -597,8 +597,7 @@ const MemoryCard: React.FC<{
                     tone="accent"
                     onClick={() => {
                       close();
-                      closeOptions();
-                      onConvert();
+                      onConvert(item);
                     }}
                   />
                   <MenuItem
@@ -606,8 +605,7 @@ const MemoryCard: React.FC<{
                     label="Circles & permissions"
                     onClick={() => {
                       close();
-                      closeOptions();
-                      onPermissions();
+                      onPermissions(item);
                     }}
                   />
                 </>
@@ -626,8 +624,7 @@ const MemoryCard: React.FC<{
                         label={pl.groupName}
                         onClick={() => {
                           close();
-                          closeOptions();
-                          onRemoveFromCircle(pl.groupId);
+                          onRemoveFromCircle(item, pl.groupId);
                         }}
                       />
                     ))
@@ -637,8 +634,7 @@ const MemoryCard: React.FC<{
                       label="This circle"
                       onClick={() => {
                         close();
-                        closeOptions();
-                        onRemoveFromCircle(selectedGroupId);
+                        onRemoveFromCircle(item, selectedGroupId);
                       }}
                     />
                   ) : (
@@ -652,8 +648,7 @@ const MemoryCard: React.FC<{
                   label="Report this memory"
                   onClick={() => {
                     close();
-                    closeOptions();
-                    onReport();
+                    onReport(item);
                   }}
                 />
               )}
@@ -671,8 +666,7 @@ const MemoryCard: React.FC<{
                       tone="danger"
                       onClick={() => {
                         close();
-                        closeOptions();
-                        onDelete();
+                        onDelete(item);
                       }}
                     />
                   )}
@@ -688,7 +682,7 @@ const MemoryCard: React.FC<{
         {item.caption && (
           <p className="mb-2.5 break-words text-[13px] leading-relaxed text-[var(--text-primary)]">{item.caption}</p>
         )}
-        <MediaFrame item={item} onOpenViewer={onOpenViewer} onOpenComments={onOpenComments} />
+        <MediaFrame item={item} onOpenViewer={onOpenViewer} onOpenComments={onOpenComments} priority={priority} />
       </div>
 
       {/* footer */}
@@ -752,7 +746,7 @@ const MemoryCard: React.FC<{
       </div>
     </article>
   );
-};
+});
 
 /* ---------------------------------------------------------------------------
    Event card (album)
@@ -760,28 +754,24 @@ const MemoryCard: React.FC<{
 
 const EventCard: React.FC<{
   item: Extract<FeedItem, { type: 'collection_card' }>;
+  priority?: boolean;
   onOpenCollection: (id: string) => void;
   onOpenComments: (item: FeedItem) => void;
-  onConvert: () => void;
-  onPermissions: () => void;
-  onDelete: () => void;
-  onEditEvent: () => void;
-  open: boolean;
-  onToggleOptions: () => void;
-  closeOptions: () => void;
+  onConvert: (item: FeedItem) => void;
+  onPermissions: (item: FeedItem) => void;
+  onDelete: (item: FeedItem) => void;
+  onEditEvent: (item: FeedItem) => void;
   isDeleteProtected: boolean;
   canManage: boolean;
-}> = ({
+}> = React.memo(({
   item,
+  priority = false,
   onOpenCollection,
   onOpenComments,
   onConvert,
   onPermissions,
   onDelete,
   onEditEvent,
-  open,
-  onToggleOptions,
-  closeOptions,
   isDeleteProtected,
   canManage,
 }) => {
@@ -799,7 +789,7 @@ const EventCard: React.FC<{
     <article className="tl-card card overflow-hidden">
       <div
         onClick={() => onOpenCollection(item.id)}
-        className={`shot relative aspect-16/9 w-full cursor-pointer border-b border-[var(--border-subtle)] ${''}`}
+        className="shot relative aspect-16/9 w-full cursor-pointer border-b border-[var(--border-subtle)]"
       >
         <div className={`grid h-full w-full gap-1 ${layout}`}>
           {mosaic.length > 0 ? (
@@ -808,6 +798,8 @@ const EventCard: React.FC<{
                 <img
                   src={url}
                   alt={`${item.title} ${idx + 1}`}
+                  loading={priority ? 'eager' : 'lazy'}
+                  decoding="async"
                   referrerPolicy="no-referrer"
                   className="h-full w-full object-cover"
                   onError={(e) => {
@@ -822,7 +814,7 @@ const EventCard: React.FC<{
                   }}
                 />
                 {idx === 3 && item.itemCount > 4 && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm font-bold text-white backdrop-blur-[1px]">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/65 text-sm font-bold text-white">
                     +{item.itemCount - 3}
                   </div>
                 )}
@@ -836,11 +828,11 @@ const EventCard: React.FC<{
         </div>
 
         <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between">
-          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md">
+          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/70 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white">
             <Sparkles className="h-3 w-3 text-[var(--accent-amber)]" />
             {item.isEvent ? 'Event' : 'Collection'}
           </span>
-          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md">
+          <span className="flex items-center gap-1.5 rounded-full border border-white/20 bg-black/70 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.12em] text-white">
             <Images className="h-3 w-3" /> {item.itemCount}
           </span>
         </div>
@@ -857,13 +849,10 @@ const EventCard: React.FC<{
 
           <Dropdown
             width={244}
-            trigger={({ toggle }) => (
+            trigger={({ open, toggle }) => (
               <button
                 type="button"
-                onClick={() => {
-                  onToggleOptions();
-                  toggle();
-                }}
+                onClick={toggle}
                 aria-label="Event options"
                 aria-expanded={open}
                 className="btn-icon !h-8 !w-8 shrink-0"
@@ -879,7 +868,6 @@ const EventCard: React.FC<{
                   label="Open event"
                   onClick={() => {
                     close();
-                    closeOptions();
                     onOpenCollection(item.id);
                   }}
                 />
@@ -888,7 +876,6 @@ const EventCard: React.FC<{
                   label="Event conversation"
                   onClick={() => {
                     close();
-                    closeOptions();
                     onOpenComments(item);
                   }}
                 />
@@ -900,8 +887,7 @@ const EventCard: React.FC<{
                       label="Edit event details"
                       onClick={() => {
                         close();
-                        closeOptions();
-                        onEditEvent();
+                        onEditEvent(item);
                       }}
                     />
                     {!item.isEvent && (
@@ -911,8 +897,7 @@ const EventCard: React.FC<{
                         tone="accent"
                         onClick={() => {
                           close();
-                          closeOptions();
-                          onConvert();
+                          onConvert(item);
                         }}
                       />
                     )}
@@ -921,8 +906,7 @@ const EventCard: React.FC<{
                       label="Circles & permissions"
                       onClick={() => {
                         close();
-                        closeOptions();
-                        onPermissions();
+                        onPermissions(item);
                       }}
                     />
                     <div className="my-1 h-px bg-[var(--border-subtle)]" />
@@ -937,8 +921,7 @@ const EventCard: React.FC<{
                         tone="danger"
                         onClick={() => {
                           close();
-                          closeOptions();
-                          onDelete();
+                          onDelete(item);
                         }}
                       />
                     )}
@@ -992,7 +975,7 @@ const EventCard: React.FC<{
       </div>
     </article>
   );
-};
+});
 
 /* ---------------------------------------------------------------------------
    Main timeline
@@ -1014,7 +997,6 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
   onResetFilters,
 }) => {
   const { user } = useAuth();
-  const [openOptionsMenuId, setOpenOptionsMenuId] = useState<string | null>(null);
   const [sharingLoadingId, setSharingLoadingId] = useState<string | null>(null);
 
   const [deleteConfirmItem, setDeleteConfirmItem] = useState<FeedItem | null>(null);
@@ -1090,7 +1072,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
       }));
   }, [items]);
 
-  const handleShareClick = async (item: FeedItem, targetGroupId: string) => {
+  const handleShareClick = useCallback(async (item: FeedItem, targetGroupId: string) => {
     setSharingLoadingId(item.id);
     try {
       await onShareToGroup(item.id, item.type === 'single_post' ? 'post' : 'album', targetGroupId);
@@ -1100,7 +1082,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     } finally {
       setSharingLoadingId(null);
     }
-  };
+  }, [onShareToGroup]);
 
   const executeDelete = async (permanent: boolean) => {
     if (!deleteConfirmItem) return;
@@ -1163,7 +1145,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     }
   };
 
-  const handleRemoveFromCircle = async (item: FeedItem, groupId: string) => {
+  const handleRemoveFromCircle = useCallback(async (item: FeedItem, groupId: string) => {
     const placement = item.placements?.find((p) => p.groupId === groupId);
     const circleName = placement?.groupName || groups.find((g) => g.id === groupId)?.name || 'circle';
     if (item.placements) item.placements = item.placements.filter((p) => p.groupId !== groupId);
@@ -1193,15 +1175,25 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     } catch {
       setToastMessage('Something went wrong removing that circle');
     }
-  };
+  }, [groups, onMemoryUpdated]);
 
-  const openConvert = (item: FeedItem) => {
+  const handleOpenEdit = useCallback((item: SinglePostFeedItem) => {
+    setEditItem({
+      id: item.id,
+      caption: item.caption || '',
+      takenAt: item.takenAt
+        ? new Date(item.takenAt).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
+    });
+  }, []);
+
+  const openConvert = useCallback((item: FeedItem) => {
     const raw = item.type === 'single_post' ? item.takenAt : item.eventDate || item.sortDate;
     setEventTitle(item.type === 'single_post' ? item.caption || 'Event memory' : item.title);
     setEventDate(raw ? new Date(raw).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
     setEventPlace(item.type === 'collection_card' ? item.eventPlace || '' : '');
     setConvertToEventItem(item);
-  };
+  }, []);
 
   const executeConvertToEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1262,8 +1254,8 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     <div className="relative">
       {/* toast */}
       {toastMessage && (
-        <div className="fixed inset-x-4 top-[calc(4.5rem+env(safe-area-inset-top,0px))] z-[80] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-card)]/95 px-4 py-2 text-[11.5px] font-semibold shadow-[var(--shadow-float)] backdrop-blur-xl fade-in">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+        <div className="fixed inset-x-4 top-[calc(4.5rem+env(safe-area-inset-top,0px))] z-[80] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-2 text-[11.5px] font-semibold shadow-[var(--shadow-float)] fade-in">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--tone-emerald-fg)]" />
           <span className="truncate">{toastMessage}</span>
         </div>
       )}
@@ -1299,7 +1291,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
           <div className="tl-root">
             <div className="tl-rail" aria-hidden="true" />
 
-            {sections.map((section) => {
+            {sections.map((section, sectionIdx) => {
               const people = new Set(
                 section.items.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))
               ).size;
@@ -1308,7 +1300,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                 <section key={section.key} className="tl-section">
                   <MonthMarker label={section.label} count={section.items.length} people={people} />
 
-                  {section.days.map((day) => {
+                  {section.days.map((day, dayIdx) => {
                     const dayCount = day.items.length;
                     return (
                       <div key={day.key} className="tl-day">
@@ -1324,13 +1316,10 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                         </div>
 
                         <div className="tl-day-cards">
-                          {day.items.map((item) => {
-                            const accent =
-                              item.type === 'single_post'
-                                ? accentFromName(item.owner.displayName)
-                                : 'var(--accent-coral)';
+                          {day.items.map((item, itemIdx) => {
                             const ownerId = item.type === 'single_post' ? item.owner.id : item.creator.id;
                             const canManage = user?.id === ownerId || user?.role === 'admin';
+                            const isPriority = sectionIdx === 0 && dayIdx === 0 && itemIdx < 2;
 
                             return (
                               <div key={item.id} className="tl-entry">
@@ -1351,47 +1340,31 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                                       item={item}
                                       groups={groups}
                                       selectedGroupId={selectedGroupId}
-                                      open={openOptionsMenuId === item.id}
-                                      onToggleOptions={() =>
-                                        setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
-                                      }
-                                      closeOptions={() => setOpenOptionsMenuId(null)}
+                                      priority={isPriority}
                                       onOpenViewer={onOpenViewer}
                                       onOpenComments={onOpenComments}
                                       onOpenCollection={onOpenCollection}
                                       onShare={handleShareClick}
                                       sharing={sharingLoadingId === item.id}
-                                      onEdit={() =>
-                                        setEditItem({
-                                          id: item.id,
-                                          caption: item.caption || '',
-                                          takenAt: item.takenAt
-                                            ? new Date(item.takenAt).toISOString().slice(0, 10)
-                                            : new Date().toISOString().slice(0, 10),
-                                        })
-                                      }
-                                      onConvert={() => openConvert(item)}
-                                      onPermissions={() => setPermissionsItem(item)}
-                                      onDelete={() => setDeleteConfirmItem(item)}
-                                      onReport={() => setReportItem(item)}
-                                      onRemoveFromCircle={(gid) => handleRemoveFromCircle(item, gid)}
+                                      onEdit={handleOpenEdit}
+                                      onConvert={openConvert}
+                                      onPermissions={setPermissionsItem}
+                                      onDelete={setDeleteConfirmItem}
+                                      onReport={setReportItem}
+                                      onRemoveFromCircle={handleRemoveFromCircle}
                                       isDeleteProtected={isDeleteProtected}
                                     />
                                   )
                                 ) : (
                                   <EventCard
                                     item={item}
+                                    priority={isPriority}
                                     onOpenCollection={onOpenCollection}
                                     onOpenComments={onOpenComments}
-                                    onConvert={() => openConvert(item)}
-                                    onPermissions={() => setPermissionsItem(item)}
-                                    onDelete={() => setDeleteConfirmItem(item)}
-                                    onEditEvent={() => openConvert(item)}
-                                    open={openOptionsMenuId === item.id}
-                                    onToggleOptions={() =>
-                                      setOpenOptionsMenuId(openOptionsMenuId === item.id ? null : item.id)
-                                    }
-                                    closeOptions={() => setOpenOptionsMenuId(null)}
+                                    onConvert={openConvert}
+                                    onPermissions={setPermissionsItem}
+                                    onDelete={setDeleteConfirmItem}
+                                    onEditEvent={openConvert}
                                     isDeleteProtected={isDeleteProtected}
                                     canManage={canManage}
                                   />

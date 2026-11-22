@@ -65,8 +65,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, o
   };
 
   return (
-    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-safe px-3 lg:hidden">
-      <div className="pointer-events-auto mx-auto mb-2 grid h-[62px] max-w-md grid-cols-5 items-center rounded-[26px] border border-[var(--border-color)] bg-[var(--bg-card)]/92 px-1.5 shadow-[0_18px_44px_-20px_rgba(0,0,0,0.85)] backdrop-blur-2xl">
+    <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 pb-safe px-3 lg:hidden transform-gpu">
+      <div className="pointer-events-auto mx-auto mb-2 grid h-[62px] max-w-md grid-cols-5 items-center rounded-[26px] border border-[var(--border-color)] bg-[var(--bg-card)]/97 px-1.5 shadow-[0_14px_34px_-18px_rgba(0,0,0,0.8)]">
         {left.map(renderTab)}
 
         <div className="flex items-center justify-center">

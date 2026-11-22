@@ -104,7 +104,7 @@ export const CirclesPage: React.FC<CirclesPageProps> = ({
               <article
                 key={g.id}
                 className={`card card-hover group relative overflow-hidden fade-in ${active ? 'border-[var(--accent-amber)]/50' : ''}`}
-                style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
+                style={{ animationDelay: `${Math.min(i, 5) * 20}ms` }}
               >
                 <div
                   aria-hidden

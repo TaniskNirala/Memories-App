@@ -91,7 +91,7 @@ export const EventsPage: React.FC<EventsPageProps> = ({
     <article
       key={c.id}
       className="card card-hover group overflow-hidden fade-in"
-      style={{ animationDelay: `${Math.min(i, 8) * 30}ms` }}
+      style={{ animationDelay: `${Math.min(i, 5) * 20}ms` }}
     >
       <button
         type="button"
@@ -106,9 +106,9 @@ export const EventsPage: React.FC<EventsPageProps> = ({
           >
             {c.mosaicUrls.slice(0, 4).map((url, idx) => (
               <div key={idx} className="relative h-full w-full overflow-hidden bg-[#0a0a12]">
-                <img src={url} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" />
+                <img src={url} alt="" referrerPolicy="no-referrer" className="h-full w-full object-cover" loading="lazy" decoding="async" />
                 {idx === 3 && c.itemCount > 4 && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[13px] font-bold text-white">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/65 text-[13px] font-bold text-white">
                     +{c.itemCount - 3}
                   </div>
                 )}
@@ -121,15 +121,15 @@ export const EventsPage: React.FC<EventsPageProps> = ({
           </div>
         )}
 
-        <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" style={{ background: 'linear-gradient(180deg, transparent 45%, rgba(0,0,0,0.72))' }} />
+        <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 sm:group-hover:opacity-100" style={{ background: 'linear-gradient(180deg, transparent 45%, rgba(0,0,0,0.72))' }} />
 
-        <span className="pointer-events-none absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full border border-white/20 bg-black/55 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-white backdrop-blur-md">
+        <span className="pointer-events-none absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full border border-white/20 bg-black/70 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-white">
           {c.isEvent ? <Sparkles className="h-2.5 w-2.5 text-[var(--accent-amber)]" /> : <Layers className="h-2.5 w-2.5" />}
           {c.isEvent ? 'Event' : 'Collection'}
         </span>
 
         {c.userAttended && (
-          <span className="pointer-events-none absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full border border-emerald-400/50 bg-black/65 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-300 backdrop-blur-md">
+          <span className="pointer-events-none absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full border border-emerald-400/50 bg-black/75 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.1em] text-emerald-300">
             <CheckCircle2 className="h-2.5 w-2.5" /> Attended
           </span>
         )}

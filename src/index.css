@@ -159,21 +159,16 @@
      is exactly why the pattern went missing — the playfield was opaque. */
   html {
     -webkit-tap-highlight-color: transparent;
-    scroll-behavior: smooth;
     background-color: var(--bg-page);
     overflow-x: clip;
-    transition: background-color 0.4s ease;
   }
 
   body {
-    /* dot grid + paper grain, kept off the opaque fill so the art shows */
+    /* dot grid — kept off the opaque fill so the art shows; avoids live SVG feTurbulence filter + fixed attachment repaints on mobile */
     background-color: transparent;
-    background-image:
-      radial-gradient(var(--paper-dot) 1px, transparent 1px),
-      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.05'/></svg>");
-    background-size: 24px 24px, 140px 140px;
-    background-repeat: repeat, repeat;
-    background-attachment: fixed, fixed;
+    background-image: radial-gradient(var(--paper-dot) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-repeat: repeat;
     color: var(--text-primary);
     font-family: var(--font-sans);
     font-feature-settings: 'ss01' on, 'cv11' on;
@@ -181,7 +176,6 @@
     -moz-osx-font-smoothing: grayscale;
     overscroll-behavior-y: none;
     overflow-x: clip;
-    transition: background-color 0.4s ease, color 0.4s ease;
   }
 
   /* Prevent iOS Safari from auto-zooming when focusing inputs on touch viewports */
@@ -193,19 +187,28 @@
     }
   }
 
-  /* Ambient aurora light behind everything */
+  /* Ambient aurora light behind everything — promoted onto its own GPU layer */
   body::before {
     content: "";
     position: fixed;
     inset: 0;
     z-index: -2;
     pointer-events: none;
+    transform: translateZ(0);
+    backface-visibility: hidden;
     background:
       radial-gradient(880px 620px at 4% -8%, var(--blob-a), transparent 70%),
       radial-gradient(760px 560px at 100% 4%, var(--blob-c), transparent 70%),
       radial-gradient(980px 700px at 78% 104%, var(--blob-b), transparent 72%),
       radial-gradient(1200px 900px at 50% 46%, transparent 42%, var(--vignette) 100%);
-    filter: saturate(1.06);
+  }
+
+  @media (max-width: 1023.98px) {
+    body::before {
+      background:
+        radial-gradient(520px 380px at 8% -6%, var(--blob-a), transparent 72%),
+        radial-gradient(560px 420px at 88% 104%, var(--blob-b), transparent 74%);
+    }
   }
 
   /* ------------------------------------------------------------------------
@@ -221,6 +224,8 @@
     /* Above the <html> page fill, below every in-flow surface */
     z-index: -1;
     pointer-events: none;
+    transform: translateZ(0);
+    backface-visibility: hidden;
     background-color: var(--pattern-ink);
     background-image: linear-gradient(160deg, transparent 30%, var(--pattern-tint) 78%);
     -webkit-mask-image: url("/bg-pattern.svg");
@@ -233,7 +238,13 @@
     mask-position: 0 0;
     -webkit-mask-mode: alpha;
     mask-mode: alpha;
-    transition: background-color 0.4s ease;
+  }
+
+  /* Full-screen SVG alpha-mask tiling (570 vector paths) stalls mobile GPUs during touch scroll */
+  @media (max-width: 1023.98px) {
+    body::after {
+      display: none;
+    }
   }
 
   h1, h2, h3, h4, .font-display {
@@ -258,9 +269,10 @@
     border-radius: 6px;
   }
 
-  button, [role="button"] {
+  button, [role="button"], a, label {
     -webkit-user-select: none;
     user-select: none;
+    touch-action: manipulation;
   }
 
   input, textarea, select {
@@ -286,14 +298,10 @@
   .surface {
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 55%),
-      color-mix(in oklab, var(--bg-card) var(--surface-opacity), transparent);
-    backdrop-filter: blur(22px) saturate(1.12);
-    -webkit-backdrop-filter: blur(22px) saturate(1.12);
+      var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 22px;
     box-shadow: var(--shadow-card);
-    backdrop-filter: blur(18px) saturate(1.1);
-    -webkit-backdrop-filter: blur(18px) saturate(1.1);
   }
 
   .surface-flat {
@@ -303,29 +311,35 @@
   }
 
   .surface-glass {
-    background: color-mix(in oklab, var(--bg-card) 72%, transparent);
+    background: color-mix(in oklab, var(--bg-card) 88%, transparent);
     border: 1px solid var(--glass-border);
     border-radius: 22px;
-    backdrop-filter: blur(26px) saturate(1.25);
-    -webkit-backdrop-filter: blur(26px) saturate(1.25);
     box-shadow: var(--shadow-float);
+  }
+  @media (min-width: 1024px) {
+    .surface-glass {
+      backdrop-filter: blur(18px) saturate(1.15);
+      -webkit-backdrop-filter: blur(18px) saturate(1.15);
+    }
   }
 
   .card, .playful-card {
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 60%),
-      color-mix(in oklab, var(--bg-card) var(--surface-opacity), transparent);
+      var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 24px;
     box-shadow: var(--shadow-card);
-    transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease, background-color 0.25s ease;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .card-hover:hover,
-  .card:hover {
-    border-color: color-mix(in oklab, var(--accent-amber) 45%, var(--border-color));
-    box-shadow: 0 24px 48px -30px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
-    transform: translateY(-2px);
+  @media (hover: hover) and (pointer: fine) {
+    .card-hover:hover,
+    .card:hover {
+      border-color: color-mix(in oklab, var(--accent-amber) 45%, var(--border-color));
+      box-shadow: 0 24px 48px -30px rgba(0, 0, 0, 0.85), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+      transform: translateY(-2px);
+    }
   }
 
   /* Login route: the same doodle sheet, a touch finer and softer so the card
@@ -340,12 +354,19 @@
     border: 1px solid var(--border-color);
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 45%),
-      color-mix(in oklab, var(--bg-card) 96%, transparent);
+      var(--bg-card);
     box-shadow:
       0 1px 0 rgba(255, 255, 255, 0.06) inset,
       0 40px 90px -50px rgba(0, 0, 0, 0.95);
-    backdrop-filter: blur(26px) saturate(1.15);
-    -webkit-backdrop-filter: blur(26px) saturate(1.15);
+  }
+  @media (min-width: 1024px) {
+    .auth-panel {
+      background:
+        linear-gradient(180deg, var(--glass-tint), transparent 45%),
+        color-mix(in oklab, var(--bg-card) 96%, transparent);
+      backdrop-filter: blur(18px) saturate(1.1);
+      -webkit-backdrop-filter: blur(18px) saturate(1.1);
+    }
   }
 
   .card-glow {
@@ -429,17 +450,18 @@
     height: 2.35rem;
     border-radius: 999px;
     border: 1px solid var(--border-color);
-    background: color-mix(in oklab, var(--bg-surface) 75%, transparent);
+    background: var(--bg-surface);
     color: var(--text-secondary);
-    transition: all 0.18s ease;
+    transition: transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
     cursor: pointer;
-    backdrop-filter: blur(12px);
   }
-  .btn-icon:hover {
-    color: var(--text-primary);
-    border-color: color-mix(in oklab, var(--accent-amber) 45%, var(--border-color));
-    background: var(--bg-surface-elevated);
-    transform: translateY(-1px);
+  @media (hover: hover) and (pointer: fine) {
+    .btn-icon:hover {
+      color: var(--text-primary);
+      border-color: color-mix(in oklab, var(--accent-amber) 45%, var(--border-color));
+      background: var(--bg-surface-elevated);
+      transform: translateY(-1px);
+    }
   }
 
   .chip {
@@ -451,12 +473,14 @@
     font-size: 0.68rem;
     font-weight: 600;
     color: var(--text-secondary);
-    background: color-mix(in oklab, var(--bg-surface) 80%, transparent);
+    background: color-mix(in oklab, var(--bg-surface) 85%, transparent);
     border: 1px solid var(--border-subtle);
-    transition: all 0.18s ease;
+    transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
     white-space: nowrap;
   }
-  .chip:hover { color: var(--text-primary); border-color: var(--border-color); }
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover { color: var(--text-primary); border-color: var(--border-color); }
+  }
   .chip-active {
     background: color-mix(in oklab, var(--accent-amber) 16%, transparent);
     border-color: color-mix(in oklab, var(--accent-amber) 45%, transparent);
@@ -502,14 +526,15 @@
     padding: 0.75rem;
     padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
-    background: color-mix(in oklab, #05060b 68%, transparent);
-    backdrop-filter: blur(10px) saturate(0.9);
-    -webkit-backdrop-filter: blur(10px) saturate(0.9);
-    animation: scrim-in 0.2s ease both;
+    background: rgba(5, 6, 11, 0.78);
+    animation: scrim-in 0.16s ease both;
   }
   @media (min-width: 640px) {
     .scrim {
       padding: 1rem;
+      background: color-mix(in oklab, #05060b 68%, transparent);
+      backdrop-filter: blur(8px) saturate(0.95);
+      -webkit-backdrop-filter: blur(8px) saturate(0.95);
     }
   }
 
@@ -519,12 +544,10 @@
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 40%),
       var(--bg-card);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
     border: 1px solid var(--border-color);
     border-radius: 22px;
     box-shadow: var(--shadow-float), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
-    animation: panel-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: panel-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
     overflow: hidden;
   }
   @media (min-width: 640px) {
@@ -585,15 +608,12 @@
     width: 2px;
     transform: translateX(-1px);
     border-radius: 999px;
-    background-image: linear-gradient(
+    background: repeating-linear-gradient(
       180deg,
-      color-mix(in oklab, var(--accent-amber) 70%, transparent) 0 28%,
-      color-mix(in oklab, var(--accent-coral) 55%, transparent) 28% 62%,
-      color-mix(in oklab, var(--accent-cyan) 50%, transparent) 62% 100%
+      color-mix(in oklab, var(--accent-amber) 58%, var(--border-color)) 0 6px,
+      transparent 6px 12px
     );
-    -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 6px, transparent 6px 12px);
-    mask-image: repeating-linear-gradient(180deg, #000 0 6px, transparent 6px 12px);
-    opacity: 0.95;
+    opacity: 0.9;
   }
 
   /* month "chapter" marker — stays in place on the timeline (does not follow scroll) */
@@ -613,14 +633,12 @@
     margin-left: calc(-1 * var(--tl-pad));
     padding: 0.32rem 0.8rem 0.32rem 0.35rem;
     border-radius: 999px;
-    background: color-mix(in oklab, var(--bg-card) 92%, transparent);
+    background: var(--bg-card);
     border: 1px dashed color-mix(in oklab, var(--border-color) 80%, var(--accent-amber));
     color: var(--text-primary);
     font-weight: 700;
     letter-spacing: -0.01em;
     box-shadow: var(--shadow-card);
-    backdrop-filter: blur(18px);
-    -webkit-backdrop-filter: blur(18px);
     position: relative;
     z-index: 3;
     pointer-events: auto;
@@ -707,7 +725,15 @@
   .tl-day-cards { display: flex; flex-direction: column; gap: 1rem; }
 
   /* ---- zigzag entries at >= 900px ---- */
-  .tl-entry { position: relative; }
+  .tl-entry {
+    position: relative;
+  }
+  @media (max-width: 899.98px) {
+    .tl-entry {
+      content-visibility: auto;
+      contain-intrinsic-size: auto 340px;
+    }
+  }
 
   @media (min-width: 900px) {
     .tl-root { --tl-pad: 0px; }
@@ -793,17 +819,20 @@
   .tl-card {
     background:
       linear-gradient(180deg, var(--glass-tint), transparent 55%),
-      color-mix(in oklab, var(--bg-card) var(--surface-opacity), transparent);
+      var(--bg-card);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-card);
-    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   }
-  .tl-card:hover {
-    transform: translateY(-2px);
-    border-color: color-mix(in oklab, var(--accent-amber) 38%, var(--border-color));
-    box-shadow: 0 26px 50px -32px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  @media (hover: hover) and (pointer: fine) {
+    .tl-card:hover {
+      transform: translateY(-2px);
+      border-color: color-mix(in oklab, var(--accent-amber) 38%, var(--border-color));
+      box-shadow: 0 26px 50px -32px rgba(0, 0, 0, 0.9), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    }
+    .tl-day:hover { z-index: 20; }
   }
-  .tl-day:hover, .tl-day:focus-within { z-index: 20; }
+  .tl-day:focus-within { z-index: 20; }
 
   /* ---------------------------------------------------------------- Misc */
   .avatar-ring {
@@ -817,8 +846,10 @@
     overflow: hidden;
     background: #0a0a10;
   }
-  .shot img { transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.4s ease; }
-  .shot:hover img { transform: scale(1.035); }
+  .shot img { transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+  @media (hover: hover) and (pointer: fine) {
+    .shot:hover img { transform: scale(1.035); }
+  }
 
   .shimmer {
     position: relative;
@@ -834,7 +865,7 @@
     animation: shimmer 1.6s infinite;
   }
 
-  .fade-in { animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .fade-in { animation: fade-up 0.24s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
   .glow-text {
     background: var(--gradient-ember);
@@ -845,6 +876,8 @@
 
   .scroll-x {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
   }
   .scroll-x::-webkit-scrollbar { display: none; }

@@ -557,6 +557,8 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
                     <img
                       src={item.thumbUrl || item.viewUrl}
                       alt={item.caption || 'Event photo'}
+                      loading="lazy"
+                      decoding="async"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         const target = e.currentTarget;

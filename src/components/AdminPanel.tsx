@@ -25,14 +25,20 @@ import { AuditLogItem } from '../types/index.ts';
 import { StorageCapabilitiesResponse } from '../utils/uploadWithProgress.ts';
 import { Avatar, PageHero, StatTile } from './ui/kit.tsx';
 
+// Wrapper does the admin check so the hooks in AdminPanelInner are never
+// skipped conditionally (React error #310).
 export const AdminPanel: React.FC = () => {
   const { user, isAdmin } = useAuth();
-  const [activeTab, setActiveTab] = useState<'signups' | 'users' | 'circles' | 'proposals' | 'reports' | 'audit'>('signups');
-
   // If user is not an admin, do not render or fetch anything
   if (!isAdmin || user?.role !== 'admin') {
     return null;
   }
+  return <AdminPanelInner />;
+};
+
+const AdminPanelInner: React.FC = () => {
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'signups' | 'users' | 'circles' | 'proposals' | 'reports' | 'audit'>('signups');
 
   const [pendingSignups, setPendingSignups] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);

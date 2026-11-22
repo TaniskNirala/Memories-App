@@ -387,6 +387,32 @@ const MainContent: React.FC = () => {
     };
   }, []);
 
+  // NOTE: all hooks must be declared above the early returns below (React error #310).
+  // Handle direct sharing from timeline card dropdown
+  const handleDirectShare = useCallback(async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
+    try {
+      const res = await apiFetch('/api/placements/bunch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemIds: [itemId],
+          itemType,
+          groupIds: [targetGroupId],
+        }),
+      });
+      if (res.ok) {
+        await fetchFeed(true);
+      }
+    } catch (e) {
+      console.error('Share to group failed', e);
+    }
+  }, [selectedGroupId, user, isPending]);
+
+  const contributorsCount = useMemo(
+    () => new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size,
+    [feedItems]
+  );
+
   if (loading) {
     return (
       <div className="app-shell items-center justify-center gap-3">
@@ -411,26 +437,6 @@ const MainContent: React.FC = () => {
       </div>
     );
   }
-
-  // Handle direct sharing from timeline card dropdown
-  const handleDirectShare = useCallback(async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
-    try {
-      const res = await apiFetch('/api/placements/bunch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          itemIds: [itemId],
-          itemType,
-          groupIds: [targetGroupId],
-        }),
-      });
-      if (res.ok) {
-        await fetchFeed(true);
-      }
-    } catch (e) {
-      console.error('Share to group failed', e);
-    }
-  }, [selectedGroupId, user, isPending]);
 
   const handleDeletePost = async (postId: string, permanent: boolean = false) => {
     try {
@@ -624,11 +630,6 @@ const MainContent: React.FC = () => {
     // Default fallback:
     setCurrentTab('feed');
   };
-
-  const contributorsCount = useMemo(
-    () => new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size,
-    [feedItems]
-  );
 
   return (
     <div className="app-shell text-[var(--text-primary)] pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))] lg:h-dvh lg:overflow-hidden lg:pb-0">

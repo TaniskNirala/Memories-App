@@ -574,10 +574,23 @@ async function runTests() {
         throw new Error(`avatar upload failed: ${up.status} ${JSON.stringify(upBody)}`);
       }
 
+      // Stored under a namespaced key so the storage lane and the read path agree
+      const storedKey = decodeURIComponent(String(upBody.avatarUrl).split('key=')[1] || '');
+      if (!/^avatars\/[^/]+\/[^/]+$/.test(storedKey)) {
+        throw new Error(`avatar key is not namespaced: ${storedKey}`);
+      }
+
       // The photo is served back to the signed-in owner…
       const view = await fetch(`${baseUrl}${upBody.avatarUrl}`, { headers: auth });
       if (view.status !== 200) throw new Error(`uploaded photo not readable (${view.status})`);
-      await view.arrayBuffer();
+
+      // …with the actual image bytes, not an error page or a colour tile
+      const servedBytes = Buffer.from(await view.arrayBuffer());
+      if (!servedBytes.equals(png)) {
+        throw new Error(`served avatar bytes do not match the upload (${servedBytes.length} vs ${png.length})`);
+      }
+      const servedType = view.headers.get('content-type') || '';
+      if (!servedType.startsWith('image/')) throw new Error(`avatar served as ${servedType}`);
 
       // …and is echoed by /me and by other people's feeds
       const me: any = await (await fetch(`${baseUrl}/api/auth/me`, { headers: auth })).json();

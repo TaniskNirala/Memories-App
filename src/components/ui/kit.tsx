@@ -32,6 +32,14 @@ export const Avatar: React.FC<{
 }> = ({ name, color, src, size = 34, ring = false, className = '', title }) => {
   const label = initials(name);
   const bg = avatarGradient(color, name);
+  /* A failed load must be tracked in state, not patched by hiding the <img>:
+     otherwise a broken photo is indistinguishable from "no photo set" and the
+     component quietly shows the colour tile as if that were the intent. */
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+  const showPhoto = Boolean(src) && !failed;
   return (
     <span
       title={title || name}
@@ -44,20 +52,29 @@ export const Avatar: React.FC<{
         className="absolute inset-0 rounded-full"
         style={{ background: bg, boxShadow: '0 1px 0 rgba(255,255,255,0.28) inset' }}
       />
-      {src ? (
+      {showPhoto ? (
         <img
           src={src}
           alt={name || 'avatar'}
           loading="lazy"
           className="absolute inset-0 h-full w-full object-cover"
           style={{ borderRadius: 999 }}
-          /* a missing/corrupt file must fall back to the colour initials */
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = 'none';
-          }}
+          onError={() => setFailed(true)}
         />
       ) : (
-        <span className="relative z-10 leading-none">{label}</span>
+        <>
+          <span className="relative z-10 leading-none">{label}</span>
+          {/* Broken photo: initials stay, plus a small warning dot so a failed
+              load is never mistaken for "this user has no photo". */}
+          {src && failed && (
+            <span
+              title="That photo could not be loaded"
+              aria-label="Profile photo unavailable"
+              role="img"
+              className="absolute right-0 top-0 z-20 h-2 w-2 rounded-full bg-rose-500 ring-1 ring-black/40"
+            />
+          )}
+        </>
       )}
     </span>
   );

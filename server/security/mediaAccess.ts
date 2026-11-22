@@ -21,6 +21,14 @@ export function normaliseKey(raw: string): string {
   return key.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^uploads\//, '');
 }
 
+function keyMatchesAnyAvatar(key: string): boolean {
+  try {
+    return queryAll<{ id: string }>('SELECT id FROM users WHERE avatar_url = ? LIMIT 1', [key]).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function alternateKeys(key: string): string[] {
   const keys = new Set<string>([key]);
   if (key.includes('_thumb')) {
@@ -49,8 +57,13 @@ export function canAccessStorageKey(viewer: Viewer, rawKey: string): boolean {
 
   if (key.startsWith(`posts/${viewer.id}/`)) return true;
 
-  // Profile photos: readable by any active member, writable only via /api/auth/avatar
+  // Profile photos: readable by any active member, writable only via /api/auth/avatar.
+  // Keys are normally `avatars/<userId>/<file>`, but a Telegram/S3 lane may have
+  // rewritten the stored key (e.g. `tg:<file_id>@<msg>/name`), so match the users
+  // table as well — otherwise an uploaded photo 404s and the avatar silently
+  // falls back to the colour tile.
   if (key.startsWith('avatars/')) return true;
+  if (keyMatchesAnyAvatar(key)) return true;
 
   const candidates = alternateKeys(key);
   const placeholders = candidates.map(() => '?').join(',');

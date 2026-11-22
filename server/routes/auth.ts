@@ -7,8 +7,9 @@ import multer from 'multer';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, clearFailedAttempts } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { LocalDiskStorageAdapter } from '../storage/local.ts';
 import { createRateLimiter } from '../security/rateLimit.ts';
-import { avatarUrlFor } from '../security/avatars.ts';
+import { avatarUrlFor, isAvatarKey } from '../security/avatars.ts';
 import { validatePassword, hashPassword, needsRehash, DUMMY_HASH } from '../security/passwords.ts';
 import { hashToken } from '../security/tokens.ts';
 import { createSession, clearSessionCookie } from '../security/session.ts';
@@ -73,6 +74,23 @@ function handleAvatarUpload(req: any, res: any, next: any) {
 /** Only the two supported palettes are ever persisted or returned. */
 function normaliseTheme(value: unknown): 'dark' | 'light' | undefined {
   return value === 'dark' || value === 'light' ? value : undefined;
+}
+
+/**
+ * Remove a profile photo from every lane it may live in: the storage adapter
+ * (Telegram/S3) and the canonical local copy under uploads/.
+ */
+async function deleteAvatarObjects(key: string | null | undefined): Promise<void> {
+  if (!key) return;
+  // The stored key is either our own `avatars/…` key or a cloud lane's key (e.g.
+  // `tg:<file_id>@<msg>/name`); ask the adapter to drop whichever it is.
+  try {
+    await getStorageAdapter().deleteObject(key);
+  } catch {}
+  // A local-lane avatar (or the copy kept for the local fallback) lives on disk.
+  try {
+    await new LocalDiskStorageAdapter().deleteObject(key);
+  } catch {}
 }
 
 const registerLimiter = createRateLimiter({ windowMs: 60 * 60 * 1000, max: 10, message: 'Too many sign-up attempts. Please try again later.' });
@@ -363,11 +381,7 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     const row = queryOne<{ avatar_url: string | null }>('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
     removedKey = row?.avatar_url || null;
     run('UPDATE users SET avatar_url = NULL WHERE id = ?', [req.user.id]);
-    if (removedKey && removedKey.startsWith('avatars/')) {
-      try {
-        await getStorageAdapter().deleteObject(removedKey);
-      } catch {}
-    }
+    await deleteAvatarObjects(removedKey);
   }
 
   const fresh = queryOne<{
@@ -412,31 +426,51 @@ authRouter.post('/avatar', handleAvatarUpload, async (req: AuthenticatedRequest,
     return res.status(400).json({ error: 'Pick a PNG, JPEG or WebP image under 2 MB' });
   }
 
-  const storageKey = `avatars/${file.filename}`;
+  // Namespaced like post media (`posts/<userId>/…`) so the storage-key rules
+  // and the "same upload, other extension" fallbacks already understand it.
+  const storageKey = `avatars/${req.user.id}/${file.filename}`;
   let finalKey = storageKey;
   try {
+    const bytes = fs.readFileSync(file.path);
+
+    // Always keep a copy at the canonical local key. Without this the image only
+    // exists at uploads/avatars/<name>, which /api/storage/view cannot resolve
+    // once the storage lane is Telegram/S3 — the photo then 404s and the avatar
+    // silently falls back to the colour tile.
+    const local = new LocalDiskStorageAdapter();
+    fs.writeFileSync(local.getFilePathForWrite(storageKey), bytes);
+
     const storage = getStorageAdapter();
     if (storage.putObject) {
-      const returned = await storage.putObject(storageKey, fs.readFileSync(file.path), file.mimetype, {
+      const returned = await storage.putObject(storageKey, bytes, file.mimetype, {
         filePath: file.path,
         fileName: file.originalname,
-        fileSize: fs.statSync(file.path).size,
+        fileSize: bytes.length,
       });
       if (typeof returned === 'string' && returned.length > 0) finalKey = returned;
     }
+
+    // A cloud lane (Telegram/S3) hands back its own key and keeps its own cache,
+    // so the local copy would just be a duplicate. Local-lane uploads keep it.
+    if (finalKey !== storageKey) {
+      try {
+        await local.deleteObject(storageKey);
+      } catch {}
+    }
   } catch (err: any) {
+    return res.status(500).json({ error: err?.message || 'Could not store that image' });
+  } finally {
+    // The image now lives at its canonical key; dropping the multer temp file
+    // keeps uploads/avatars/ from growing one orphan per replace.
     try {
       fs.unlink(file.path, () => {});
     } catch {}
-    return res.status(500).json({ error: err?.message || 'Could not store that image' });
   }
 
   const previous = queryOne<{ avatar_url: string | null }>('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
   run('UPDATE users SET avatar_url = ? WHERE id = ?', [finalKey, req.user.id]);
-  if (previous?.avatar_url && previous.avatar_url !== finalKey && previous.avatar_url.startsWith('avatars/')) {
-    try {
-      await getStorageAdapter().deleteObject(previous.avatar_url);
-    } catch {}
+  if (previous?.avatar_url && previous.avatar_url !== finalKey) {
+    await deleteAvatarObjects(previous.avatar_url);
   }
 
   return res.json({ success: true, avatarUrl: avatarUrlFor(finalKey) });

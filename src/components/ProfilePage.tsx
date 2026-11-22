@@ -243,7 +243,8 @@ export const ProfilePage: React.FC = () => {
             <div className="min-w-0 flex-1">
               <p className="text-[11.5px] font-bold">Profile photo</p>
               <p className="mt-0.5 text-[10px] leading-relaxed text-[var(--text-muted)]">
-                PNG, JPEG or WebP up to 2 MB. Falls back to your colour initials.
+                PNG, JPEG or WebP up to 2 MB. Your photo replaces the colour initials; if it cannot load, the
+                initials return with a small red dot.
               </p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <input

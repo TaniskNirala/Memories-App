@@ -648,7 +648,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         <div className="relative w-full h-full flex flex-col items-center pt-20 pb-8 px-4 sm:px-8 overflow-y-auto">
           <div className="w-full max-w-4xl space-y-5 my-auto">
             {/* Album Header Banner */}
-            <div className="bg-neutral-900/80 border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl backdrop-blur-md">
+            <div className="bg-neutral-900/90 border border-white/10 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl">
               <div>
                 {item.caption ? (
                   <h2 className="font-display font-bold text-lg sm:text-xl text-white">
@@ -756,22 +756,24 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     </>
                   ) : (
                     <img
-                      src={file.viewUrl || file.thumbUrl}
+                      src={file.thumbUrl || file.viewUrl}
                       alt={`${item.caption || 'Memory'} ${idx + 1}`}
+                      loading="lazy"
+                      decoding="async"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         const target = e.currentTarget;
-                        if (!target.dataset.triedFallback && file.storageKey) {
+                        if (!target.dataset.triedFallback && (file.thumbKey || file.storageKey)) {
                           target.dataset.triedFallback = 'true';
-                          target.src = `/api/storage/view?key=${encodeURIComponent(file.storageKey)}`;
+                          target.src = `/api/storage/view?key=${encodeURIComponent(file.thumbKey || file.storageKey || '')}`;
                         }
                       }}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      className="w-full h-full object-cover transition-transform duration-300 sm:group-hover:scale-105"
                     />
                   )}
 
                   {/* Corner Badge */}
-                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-xs text-white text-[10px] font-mono border border-white/10">
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/75 text-white text-[10px] font-mono border border-white/10">
                     {isVideoMedia(file) ? `VIDEO #${idx + 1}` : `#${idx + 1}`}
                   </div>
                   {file.tgDeleted && <TgDeletedBadge compact />}
@@ -784,7 +786,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         setFileIndex(idx);
                         setIsEditorOpen(true);
                       }}
-                      className="absolute top-2 right-9 p-1.5 rounded-full bg-black/75 hover:bg-amber-500 text-[var(--text-secondary)] hover:text-neutral-950 backdrop-blur-xs border border-white/20 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 z-10 shadow-md"
+                      className="absolute top-2 right-9 p-1.5 rounded-full bg-black/80 hover:bg-amber-500 text-[var(--text-secondary)] hover:text-neutral-950 border border-white/20 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 z-10 shadow-md"
                       title={`Crop & Rotate Photo #${idx + 1}`}
                     >
                       <Crop className="w-3.5 h-3.5" />
@@ -798,7 +800,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         e.stopPropagation();
                         setDeleteTargetPhoto({ id: file.id, index: idx });
                       }}
-                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/75 hover:bg-rose-600 text-[var(--text-secondary)] hover:text-white backdrop-blur-xs border border-white/20 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 z-10 shadow-md"
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/80 hover:bg-rose-600 text-[var(--text-secondary)] hover:text-white border border-white/20 transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100 z-10 shadow-md"
                       title={`Delete Photo #${idx + 1}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -806,7 +808,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   )}
 
                   {/* Hover Overlay */}
-                  <div className="absolute inset-0 bg-black/50 backdrop-blur-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center gap-1.5 text-white">
+                  <div className="hidden sm:flex absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex-col items-center justify-center gap-1.5 text-white">
                     <div className="w-9 h-9 rounded-full bg-amber-500 text-neutral-950 flex items-center justify-center shadow-md">
                       <Maximize2 className="w-4 h-4" />
                     </div>
@@ -1093,8 +1095,10 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                         </>
                       ) : (
                         <img
-                          src={f.viewUrl || f.thumbUrl}
+                          src={f.thumbUrl || f.viewUrl}
                           alt={`Thumb ${idx + 1}`}
+                          loading="lazy"
+                          decoding="async"
                           referrerPolicy="no-referrer"
                           onError={(e) => {
                             const target = e.currentTarget;

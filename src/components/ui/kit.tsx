@@ -58,6 +58,7 @@ export const Avatar: React.FC<{
           src={src}
           alt={name || 'avatar'}
           loading="lazy"
+          decoding="async"
           className="absolute inset-0 z-10 h-full w-full object-cover"
           style={{ borderRadius: 999 }}
           /* a missing/corrupt file must fall back to the colour initials */
@@ -204,7 +205,7 @@ export const Segmented = <T extends string>({
   className?: string;
 }) => (
   <div
-    className={`inline-flex items-center gap-1 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 p-1 backdrop-blur-md ${className}`}
+    className={`inline-flex items-center gap-1 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/85 p-1 ${className}`}
   >
     {options.map((o) => {
       const active = o.id === value;
@@ -325,19 +326,25 @@ export const Dropdown: React.FC<{
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
+    let rafId: number | null = null;
     const onScrollOrResize = (e: Event) => {
       if (e.type === 'scroll' && menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) {
         return;
       }
-      updatePosition();
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = null;
+        updatePosition();
+      });
     };
 
     document.addEventListener('mousedown', onDown);
-    document.addEventListener('touchstart', onDown);
+    document.addEventListener('touchstart', onDown, { passive: true });
     document.addEventListener('keydown', onKey);
-    window.addEventListener('resize', onScrollOrResize);
-    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize, { passive: true });
+    window.addEventListener('scroll', onScrollOrResize, { capture: true, passive: true });
     return () => {
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('touchstart', onDown);
       document.removeEventListener('keydown', onKey);
@@ -364,7 +371,7 @@ export const Dropdown: React.FC<{
               maxWidth: 'min(calc(100vw - 1.5rem), 320px)',
               maxHeight: coords.maxHeight,
             }}
-            className={`z-[95] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 p-1.5 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in ${
+            className={`z-[95] overflow-y-auto rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] p-1.5 shadow-[var(--shadow-float)] lg:backdrop-blur-xl fade-in ${
               coords.originY === 'bottom'
                 ? align === 'right'
                   ? 'origin-bottom-right'
@@ -571,7 +578,7 @@ export const PageHero: React.FC<{
   ) : null;
 
   return (
-    <header className="relative overflow-hidden rounded-[24px] border border-[var(--border-color)] bg-[var(--bg-card)]/70 px-4 py-4 backdrop-blur-xl sm:rounded-[28px] sm:px-6 sm:py-6">
+    <header className="relative overflow-hidden rounded-[24px] border border-[var(--border-color)] bg-[var(--bg-card)] px-4 py-4 sm:rounded-[28px] sm:px-6 sm:py-6">
       <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: gradient }} />
       <div
         aria-hidden

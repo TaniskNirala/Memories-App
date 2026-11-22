@@ -188,7 +188,7 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
         <button
           type="button"
           onClick={toggleTheme}
-          className="btn-icon absolute right-3.5 top-[max(0.9rem,env(safe-area-inset-top))] z-30 !h-9 !w-9 backdrop-blur-xl sm:right-4 sm:top-4"
+          className="btn-icon absolute right-3.5 top-[max(0.9rem,env(safe-area-inset-top))] z-30 !h-9 !w-9 sm:right-4 sm:top-4"
           aria-label="Toggle theme"
         >
           {isDark ? (

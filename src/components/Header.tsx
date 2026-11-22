@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
       }
     };
     document.addEventListener('mousedown', onPointerDown, true);
-    document.addEventListener('touchstart', onPointerDown, true);
+    document.addEventListener('touchstart', onPointerDown, { capture: true, passive: true });
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('mousedown', onPointerDown, true);
@@ -96,23 +96,19 @@ export const Header: React.FC<HeaderProps> = ({
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 15000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      fetchNotifications();
+    }, 25000);
+    const onVisible = () => {
+      if (!document.hidden) fetchNotifications();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [user, isPending]);
-
-  // Close any open popover when a click lands outside of it
-  useEffect(() => {
-    const close = () => {
-      setShowUserMenu(false);
-      setShowNotif(false);
-    };
-    if (!showUserMenu && !showNotif) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [showUserMenu, showNotif]);
 
   const markAllRead = async () => {
     try {
@@ -136,9 +132,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <div className="sticky top-0 z-50 w-full px-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-3 sm:pt-3">
+      <div className="sticky top-0 z-50 w-full px-2 pt-[max(0.5rem,env(safe-area-inset-top))] sm:px-3 sm:pt-3 transform-gpu">
         <header className="page-wrap !px-0">
-          <div className="flex h-[54px] items-center gap-1.5 rounded-[18px] border border-[var(--border-color)] bg-[color-mix(in_oklab,var(--bg-card)_92%,transparent)] px-2 shadow-[0_18px_40px_-30px_rgba(0,0,0,0.95)] backdrop-blur-2xl sm:h-[58px] sm:gap-3 sm:px-3.5">
+          <div className="flex h-[54px] items-center gap-1.5 rounded-[18px] border border-[var(--border-color)] bg-[var(--bg-card)]/96 lg:bg-[color-mix(in_oklab,var(--bg-card)_92%,transparent)] px-2 shadow-[0_14px_32px_-26px_rgba(0,0,0,0.85)] lg:backdrop-blur-xl sm:h-[58px] sm:gap-3 sm:px-3.5">
             {/* ---- identity */}
             <a
               href="/"
@@ -232,7 +228,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {showNotif && (
                   <>
                     <div className="fixed inset-0 z-[55]" onClick={() => setShowNotif(false)} />
-                    <div className="fixed inset-x-3 top-[66px] z-[60] max-h-[75dvh] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[340px]">
+                    <div className="fixed inset-x-3 top-[66px] z-[60] max-h-[75dvh] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-[var(--shadow-float)] lg:backdrop-blur-xl fade-in sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[340px]">
                       <div className="flex items-center justify-between border-b border-[var(--border-subtle)] px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className="font-display text-sm">Notifications</span>
@@ -328,7 +324,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {showUserMenu && (
                     <>
                       <div className="fixed inset-0 z-[55]" onClick={() => setShowUserMenu(false)} />
-                      <div className="absolute right-0 z-[60] mt-2 w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)]/98 shadow-[var(--shadow-float)] backdrop-blur-2xl fade-in">
+                      <div className="absolute right-0 z-[60] mt-2 w-64 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-card)] shadow-[var(--shadow-float)] lg:backdrop-blur-xl fade-in">
                         <div className="flex items-center gap-3 border-b border-[var(--border-subtle)] bg-[var(--bg-surface)]/50 px-3.5 py-3">
                           <Avatar name={user.displayName || user.username} color={user.avatarColor} src={user.avatarUrl} size={38} ring />
                           <div className="min-w-0">

@@ -154,7 +154,7 @@ export const TrashView: React.FC = () => {
               <div key={item.id} className="surface group flex flex-wrap items-center gap-3 p-3 transition hover:border-[var(--accent-amber)]/35 sm:flex-nowrap sm:p-2.5">
                 <div className="shot h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-[var(--border-subtle)]">
                   {thumb ? (
-                    <img src={thumb} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={thumb} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-[var(--bg-surface)] text-[var(--text-muted)]">
                       <ImageIcon className="h-4 w-4 opacity-60" />

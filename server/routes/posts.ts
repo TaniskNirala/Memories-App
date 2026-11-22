@@ -1,5 +1,5 @@
 import { safeExtension, isAllowedUploadMime, isAllowedMediaName } from '../security/media.ts';
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
@@ -10,6 +10,12 @@ import { getStorageAdapter, getStorageCapabilities, isCloudStorageBackend, isTel
 import { syncStorageToDatabase } from '../storage/sync.ts';
 import { isDeleteProtected } from '../config.ts';
 import { avatarUrlFor } from '../security/avatars.ts';
+import { logger, errMessage } from '../logger.ts';
+import { canUserViewPost } from '../security/postAccess.ts';
+import { uploadProgressClients, emitUploadProgress, emitUploadDone } from '../uploadProgress.ts';
+import { computeFileSha256 } from '../security/fileHash.ts';
+import { MB, GB } from '../limits.ts';
+import type { Row } from '../rows.ts';
 
 // Multer disk storage setup for reliable multipart file uploads
 const uploadsBaseDir = path.resolve(process.cwd(), 'uploads');
@@ -18,8 +24,8 @@ if (!fs.existsSync(uploadsBaseDir)) {
 }
 
 const diskStorage = multer.diskStorage({
-  destination: (req: any, _file, cb) => {
-    const userId = req.user?.id || 'anon';
+  destination: (req, _file, cb) => {
+    const userId = (req as AuthenticatedRequest).user?.id || 'anon';
     const userDir = path.join(uploadsBaseDir, 'posts', userId);
     if (!fs.existsSync(userDir)) {
       fs.mkdirSync(userDir, { recursive: true });
@@ -38,7 +44,7 @@ const diskStorage = multer.diskStorage({
 
 const upload = multer({
   storage: diskStorage,
-  limits: { fileSize: 2 * 1024 * 1024 * 1024, files: 2 }, // 2 GB limit for MTProto Telegram video support
+  limits: { fileSize: 2 * GB, files: 2 }, // 2 GB limit for MTProto Telegram video support
   // Only photos, videos and audio. HTML, SVG, scripts and other active content are refused.
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '');
@@ -50,47 +56,8 @@ const upload = multer({
 // Optional per-user storage quota (MB). 0 disables it. Default 50 GB.
 const USER_QUOTA_BYTES = (() => {
   const mb = Number(process.env.USER_STORAGE_QUOTA_MB ?? 51200);
-  return Number.isFinite(mb) && mb > 0 ? mb * 1024 * 1024 : 0;
+  return Number.isFinite(mb) && mb > 0 ? mb * MB : 0;
 })();
-
-// Active SSE upload progress listeners keyed by uploadId (NotaForge two-phase progress)
-const uploadProgressClients = new Map<string, any>();
-
-function emitUploadProgress(uploadId: string | null, pct: number): void {
-  if (!uploadId) return;
-  const clientRes = uploadProgressClients.get(uploadId);
-  if (clientRes && !clientRes.writableEnded) {
-    try {
-      clientRes.write(`data: ${Math.min(100, Math.max(0, Math.round(pct)))}\n\n`);
-    } catch {}
-  }
-}
-
-function emitUploadDone(uploadId: string | null): void {
-  if (!uploadId) return;
-  const clientRes = uploadProgressClients.get(uploadId);
-  if (clientRes && !clientRes.writableEnded) {
-    try {
-      clientRes.write(`event: done\ndata: 100\n\n`);
-      clientRes.end();
-    } catch {}
-  }
-  uploadProgressClients.delete(uploadId);
-}
-
-function computeFileSha256(filePath: string): Promise<string> {
-  return new Promise((resolve) => {
-    try {
-      const hash = crypto.createHash('sha256');
-      const stream = fs.createReadStream(filePath);
-      stream.on('data', (chunk) => hash.update(chunk));
-      stream.on('end', () => resolve(hash.digest('hex')));
-      stream.on('error', () => resolve(''));
-    } catch {
-      resolve('');
-    }
-  });
-}
 
 export const postsRouter = Router();
 postsRouter.use(requireApproved);
@@ -118,7 +85,9 @@ postsRouter.get('/upload-progress/:uploadId', (req: AuthenticatedRequest, res) =
     if (!res.writableEnded) {
       try {
         res.write(':heartbeat\n\n');
-      } catch {}
+      } catch {
+        // client disconnected; heartbeat is optional
+      }
     }
   }, 20000);
 
@@ -127,79 +96,6 @@ postsRouter.get('/upload-progress/:uploadId', (req: AuthenticatedRequest, res) =
     uploadProgressClients.delete(uploadId);
   });
 });
-
-// Helper to check if a user can view a post
-export function canUserViewPost(
-  userId: string,
-  userRole: string,
-  postId: string
-): { canView: boolean; isOwner: boolean; isLockedReference: boolean; lockedReason?: string; post?: any } {
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
-  if (!post) return { canView: false, isOwner: false, isLockedReference: false };
-
-  const isOwner = post.owner_id === userId;
-  const isAdmin = userRole === 'admin';
-
-  // Soft-deleted posts only viewable by owner or admin
-  if (post.deleted_at && !isOwner && !isAdmin) {
-    return { canView: false, isOwner, isLockedReference: false };
-  }
-
-  // Admin visibility override check
-  if (post.visibility_override === 'hidden' && !isAdmin && !isOwner) {
-    return { canView: false, isOwner, isLockedReference: false };
-  }
-  if (post.visibility_override === 'public_all') {
-    return { canView: true, isOwner, isLockedReference: false, post };
-  }
-
-  // Admins and owners can always view
-  if (isAdmin || isOwner) {
-    return { canView: true, isOwner, isLockedReference: false, post };
-  }
-
-  // Check placements in groups user is a member of
-  const placements = queryAll<any>(
-    `SELECT ig.*, g.name as group_name
-     FROM item_groups ig
-     JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
-     JOIN groups g ON ig.group_id = g.id
-     WHERE ig.item_type = 'post' AND ig.item_id = ?`,
-    [userId, postId]
-  );
-
-  if (placements.length === 0) {
-    // If not placed in any group user belongs to, check if in an album user can see
-    const albumPlacements = queryAll<any>(
-      `SELECT ai.album_id
-       FROM album_items ai
-       JOIN item_groups ig ON ig.item_type = 'album' AND ig.item_id = ai.album_id
-       JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
-       WHERE ai.post_id = ?`,
-      [userId, postId]
-    );
-    if (albumPlacements.length === 0) {
-      return { canView: false, isOwner: false, isLockedReference: false };
-    }
-    return { canView: true, isOwner: false, isLockedReference: false, post };
-  }
-
-  // Check if all placements available to this user are pending references
-  const nonPending = placements.filter((p) => !p.is_reference || p.reference_status === 'approved');
-  if (nonPending.length > 0) {
-    return { canView: true, isOwner: false, isLockedReference: false, post };
-  }
-
-  // User only sees this post via a pending reference!
-  const ownerUser = queryOne<any>('SELECT username, display_name FROM users WHERE id = ?', [post.owner_id]);
-  return {
-    canView: false,
-    isOwner: false,
-    isLockedReference: true,
-    lockedReason: `Shared from another circle. Pending approval by owner @${ownerUser?.username || 'user'}`,
-    post,
-  };
-}
 
 // Direct multipart file upload endpoint (streamed directly to disk via multer)
 postsRouter.post(
@@ -255,7 +151,7 @@ postsRouter.post(
       if (isCloud && storage.putObject) {
         try {
           // For Telegram MTProto large files (>15 MB), pass disk path directly to avoid loading GBs into RAM
-          const isLargeFile = mainFile.size > 15 * 1024 * 1024;
+          const isLargeFile = mainFile.size > 15 * MB;
           const fileBuf = isLargeFile && caps.backend === 'telegram' ? Buffer.alloc(0) : fs.readFileSync(mainFile.path);
 
           const returnedMainKey = await storage.putObject(mainStorageKey, fileBuf, mainFile.mimetype, {
@@ -294,13 +190,13 @@ postsRouter.post(
             fs.unlink(mainFile.path, () => {});
             if (thumbFile) fs.unlink(thumbFile.path, () => {});
           }
-        } catch (cloudErr: any) {
+        } catch (cloudErr) {
           if (caps.backend === 'telegram') {
             fs.unlink(mainFile.path, () => {});
             if (thumbFile) fs.unlink(thumbFile.path, () => {});
-            throw new Error(cloudErr?.message || 'Failed to upload file to Telegram storage');
+            throw new Error(errMessage(cloudErr) || 'Failed to upload file to Telegram storage');
           }
-          console.error('⚠️ Cloud storage sync warning (file safely saved on disk):', cloudErr.message);
+          logger.error('⚠️ Cloud storage sync warning (file safely saved on disk):', errMessage(cloudErr));
         }
       }
 
@@ -326,16 +222,16 @@ postsRouter.post(
         height,
         checksum,
       });
-    } catch (err: any) {
+    } catch (err) {
       if (uploadId) uploadProgressClients.delete(uploadId);
-      console.error('File upload error:', err);
+      logger.error('File upload error:', err);
       res.status(500).json({ error: 'File upload failed' });
     }
   }
 );
 
 // Generate signed upload URLs for browser direct upload
-const handleSignedUploadUrls = async (req: AuthenticatedRequest, res: any) => {
+const handleSignedUploadUrls = async (req: AuthenticatedRequest, res: Response) => {
   const { files } = req.body || {};
   if (!Array.isArray(files) || files.length === 0 || files.length > 50) {
     return res.status(400).json({ error: 'Files array required (max 50 files)' });
@@ -349,7 +245,7 @@ const handleSignedUploadUrls = async (req: AuthenticatedRequest, res: any) => {
 
   const storage = getStorageAdapter();
   const userId = req.user!.id;
-  const results: any[] = [];
+  const results: Array<Record<string, unknown>> = [];
 
   for (const f of files) {
     const ext = safeExtension(f.fileName || f.filename, '.jpg').slice(1);
@@ -384,8 +280,8 @@ postsRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
   try {
     const result = await syncStorageToDatabase();
     res.json({ success: true, ...result });
-  } catch (err: any) {
-    console.error('posts.ts error:', err);
+  } catch (err) {
+    logger.error('posts.ts error:', err);
     res.status(500).json({ error: 'Failed to sync storage' });
   }
 });
@@ -460,7 +356,7 @@ postsRouter.post('/', async (req: AuthenticatedRequest, res) => {
   for (const gId of targetGroups) {
     // Verify user is in group or admin
     const member = queryOne('SELECT user_id FROM group_members WHERE group_id = ? AND user_id = ?', [gId, userId]);
-    const grp = queryOne<any>('SELECT id, is_everyone FROM groups WHERE id = ?', [gId]);
+    const grp = queryOne<Row>('SELECT id, is_everyone FROM groups WHERE id = ?', [gId]);
     if (member || req.user!.role === 'admin' || grp?.is_everyone === 1) {
       const placementId = crypto.randomUUID();
       run(
@@ -482,8 +378,8 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
 
   const access = canUserViewPost(userId, userRole, postId);
 
-  if (access.isLockedReference) {
-    const owner = queryOne<any>('SELECT username, display_name FROM users WHERE id = ?', [access.post.owner_id]);
+  if (access.isLockedReference && access.post) {
+    const owner = queryOne<Row>('SELECT username, display_name FROM users WHERE id = ?', [access.post.owner_id]);
     return res.json({
       isLocked: true,
       lockedReason: access.lockedReason,
@@ -500,7 +396,7 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
   const post = access.post;
   const storage = getStorageAdapter();
 
-  const rawFiles = queryAll<any>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [postId]);
+  const rawFiles = queryAll<Row>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [postId]);
   const filesWithUrls = await Promise.all(
     rawFiles.map(async (f) => ({
       id: f.id,
@@ -518,10 +414,14 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     }))
   );
 
-  const owner = queryOne<any>('SELECT id, username, display_name, avatar_color, avatar_url FROM users WHERE id = ?', [post.owner_id]);
+  const owner = queryOne<Row>('SELECT id, username, display_name, avatar_color, avatar_url FROM users WHERE id = ?', [post.owner_id]);
+  if (!owner) {
+    // Should not happen (owner_id is a foreign key) but never crash the whole request if the account row is gone
+    return res.status(404).json({ error: 'The owner of this post no longer exists' });
+  }
 
   // Placements for this post
-  const placements = queryAll<any>(
+  const placements = queryAll<Row>(
     `SELECT ig.*, g.name as group_name
      FROM item_groups ig
      JOIN groups g ON ig.group_id = g.id
@@ -568,7 +468,7 @@ postsRouter.patch('/:id', (req: AuthenticatedRequest, res) => {
   const isAdmin = req.user!.role === 'admin';
   const { caption, takenAt, dateBasis } = req.body;
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
     return res.status(403).json({ error: 'Only the author or an admin can edit this post' });
@@ -594,7 +494,7 @@ postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
     return res.status(403).json({ error: 'Only the author or an admin can delete this post' });
@@ -602,7 +502,7 @@ postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
 
   const permanent = req.query.permanent === 'true' || req.body?.permanent === true;
   if (permanent) {
-    const files = queryAll<any>('SELECT * FROM post_files WHERE post_id = ?', [postId]);
+    const files = queryAll<Row>('SELECT * FROM post_files WHERE post_id = ?', [postId]);
     const storage = getStorageAdapter();
     for (const f of files) {
       try {
@@ -610,7 +510,9 @@ postsRouter.delete('/:id', async (req: AuthenticatedRequest, res) => {
         if (f.thumb_key && f.thumb_key !== f.storage_key) {
           await storage.deleteObject(f.thumb_key);
         }
-      } catch {}
+      } catch (err) {
+        logger.warn('Could not delete a storage object (it may remain as an orphan):', err);
+      }
     }
     run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [postId]);
     run('DELETE FROM album_items WHERE post_id = ?', [postId]);
@@ -639,13 +541,13 @@ postsRouter.put(
       const userId = req.user!.id;
       const isAdmin = req.user!.role === 'admin';
 
-      const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+      const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
       if (!post) return res.status(404).json({ error: 'Post not found' });
       if (!isAdmin && post.owner_id !== userId) {
         return res.status(403).json({ error: 'Only the author or an admin can edit photos in this post' });
       }
 
-      const fileRecord = queryOne<any>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
+      const fileRecord = queryOne<Row>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
       if (!fileRecord) return res.status(404).json({ error: 'Photo not found in this post' });
 
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -691,13 +593,13 @@ postsRouter.put(
             fs.unlink(mainFile.path, () => {});
             if (thumbFile) fs.unlink(thumbFile.path, () => {});
           }
-        } catch (cloudErr: any) {
+        } catch (cloudErr) {
           if (caps.backend === 'telegram') {
             fs.unlink(mainFile.path, () => {});
             if (thumbFile) fs.unlink(thumbFile.path, () => {});
-            throw new Error(cloudErr?.message || 'Failed to upload edited photo to Telegram');
+            throw new Error(errMessage(cloudErr) || 'Failed to upload edited photo to Telegram');
           }
-          console.error('Cloud storage sync warning:', cloudErr.message);
+          logger.error('Cloud storage sync warning:', errMessage(cloudErr));
         }
       }
 
@@ -735,8 +637,8 @@ postsRouter.put(
           thumbUrl,
         },
       });
-    } catch (err: any) {
-      console.error('Photo update error:', err);
+    } catch (err) {
+      logger.error('Photo update error:', err);
       res.status(500).json({ error: 'Failed to update photo' });
     }
   }
@@ -749,7 +651,7 @@ postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
     const userId = req.user!.id;
     const isAdmin = req.user!.role === 'admin';
 
-    const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+    const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
     if (!post) return res.status(404).json({ error: 'Post/Album not found' });
     if (!isAdmin && post.owner_id !== userId) {
       return res.status(403).json({ error: 'Only the author or an admin can add photos to this album' });
@@ -788,7 +690,7 @@ postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
     }
 
     // Fetch all current files with fresh signed URLs
-    const allFiles = queryAll<any>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [postId]);
+    const allFiles = queryAll<Row>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [postId]);
     const storage = getStorageAdapter();
     const filesWithUrls = await Promise.all(
       allFiles.map(async (f) => ({
@@ -812,8 +714,8 @@ postsRouter.post('/:id/files', async (req: AuthenticatedRequest, res) => {
       files: filesWithUrls,
       message: `${files.length} photo(s) added to album`,
     });
-  } catch (err: any) {
-    console.error('Failed to add photos to post:', err);
+  } catch (err) {
+    logger.error('Failed to add photos to post:', err);
     res.status(500).json({ error: 'Failed to add photos' });
   }
 });
@@ -831,13 +733,13 @@ postsRouter.delete('/:id/files/:fileId', async (req: AuthenticatedRequest, res) 
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
     return res.status(403).json({ error: 'Permission denied' });
   }
 
-  const fileRecord = queryOne<any>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
+  const fileRecord = queryOne<Row>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
   if (!fileRecord) return res.status(404).json({ error: 'Photo not found in this post' });
 
   const totalFiles = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM post_files WHERE post_id = ?', [postId]);
@@ -851,7 +753,9 @@ postsRouter.delete('/:id/files/:fileId', async (req: AuthenticatedRequest, res) 
     if (fileRecord.thumb_key && fileRecord.thumb_key !== fileRecord.storage_key) {
       await storage.deleteObject(fileRecord.thumb_key);
     }
-  } catch {}
+  } catch (err) {
+    logger.warn('Could not delete a storage object (it may remain as an orphan):', err);
+  }
 
   run('DELETE FROM post_files WHERE id = ?', [fileId]);
   res.json({ success: true, message: 'Photo deleted' });
@@ -863,7 +767,7 @@ postsRouter.post('/:id/restore', (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
     return res.status(403).json({ error: 'Permission denied' });
@@ -882,7 +786,7 @@ postsRouter.get('/trash/list', (req: AuthenticatedRequest, res) => {
     ? 'SELECT * FROM posts WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC'
     : 'SELECT * FROM posts WHERE deleted_at IS NOT NULL AND owner_id = ? ORDER BY deleted_at DESC';
 
-  const posts = queryAll<any>(sql, isAdmin ? [] : [userId]);
+  const posts = queryAll<Row>(sql, isAdmin ? [] : [userId]);
   res.json({ trash: posts });
 });
 
@@ -893,7 +797,7 @@ postsRouter.post('/:id/override-visibility', requireAdmin, (req: AuthenticatedRe
   const adminId = req.user!.id;
   const { override } = req.body; // 'public_all', 'hidden', or null
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
 
   const validOverrides = ['public_all', 'hidden', null];
@@ -944,7 +848,7 @@ postsRouter.post('/:id/caption', async (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
     return res.status(403).json({ error: 'Permission denied to edit caption' });
@@ -961,7 +865,7 @@ postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res)
   const isAdmin = req.user!.role === 'admin';
   const { title, eventDate, eventPlace, description } = req.body;
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
     return res.status(403).json({ error: 'Only the author or an admin can convert this memory' });
@@ -988,7 +892,7 @@ postsRouter.post('/:id/convert-to-event', async (req: AuthenticatedRequest, res)
   );
 
   // Copy placements from item_groups
-  const postPlacements = queryAll<any>("SELECT group_id FROM item_groups WHERE item_type = 'post' AND item_id = ?", [postId]);
+  const postPlacements = queryAll<Row>("SELECT group_id FROM item_groups WHERE item_type = 'post' AND item_id = ?", [postId]);
   for (const pl of postPlacements) {
     const plId = crypto.randomUUID();
     run(
@@ -1031,7 +935,7 @@ postsRouter.post('/check-duplicates', async (req: AuthenticatedRequest, res) => 
     let match: any = null;
 
     if (f.checksum) {
-      match = queryOne<any>(
+      match = queryOne<Row>(
         `SELECT pf.*, p.caption, p.taken_at, p.id as post_id, p.owner_id
          FROM post_files pf
          JOIN posts p ON pf.post_id = p.id
@@ -1042,7 +946,7 @@ postsRouter.post('/check-duplicates', async (req: AuthenticatedRequest, res) => 
     }
 
     if (!match && f.size && f.size > 0) {
-      match = queryOne<any>(
+      match = queryOne<Row>(
         `SELECT pf.*, p.caption, p.taken_at, p.id as post_id, p.owner_id
          FROM post_files pf
          JOIN posts p ON pf.post_id = p.id
@@ -1083,7 +987,7 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
   const ignoredSet = new Set(ignoredRows.map((r) => r.match_key));
 
   // Find all file_sizes or checksums that have 2+ photos in active posts
-  const duplicateSets = queryAll<any>(
+  const duplicateSets = queryAll<Row>(
     `SELECT file_size, width, height, COUNT(*) as count
      FROM post_files pf
      JOIN posts p ON pf.post_id = p.id
@@ -1103,7 +1007,7 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
       continue;
     }
 
-    const rawFiles = queryAll<any>(
+    const rawFiles = queryAll<Row>(
       `SELECT pf.id as file_id, pf.post_id, pf.storage_key, pf.thumb_key, pf.file_size,
               pf.width, pf.height, pf.checksum, pf.position, pf.tg_deleted_at,
               p.caption, p.taken_at, p.uploaded_at, p.owner_id,
@@ -1120,7 +1024,7 @@ postsRouter.get('/duplicates/list', async (req: AuthenticatedRequest, res) => {
     if (rawFiles.length > 1) {
       const filesWithUrls = await Promise.all(
         rawFiles.map(async (rf) => {
-          const placements = queryAll<any>(
+          const placements = queryAll<Row>(
             `SELECT g.id, g.name FROM item_groups ig JOIN groups g ON ig.group_id = g.id WHERE ig.item_type = 'post' AND ig.item_id = ?`,
             [rf.post_id]
           );
@@ -1173,7 +1077,9 @@ postsRouter.post('/duplicates/keep-both', async (req: AuthenticatedRequest, res)
        VALUES (?, ?, ?, ?)`,
       [crypto.randomUUID(), userId, matchKey, now]
     );
-  } catch (e) {}
+  } catch (err) {
+    logger.warn("Could not store the 'keep both' choice:", err);
+  }
 
   res.json({
     success: true,
@@ -1194,13 +1100,13 @@ postsRouter.post('/duplicates/resolve', async (req: AuthenticatedRequest, res) =
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+  const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
   if (!post) return res.status(404).json({ error: 'Post not found' });
   if (!isAdmin && post.owner_id !== userId) {
     return res.status(403).json({ error: 'Permission denied' });
   }
 
-  const fileRecord = queryOne<any>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
+  const fileRecord = queryOne<Row>('SELECT * FROM post_files WHERE id = ? AND post_id = ?', [fileId, postId]);
   if (!fileRecord) return res.status(404).json({ error: 'Photo not found' });
 
   const totalFiles = queryOne<{ count: number }>('SELECT COUNT(*) as count FROM post_files WHERE post_id = ?', [postId]);
@@ -1211,7 +1117,9 @@ postsRouter.post('/duplicates/resolve', async (req: AuthenticatedRequest, res) =
     if (fileRecord.thumb_key && fileRecord.thumb_key !== fileRecord.storage_key) {
       await storage.deleteObject(fileRecord.thumb_key);
     }
-  } catch {}
+  } catch (err) {
+    logger.warn('Could not delete a storage object (it may remain as an orphan):', err);
+  }
 
   if ((totalFiles?.count || 0) <= 1) {
     run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [postId]);

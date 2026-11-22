@@ -91,7 +91,9 @@ export const Header: React.FC<HeaderProps> = ({
         setNotifications(data.notifications || []);
         setUnreadCount(data.unreadCount || 0);
       }
-    } catch {}
+    } catch (err) {
+      console.error('Load notifications failed', err);
+    }
   };
 
   useEffect(() => {
@@ -115,7 +117,9 @@ export const Header: React.FC<HeaderProps> = ({
       await apiFetch('/api/notifications/mark-all-read', { method: 'POST' });
       setUnreadCount(0);
       setNotifications((prev) => prev.map((n) => ({ ...n, read: 1 })));
-    } catch {}
+    } catch (err) {
+      console.error('Mark all notifications read failed', err);
+    }
   };
 
   const handleNotificationClick = async (n: NotificationItem) => {
@@ -124,7 +128,9 @@ export const Header: React.FC<HeaderProps> = ({
         await apiFetch(`/api/notifications/${n.id}/read`, { method: 'POST' });
         setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: 1 } : item)));
         setUnreadCount((prev) => Math.max(0, prev - 1));
-      } catch {}
+      } catch (err) {
+        console.error('Mark notification read failed', err);
+      }
     }
     setShowNotif(false);
     if (onNotificationClick) onNotificationClick(n);

@@ -145,7 +145,9 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         if (event && 'preventDefault' in event) {
           try {
             event.preventDefault();
-          } catch {}
+          } catch {
+            // preventDefault can throw on passive listeners
+          }
         }
         const nextZoom = Math.min(Math.max(1, scale), 6);
         setZoom(nextZoom);
@@ -163,7 +165,9 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
         if (event && 'preventDefault' in event) {
           try {
             event.preventDefault();
-          } catch {}
+          } catch {
+            // preventDefault can throw on passive listeners
+          }
         }
         const zoomFactor = dy < 0 ? 1.15 : 0.87;
         setZoom((prevZoom) => {

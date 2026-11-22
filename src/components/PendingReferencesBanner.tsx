@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShieldAlert, Check, X } from 'lucide-react';
 import { apiFetch } from '../context/AuthContext.tsx';
+import { useFeedback } from './ui/Feedback.tsx';
 
 interface PendingRef {
   placement_id: string;
@@ -14,6 +15,7 @@ interface PendingRef {
 }
 
 export const PendingReferencesBanner: React.FC<{ onUpdated: () => void }> = ({ onUpdated }) => {
+  const { toast } = useFeedback();
   const [requests, setRequests] = useState<PendingRef[]>([]);
 
   const fetchRequests = async () => {
@@ -23,7 +25,9 @@ export const PendingReferencesBanner: React.FC<{ onUpdated: () => void }> = ({ o
         const data = await res.json();
         setRequests(data.requests || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load pending references failed', err);
+    }
   };
 
   useEffect(() => {
@@ -41,7 +45,10 @@ export const PendingReferencesBanner: React.FC<{ onUpdated: () => void }> = ({ o
         fetchRequests();
         onUpdated();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Decide reference failed', err);
+      toast('Could not save your decision. Please try again.', 'error');
+    }
   };
 
   if (requests.length === 0) return null;

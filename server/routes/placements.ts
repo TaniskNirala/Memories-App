@@ -2,7 +2,8 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { queryOne, queryAll, run, saveDb } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
-import { canUserViewPost } from './posts.ts';
+import { canUserViewPost } from '../security/postAccess.ts';
+import type { Row } from '../rows.ts';
 
 export const placementsRouter = Router();
 placementsRouter.use(requireApproved);
@@ -31,10 +32,10 @@ placementsRouter.post('/bunch', async (req: AuthenticatedRequest, res) => {
 
     if (itemType === 'post') {
       const access = canUserViewPost(userId, userRole, itemId);
-      if (!access.canView) continue;
+      if (!access.canView || !access.post) continue;
       ownerId = access.post.owner_id;
     } else {
-      const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
+      const album = queryOne<Row>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
       if (!album) continue;
       ownerId = album.creator_id;
     }
@@ -68,7 +69,7 @@ placementsRouter.post('/bunch', async (req: AuthenticatedRequest, res) => {
       if (isRef) {
         pendingCount++;
         // Notify owner
-        const group = queryOne<any>('SELECT name FROM groups WHERE id = ?', [groupId]);
+        const group = queryOne<Row>('SELECT name FROM groups WHERE id = ?', [groupId]);
         run(
           `INSERT INTO notifications (id, user_id, type, title, body, link, read, created_at)
            VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
@@ -105,7 +106,7 @@ placementsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const placement = queryOne<any>('SELECT * FROM item_groups WHERE id = ?', [placementId]);
+  const placement = queryOne<Row>('SELECT * FROM item_groups WHERE id = ?', [placementId]);
   if (!placement) {
     return res.status(404).json({ error: 'Placement not found' });
   }
@@ -113,10 +114,10 @@ placementsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
   // Check authorization: owner of the item, person who added the placement, or admin
   let isOwner = false;
   if (placement.item_type === 'post') {
-    const post = queryOne<any>('SELECT owner_id FROM posts WHERE id = ?', [placement.item_id]);
+    const post = queryOne<Row>('SELECT owner_id FROM posts WHERE id = ?', [placement.item_id]);
     if (post && post.owner_id === userId) isOwner = true;
   } else if (placement.item_type === 'album') {
-    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [placement.item_id]);
+    const album = queryOne<Row>('SELECT creator_id FROM albums WHERE id = ?', [placement.item_id]);
     if (album && album.creator_id === userId) isOwner = true;
   }
 
@@ -142,7 +143,7 @@ placementsRouter.post('/remove-by-item', (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'itemId and groupId required' });
   }
 
-  const placement = queryOne<any>(
+  const placement = queryOne<Row>(
     'SELECT * FROM item_groups WHERE item_type = ? AND item_id = ? AND group_id = ?',
     [itemType, itemId, groupId]
   );
@@ -153,10 +154,10 @@ placementsRouter.post('/remove-by-item', (req: AuthenticatedRequest, res) => {
 
   let isOwner = false;
   if (itemType === 'post') {
-    const post = queryOne<any>('SELECT owner_id FROM posts WHERE id = ?', [itemId]);
+    const post = queryOne<Row>('SELECT owner_id FROM posts WHERE id = ?', [itemId]);
     if (post && post.owner_id === userId) isOwner = true;
   } else {
-    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
+    const album = queryOne<Row>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
     if (album && album.creator_id === userId) isOwner = true;
   }
 
@@ -176,7 +177,7 @@ placementsRouter.post('/remove-by-item', (req: AuthenticatedRequest, res) => {
 placementsRouter.get('/pending-references', (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
 
-  const requests = queryAll<any>(
+  const requests = queryAll<Row>(
     `SELECT ig.id as placement_id, ig.item_type, ig.item_id, ig.group_id, ig.added_at,
             g.name as group_name,
             u.username as requester_username, u.display_name as requester_display_name,
@@ -205,7 +206,7 @@ placementsRouter.post('/pending-references/:placementId/decide', (req: Authentic
     return res.status(400).json({ error: 'Decision must be approved or rejected' });
   }
 
-  const placement = queryOne<any>(
+  const placement = queryOne<Row>(
     `SELECT ig.*, p.owner_id, g.name as group_name
      FROM item_groups ig
      JOIN posts p ON ig.item_id = p.id
@@ -250,12 +251,12 @@ placementsRouter.get('/item/:itemType/:itemId', (req: AuthenticatedRequest, res)
   let visibilityOverride: string | null = null;
 
   if (itemType === 'post') {
-    const post = queryOne<any>('SELECT owner_id, visibility_override FROM posts WHERE id = ?', [itemId]);
+    const post = queryOne<Row>('SELECT owner_id, visibility_override FROM posts WHERE id = ?', [itemId]);
     if (!post) return res.status(404).json({ error: 'Post not found' });
     ownerId = post.owner_id;
     visibilityOverride = post.visibility_override;
   } else {
-    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
+    const album = queryOne<Row>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
     if (!album) return res.status(404).json({ error: 'Album not found' });
     ownerId = album.creator_id;
   }
@@ -263,7 +264,7 @@ placementsRouter.get('/item/:itemType/:itemId', (req: AuthenticatedRequest, res)
   const isOwner = ownerId === userId;
   const canManage = isOwner || isAdmin;
 
-  const placements = queryAll<any>(
+  const placements = queryAll<Row>(
     `SELECT ig.id, ig.group_id, ig.is_reference, ig.reference_status, ig.added_by, ig.added_at,
             g.name as group_name, g.is_everyone
      FROM item_groups ig
@@ -297,11 +298,11 @@ placementsRouter.post('/adjust-permissions', async (req: AuthenticatedRequest, r
 
   let ownerId = '';
   if (itemType === 'post') {
-    const post = queryOne<any>('SELECT owner_id, visibility_override FROM posts WHERE id = ?', [itemId]);
+    const post = queryOne<Row>('SELECT owner_id, visibility_override FROM posts WHERE id = ?', [itemId]);
     if (!post) return res.status(404).json({ error: 'Post not found' });
     ownerId = post.owner_id;
   } else {
-    const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
+    const album = queryOne<Row>('SELECT creator_id FROM albums WHERE id = ?', [itemId]);
     if (!album) return res.status(404).json({ error: 'Album not found' });
     ownerId = album.creator_id;
   }
@@ -314,7 +315,7 @@ placementsRouter.post('/adjust-permissions', async (req: AuthenticatedRequest, r
   const now = new Date().toISOString();
 
   // Current active placements
-  const currentPlacements = queryAll<any>(
+  const currentPlacements = queryAll<Row>(
     'SELECT id, group_id FROM item_groups WHERE item_type = ? AND item_id = ?',
     [itemType, itemId]
   );
@@ -333,7 +334,7 @@ placementsRouter.post('/adjust-permissions', async (req: AuthenticatedRequest, r
   for (const gid of targetGroupIds) {
     if (!currentGroupIds.has(gid)) {
       // Verify group exists
-      const grp = queryOne<any>('SELECT id FROM groups WHERE id = ?', [gid]);
+      const grp = queryOne<Row>('SELECT id FROM groups WHERE id = ?', [gid]);
       if (grp) {
         run(
           `INSERT INTO item_groups (id, item_type, item_id, group_id, added_by, is_reference, reference_status, added_at)
@@ -367,7 +368,7 @@ placementsRouter.post('/adjust-permissions', async (req: AuthenticatedRequest, r
 
   // Fetch updated placements
   saveDb();
-  const updatedPlacements = queryAll<any>(
+  const updatedPlacements = queryAll<Row>(
     `SELECT ig.id, ig.group_id, g.name as group_name, g.is_everyone
      FROM item_groups ig
      JOIN groups g ON ig.group_id = g.id

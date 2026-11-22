@@ -24,6 +24,7 @@ import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { AuditLogItem } from '../types/index.ts';
 import { StorageCapabilitiesResponse } from '../utils/uploadWithProgress.ts';
 import { Avatar, PageHero, StatTile } from './ui/kit.tsx';
+import { errMessage } from '../lib/errors.ts';
 
 // Wrapper does the admin check so the hooks in AdminPanelInner are never
 // skipped conditionally (React error #310).
@@ -102,7 +103,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setDbStatus(data);
       }
-    } catch {}
+    } catch (err) {
+      console.error('Load database status failed', err);
+    }
   };
 
   const fetchStorageStatus = async () => {
@@ -112,7 +115,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setStorageStatus(data);
       }
-    } catch {}
+    } catch (err) {
+      console.error('Load storage status failed', err);
+    }
   };
 
   const handleTestStorageConnection = async () => {
@@ -128,8 +133,8 @@ const AdminPanelInner: React.FC = () => {
         setActionToast({ message: data.summary || 'Storage connection check reported an issue', type: 'error' });
       }
       fetchStorageStatus();
-    } catch (e: any) {
-      const msg = e.message || 'Failed to test storage connection';
+    } catch (e) {
+      const msg = errMessage(e) || 'Failed to test storage connection';
       setStorageTestResult({ ok: false, summary: msg });
       setActionToast({ message: msg, type: 'error' });
     } finally {
@@ -149,8 +154,8 @@ const AdminPanelInner: React.FC = () => {
         setActionToast({ message: data.message || 'Neon sync notice updated', type: 'error' });
         fetchDbStatus();
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Error syncing database', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Error syncing database', type: 'error' });
     } finally {
       setDbSyncLoading(false);
     }
@@ -174,8 +179,8 @@ const AdminPanelInner: React.FC = () => {
         setActionToast({ message: data.message || 'Failed to restore from Neon', type: 'error' });
         fetchDbStatus();
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Error restoring from Neon', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Error restoring from Neon', type: 'error' });
     } finally {
       setRestoreLoading(false);
     }
@@ -202,8 +207,8 @@ const AdminPanelInner: React.FC = () => {
       } else {
         setActionToast({ message: data.error || 'Failed to purge data', type: 'error' });
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Error purging data', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Error purging data', type: 'error' });
     } finally {
       setPurgeLoading(false);
     }
@@ -225,8 +230,8 @@ const AdminPanelInner: React.FC = () => {
       } else {
         setActionToast({ message: data.error || 'Failed to clear feed', type: 'error' });
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Error clearing feed', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Error clearing feed', type: 'error' });
     } finally {
       setClearFeedLoading(false);
     }
@@ -257,8 +262,8 @@ const AdminPanelInner: React.FC = () => {
       } else {
         setActionToast({ message: data.error || 'Failed to sync storage', type: 'error' });
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Error syncing storage', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Error syncing storage', type: 'error' });
     } finally {
       setSyncLoading(false);
     }
@@ -278,7 +283,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setPendingSignups(data.pending || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load pending signups failed', err);
+    }
   };
 
   const fetchUsers = async () => {
@@ -288,7 +295,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setUsers(data.users || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load users failed', err);
+    }
   };
 
   const fetchCircles = async () => {
@@ -298,7 +307,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setCircles(data.groups || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load circles failed', err);
+    }
   };
 
   const fetchProposals = async () => {
@@ -308,7 +319,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setProposals(data.proposals || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load proposals failed', err);
+    }
   };
 
   const fetchReports = async () => {
@@ -318,7 +331,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setReports(data.reports || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load reports failed', err);
+    }
   };
 
   const fetchAuditLogs = async () => {
@@ -328,7 +343,9 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setAuditLogs(data.logs || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load audit log failed', err);
+    }
   };
 
   useEffect(() => {
@@ -354,8 +371,8 @@ const AdminPanelInner: React.FC = () => {
       } else {
         setActionToast({ message: data.error || 'Failed to delete user', type: 'error' });
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Failed to delete user', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Failed to delete user', type: 'error' });
     } finally {
       setDeleteUserLoading(false);
     }
@@ -374,8 +391,8 @@ const AdminPanelInner: React.FC = () => {
       } else {
         setActionToast({ message: data.error || 'Failed to delete circle', type: 'error' });
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Failed to delete circle', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Failed to delete circle', type: 'error' });
     } finally {
       setDeleteCircleLoading(false);
     }
@@ -397,8 +414,8 @@ const AdminPanelInner: React.FC = () => {
         const data = await res.json();
         setActionToast({ message: data.error || 'Failed to approve account', type: 'error' });
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Failed to approve account', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Failed to approve account', type: 'error' });
     }
   };
 
@@ -410,7 +427,10 @@ const AdminPanelInner: React.FC = () => {
         fetchSignups();
         fetchUsers();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Reject user failed', err);
+      setActionToast({ message: 'Could not reject the user.', type: 'error' });
+    }
   };
 
   const handleToggleSuspend = async (userId: string) => {
@@ -424,7 +444,10 @@ const AdminPanelInner: React.FC = () => {
         });
         fetchUsers();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Toggle suspend failed', err);
+      setActionToast({ message: 'Could not change suspension.', type: 'error' });
+    }
   };
 
   const handleGenerateReset = async (userId: string) => {
@@ -440,8 +463,8 @@ const AdminPanelInner: React.FC = () => {
       } else {
         setActionToast({ message: data.error || 'Failed to generate reset key', type: 'error' });
       }
-    } catch (e: any) {
-      setActionToast({ message: e.message || 'Failed to generate reset key', type: 'error' });
+    } catch (e) {
+      setActionToast({ message: errMessage(e) || 'Failed to generate reset key', type: 'error' });
     }
   };
 
@@ -455,7 +478,10 @@ const AdminPanelInner: React.FC = () => {
       if (res.ok) {
         fetchProposals();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Proposal decision failed', err);
+      setActionToast({ message: 'Could not save the proposal decision.', type: 'error' });
+    }
   };
 
   const handleReportDecision = async (reportId: string, status: string) => {
@@ -468,7 +494,10 @@ const AdminPanelInner: React.FC = () => {
       if (res.ok) {
         fetchReports();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Report decision failed', err);
+      setActionToast({ message: 'Could not save the report decision.', type: 'error' });
+    }
   };
 
   const TABS: { id: typeof activeTab; label: string; count: () => number | undefined }[] = [

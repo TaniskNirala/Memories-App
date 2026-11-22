@@ -14,7 +14,9 @@ function allowedOrigins(): Set<string> {
   if (process.env.APP_URL) {
     try {
       set.add(new URL(process.env.APP_URL).origin);
-    } catch {}
+    } catch {
+      // an invalid APP_URL is ignored
+    }
   }
   return set;
 }

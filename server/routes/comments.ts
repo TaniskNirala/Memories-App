@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { avatarUrlFor } from '../security/avatars.ts';
+import type { Row } from '../rows.ts';
 
 export const commentsRouter = Router();
 commentsRouter.use(requireApproved);
@@ -29,7 +30,7 @@ commentsRouter.get('/', (req: AuthenticatedRequest, res) => {
     return res.status(403).json({ error: 'You are not a member of this circle' });
   }
 
-  const comments = queryAll<any>(
+  const comments = queryAll<Row>(
     `SELECT c.*, u.username, u.display_name, u.avatar_color, u.avatar_url
      FROM comments c
      JOIN users u ON c.author_id = u.id
@@ -100,7 +101,7 @@ commentsRouter.post('/', (req: AuthenticatedRequest, res) => {
     const uniqueUsernames = Array.from(new Set(mentionMatches.map((m: string) => m.substring(1).toLowerCase())));
     for (const uname of uniqueUsernames) {
       // Find user who is in THIS group
-      const targetUser = queryOne<any>(
+      const targetUser = queryOne<Row>(
         `SELECT u.id, u.username
          FROM users u
          JOIN group_members gm ON u.id = gm.user_id
@@ -116,7 +117,7 @@ commentsRouter.post('/', (req: AuthenticatedRequest, res) => {
           now,
         ]);
 
-        const group = queryOne<any>('SELECT name FROM groups WHERE id = ?', [groupId]);
+        const group = queryOne<Row>('SELECT name FROM groups WHERE id = ?', [groupId]);
         run(
           `INSERT INTO notifications (id, user_id, type, title, body, link, read, created_at)
            VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
@@ -136,7 +137,7 @@ commentsRouter.post('/', (req: AuthenticatedRequest, res) => {
 
   // Also notify post owner if they are not the author
   if (targetType === 'post') {
-    const post = queryOne<any>('SELECT owner_id FROM posts WHERE id = ?', [targetId]);
+    const post = queryOne<Row>('SELECT owner_id FROM posts WHERE id = ?', [targetId]);
     if (post && post.owner_id !== userId) {
       run(
         `INSERT INTO notifications (id, user_id, type, title, body, link, read, created_at)
@@ -167,7 +168,7 @@ commentsRouter.patch('/:id', (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'Comment text required' });
   }
 
-  const comment = queryOne<any>('SELECT * FROM comments WHERE id = ?', [commentId]);
+  const comment = queryOne<Row>('SELECT * FROM comments WHERE id = ?', [commentId]);
   if (!comment) return res.status(404).json({ error: 'Comment not found' });
   if (comment.author_id !== userId) {
     return res.status(403).json({ error: 'You can only edit your own comments' });
@@ -195,7 +196,7 @@ commentsRouter.get('/group-members/:groupId', (req: AuthenticatedRequest, res) =
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const members = queryAll<any>(
+  const members = queryAll<Row>(
     `SELECT u.id, u.username, u.display_name, u.avatar_color, u.avatar_url
      FROM group_members gm
      JOIN users u ON gm.user_id = u.id

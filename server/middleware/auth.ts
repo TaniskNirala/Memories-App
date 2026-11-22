@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { queryOne, queryAll, run } from '../db.ts';
 import { hashToken } from '../security/tokens.ts';
 import { SESSION_TTL_MS, SESSION_RENEW_BELOW_MS, setSessionCookie } from '../security/session.ts';
+import { logger } from '../logger.ts';
 
 export interface AuthenticatedUser {
   id: string;
@@ -68,8 +69,8 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
         id: user.id,
         username: user.username,
         displayName: user.display_name,
-        role: user.role as any,
-        status: user.status as any,
+        role: user.role as AuthenticatedUser['role'],
+        status: user.status as AuthenticatedUser['status'],
         avatarColor: user.avatar_color || '#f59e0b',
         avatarUrl: user.avatar_url
           ? `/api/storage/view?key=${encodeURIComponent(user.avatar_url)}`
@@ -89,7 +90,7 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
       }
     }
   } catch (err) {
-    console.error('Error verifying session:', err);
+    logger.error('Error verifying session:', err);
   }
 
   next();
@@ -161,7 +162,7 @@ export function checkLoginRateLimit(ip: string, username: string): boolean {
     if (failuresSince('ip', ip, username) >= 30) return false; // one client spraying many accounts
     if (failuresSince('username', ip, username) >= 20) return false; // distributed attack on one account
   } catch (e) {
-    console.error('Login rate-limit check failed:', e);
+    logger.error('Login rate-limit check failed:', e);
   }
   return true;
 }
@@ -171,13 +172,17 @@ export function clearLoginAttempts(): void {
   try {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     run('DELETE FROM login_attempts WHERE attempted_at < ?', [cutoff]);
-  } catch (e) {}
+  } catch (err) {
+    logger.warn('Cleaning old login attempts failed:', err);
+  }
 }
 
 export function clearFailedAttempts(ip: string, username: string): void {
   try {
     run('DELETE FROM login_attempts WHERE success = 0 AND ip = ? AND username = ?', [ip, username.toLowerCase()]);
-  } catch (e) {}
+  } catch (err) {
+    logger.warn('Clearing failed login attempts failed:', err);
+  }
 }
 
 export function recordLoginAttempt(ip: string, username: string, success: boolean): void {

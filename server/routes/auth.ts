@@ -1,17 +1,21 @@
-import { Router, Response } from 'express';
+import { Router, Response, Request, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import { queryOne, queryAll, run } from '../db.ts';
-import { AuthenticatedRequest, checkLoginRateLimit, recordLoginAttempt, clearLoginAttempts, clearFailedAttempts } from '../middleware/auth.ts';
+import { AuthenticatedRequest, checkLoginRateLimit, recordLoginAttempt, clearFailedAttempts } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
 import { createRateLimiter } from '../security/rateLimit.ts';
 import { avatarUrlFor } from '../security/avatars.ts';
 import { validatePassword, hashPassword, needsRehash, DUMMY_HASH } from '../security/passwords.ts';
 import { hashToken } from '../security/tokens.ts';
 import { createSession, clearSessionCookie } from '../security/session.ts';
+import { MB } from '../limits.ts';
+import { logger, errMessage } from '../logger.ts';
+import type { UsersRow } from '../rows.ts';
+import type { Row } from '../rows.ts';
 
 const PALETTE = [
   '#f6b544',
@@ -27,9 +31,6 @@ const PALETTE = [
 ];
 
 export const authRouter = Router();
-
-// Prune old login attempts on boot (recent failures are kept so a restart cannot reset rate limits)
-clearLoginAttempts();
 
 /* --------------------------------------------------------------- avatar upload
    Small, image-only multipart upload. Files land next to post media so the
@@ -50,13 +51,13 @@ const avatarUpload = multer({
       cb(null, `${Date.now()}_${crypto.randomUUID()}${ext}`);
     },
   }),
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 2 * MB, files: 1 },
   fileFilter: (_req, file, cb) => cb(null, ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype)),
 });
 
 // Multer failures must surface as JSON (a bare 500 HTML page breaks the UI)
-function handleAvatarUpload(req: any, res: any, next: any) {
-  avatarUpload.single('avatar')(req, res, (err: any) => {
+function handleAvatarUpload(req: Request, res: Response, next: NextFunction) {
+  avatarUpload.single('avatar')(req, res, (err: unknown) => {
     if (!err) return next();
     if (err instanceof multer.MulterError) {
       return res.status(400).json({
@@ -208,15 +209,7 @@ authRouter.post('/login', async (req, res) => {
     return res.status(429).json({ error: 'Too many failed login attempts. Please wait 15 minutes and try again.' });
   }
 
-  const user = queryOne<{
-    id: string;
-    username: string;
-    password_hash: string;
-    display_name: string;
-    role: string;
-    status: string;
-    avatar_color: string;
-  }>('SELECT * FROM users WHERE username = ?', [cleanUsername]);
+  const user = queryOne<UsersRow>('SELECT * FROM users WHERE username = ?', [cleanUsername]);
 
   // Always run bcrypt so response time does not reveal whether the username exists
   const isValid = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
@@ -240,7 +233,9 @@ authRouter.post('/login', async (req, res) => {
   if (needsRehash(user.password_hash)) {
     try {
       run('UPDATE users SET password_hash = ? WHERE id = ?', [await hashPassword(password), user.id]);
-    } catch {}
+    } catch (err) {
+      logger.warn('Password rehash on login failed:', err);
+    }
   }
 
   createSession(req, res, user.id);
@@ -253,8 +248,8 @@ authRouter.post('/login', async (req, res) => {
       role: user.role,
       status: user.status,
       avatarColor: user.avatar_color,
-      avatarUrl: avatarUrlFor((user as any).avatar_url),
-      themePreference: normaliseTheme((user as any).theme_preference),
+      avatarUrl: avatarUrlFor(user.avatar_url),
+      themePreference: normaliseTheme(user.theme_preference),
     },
     isPending: user.role === 'pending',
   });
@@ -366,7 +361,9 @@ authRouter.patch('/me', sensitiveLimiter, async (req: AuthenticatedRequest, res)
     if (removedKey) {
       try {
         await getStorageAdapter().deleteObject(removedKey);
-      } catch {}
+      } catch (err) {
+        logger.warn('Could not delete a storage object (it may remain as an orphan):', err);
+      }
     }
   }
 
@@ -407,7 +404,7 @@ authRouter.post('/avatar', handleAvatarUpload, async (req: AuthenticatedRequest,
   if (!req.user) {
     return res.status(401).json({ error: 'Not authenticated' });
   }
-  const file = (req as any).file as { filename: string; path: string; mimetype: string; originalname: string } | undefined;
+  const file = (req as Request & { file?: unknown }).file as { filename: string; path: string; mimetype: string; originalname: string } | undefined;
   if (!file) {
     return res.status(400).json({ error: 'Pick a PNG, JPEG or WebP image under 2 MB' });
   }
@@ -427,11 +424,13 @@ authRouter.post('/avatar', handleAvatarUpload, async (req: AuthenticatedRequest,
     if (finalKey !== storageKey && (finalKey.startsWith('tg:') || finalKey.startsWith('tgmsg:'))) {
       fs.unlink(file.path, () => {});
     }
-  } catch (err: any) {
+  } catch (err) {
     try {
       fs.unlink(file.path, () => {});
-    } catch {}
-    return res.status(500).json({ error: err?.message || 'Could not store that image' });
+    } catch {
+      // temp upload already removed
+    }
+    return res.status(500).json({ error: errMessage(err) || 'Could not store that image' });
   }
 
   const previous = queryOne<{ avatar_url: string | null }>('SELECT avatar_url FROM users WHERE id = ?', [req.user.id]);
@@ -439,7 +438,9 @@ authRouter.post('/avatar', handleAvatarUpload, async (req: AuthenticatedRequest,
   if (previous?.avatar_url && previous.avatar_url !== finalKey) {
     try {
       await getStorageAdapter().deleteObject(previous.avatar_url);
-    } catch {}
+    } catch (err) {
+      logger.warn('Could not delete a storage object (it may remain as an orphan):', err);
+    }
   }
 
   const fresh = queryOne<{
@@ -521,17 +522,19 @@ authRouter.delete('/account', sensitiveLimiter, async (req: AuthenticatedRequest
   }
 
   // Delete user media files and records
-  const userPosts = queryAll<any>('SELECT id FROM posts WHERE owner_id = ?', [userId]);
+  const userPosts = queryAll<Row>('SELECT id FROM posts WHERE owner_id = ?', [userId]);
   const storage = getStorageAdapter();
   for (const p of userPosts) {
-    const files = queryAll<any>('SELECT storage_key, thumb_key FROM post_files WHERE post_id = ?', [p.id]);
+    const files = queryAll<Row>('SELECT storage_key, thumb_key FROM post_files WHERE post_id = ?', [p.id]);
     for (const f of files) {
       try {
         await storage.deleteObject(f.storage_key);
         if (f.thumb_key && f.thumb_key !== f.storage_key) {
           await storage.deleteObject(f.thumb_key);
         }
-      } catch {}
+      } catch (err) {
+        logger.warn('Could not delete a storage object (it may remain as an orphan):', err);
+      }
     }
     run('DELETE FROM post_files WHERE post_id = ?', [p.id]);
     run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [p.id]);
@@ -541,7 +544,7 @@ authRouter.delete('/account', sensitiveLimiter, async (req: AuthenticatedRequest
   }
   run('DELETE FROM posts WHERE owner_id = ?', [userId]);
 
-  const userAlbums = queryAll<any>('SELECT id FROM albums WHERE creator_id = ?', [userId]);
+  const userAlbums = queryAll<Row>('SELECT id FROM albums WHERE creator_id = ?', [userId]);
   for (const a of userAlbums) {
     run('DELETE FROM album_items WHERE album_id = ?', [a.id]);
     run("DELETE FROM item_groups WHERE item_type = 'album' AND item_id = ?", [a.id]);
@@ -551,7 +554,7 @@ authRouter.delete('/account', sensitiveLimiter, async (req: AuthenticatedRequest
   }
   run('DELETE FROM albums WHERE creator_id = ?', [userId]);
 
-  const userGroups = queryAll<any>('SELECT id FROM groups WHERE creator_id = ? AND is_everyone = 0', [userId]);
+  const userGroups = queryAll<Row>('SELECT id FROM groups WHERE creator_id = ? AND is_everyone = 0', [userId]);
   for (const g of userGroups) {
     run('DELETE FROM group_members WHERE group_id = ?', [g.id]);
     run('DELETE FROM item_groups WHERE group_id = ?', [g.id]);

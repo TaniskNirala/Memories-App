@@ -1,31 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
-  X,
-  Upload,
-  CheckCircle2,
-  AlertCircle,
-  RefreshCw,
-  Image,
-  Calendar,
-  Users,
-  Sparkles,
-  Clock,
-  Crop,
-  Copy,
-  Layers,
-  Images,
-  Play,
-} from 'lucide-react';
+import { X, Upload, CheckCircle2, AlertCircle, RefreshCw, Calendar, Users, Sparkles, Crop, Copy, Layers, Images, Play } from 'lucide-react';
 import exifr from 'exifr';
 import { Group } from '../types/index.ts';
-import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { apiFetch } from '../context/AuthContext.tsx';
 import { PhotoEditorModal, PhotoEditorResult } from './PhotoEditorModal.tsx';
-import {
-  fetchStorageCapabilities,
-  uploadFileWithProgress,
-  StorageCapabilitiesResponse,
-} from '../utils/uploadWithProgress.ts';
+import { fetchStorageCapabilities, uploadFileWithProgress, StorageCapabilitiesResponse } from '../utils/uploadWithProgress.ts';
 import { extractVideoThumbnail } from '../utils/videoThumbnail.ts';
+import { MB } from '../lib/format.ts';
+import { resizeImage, extractPhotoDate } from '../utils/imageProcessing.ts';
+import { errMessage } from '../lib/errors.ts';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -51,176 +34,6 @@ interface QueuedFile {
   height?: number;
   detectedDate?: string;
   hasImagePreview?: boolean;
-}
-
-// Client-side resizing (~2048px max dimension) and thumbnail (~400px) with resilient fallback
-async function resizeImage(file: File): Promise<{ mainBlob: Blob; thumbBlob: Blob; width: number; height: number }> {
-  return new Promise((resolve) => {
-    // If not an image or SVG/GIF, pass through directly
-    if (!file.type.startsWith('image/') || file.type.includes('svg') || file.type.includes('gif')) {
-      return resolve({
-        mainBlob: file,
-        thumbBlob: file,
-        width: 1200,
-        height: 800,
-      });
-    }
-
-    const img = new window.Image();
-    const url = URL.createObjectURL(file);
-
-    const cleanup = () => {
-      try {
-        URL.revokeObjectURL(url);
-      } catch {}
-    };
-
-    img.onload = async () => {
-      try {
-        const originalWidth = img.naturalWidth || img.width || 800;
-        const originalHeight = img.naturalHeight || img.height || 600;
-
-        // 1. High-Fidelity Main Image:
-        // If image is within 4096px (Ultra-HD 4K) and under 25MB, preserve the original untouched file
-        // to retain maximum crispness, original camera color space, and zero compression loss!
-        const maxDim = 4096;
-        let mainBlob: Blob = file;
-        let targetWidth = originalWidth;
-        let targetHeight = originalHeight;
-
-        if (originalWidth > maxDim || originalHeight > maxDim) {
-          if (targetWidth > targetHeight) {
-            targetHeight = Math.round((targetHeight * maxDim) / targetWidth);
-            targetWidth = maxDim;
-          } else {
-            targetWidth = Math.round((targetWidth * maxDim) / targetHeight);
-            targetHeight = maxDim;
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = targetWidth;
-          canvas.height = targetHeight;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-          }
-
-          mainBlob = await new Promise<Blob>((res) => {
-            try {
-              canvas.toBlob(
-                (b) => res(b || file),
-                file.type === 'image/png' ? 'image/png' : 'image/jpeg',
-                0.95
-              );
-            } catch {
-              res(file);
-            }
-          });
-        }
-
-        // 2. High-DPI Retina Thumbnail: scale to max 960px at 0.88 quality with high smoothing
-        const thumbDim = 960;
-        let tw = targetWidth;
-        let th = targetHeight;
-        if (tw > th) {
-          th = Math.round((th * thumbDim) / tw);
-          tw = thumbDim;
-        } else {
-          tw = Math.round((tw * thumbDim) / th);
-          th = thumbDim;
-        }
-
-        const thumbCanvas = document.createElement('canvas');
-        thumbCanvas.width = tw;
-        thumbCanvas.height = th;
-        const tctx = thumbCanvas.getContext('2d');
-        if (tctx) {
-          tctx.imageSmoothingEnabled = true;
-          tctx.imageSmoothingQuality = 'high';
-          tctx.drawImage(img, 0, 0, tw, th);
-        }
-
-        cleanup();
-
-        const thumbBlob = await new Promise<Blob>((res) => {
-          try {
-            thumbCanvas.toBlob((b) => res(b || file), 'image/jpeg', 0.88);
-          } catch {
-            res(file);
-          }
-        });
-
-        resolve({
-          mainBlob: mainBlob || file,
-          thumbBlob: thumbBlob || file,
-          width: targetWidth,
-          height: targetHeight,
-        });
-      } catch (err) {
-        cleanup();
-        resolve({
-          mainBlob: file,
-          thumbBlob: file,
-          width: 1200,
-          height: 800,
-        });
-      }
-    };
-
-    img.onerror = () => {
-      cleanup();
-      resolve({
-        mainBlob: file,
-        thumbBlob: file,
-        width: 1200,
-        height: 800,
-      });
-    };
-
-    img.src = url;
-  });
-}
-
-// Extract capture date from EXIF metadata (or lastModified date)
-async function extractPhotoDate(file: File): Promise<string | null> {
-  try {
-    if (file.type.startsWith('image/')) {
-      const data = await exifr.parse(file, [
-        'DateTimeOriginal',
-        'CreateDate',
-        'DateCreated',
-        'ModifyDate',
-        'OffsetTimeOriginal',
-      ]);
-
-      const candidate = data?.DateTimeOriginal || data?.CreateDate || data?.DateCreated || data?.ModifyDate;
-      if (candidate instanceof Date && !isNaN(candidate.getTime())) {
-        return candidate.toISOString().slice(0, 10);
-      }
-      if (typeof candidate === 'string') {
-        const parsed = new Date(candidate);
-        if (!isNaN(parsed.getTime())) {
-          return parsed.toISOString().slice(0, 10);
-        }
-      }
-    }
-  } catch (e) {
-    console.debug('EXIF extraction skipped or unsupported for file', file.name, e);
-  }
-
-  // Fallback to file.lastModified timestamp if plausible
-  if (file.lastModified && typeof file.lastModified === 'number') {
-    try {
-      const mod = new Date(file.lastModified);
-      if (!isNaN(mod.getTime()) && mod.getTime() > 0) {
-        return mod.toISOString().slice(0, 10);
-      }
-    } catch {}
-  }
-
-  return null;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
@@ -278,7 +91,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       if (item.previewUrl) {
         try {
           URL.revokeObjectURL(item.previewUrl);
-        } catch {}
+        } catch {
+          // revoking a blob URL can only fail if it is already revoked
+        }
       }
     });
     setQueue([]);
@@ -316,13 +131,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         files.map(async (f) => {
           let checksum = '';
           try {
-            const slice = f.slice(0, 1024 * 1024 * 4);
+            const slice = f.slice(0, 4 * MB);
             const buf = await slice.arrayBuffer();
             const hashBuf = await crypto.subtle.digest('SHA-256', buf);
             checksum = Array.from(new Uint8Array(hashBuf))
               .map((b) => b.toString(16).padStart(2, '0'))
               .join('');
-          } catch {}
+          } catch (err) {
+            console.error('Checksum calculation failed', err);
+          }
           return { name: f.name, size: f.size, checksum };
         })
       );
@@ -620,7 +437,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               item.mainBlob = item.file;
               item.thumbBlob = undefined;
             }
-          } catch (err: any) {
+          } catch (err) {
             item.mainBlob = item.file;
             if (!item.file.type.startsWith('image/')) {
               item.thumbBlob = undefined;
@@ -683,10 +500,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               height: data.height || item.height || 800,
               position: idx,
             });
-          } catch (err: any) {
+          } catch (err) {
             console.error('File upload error for', item.file.name, err);
             item.status = 'error';
-            item.error = err.message || 'Upload dropped';
+            item.error = errMessage(err) || 'Upload dropped';
             setQueue([...processedQueue]);
           }
         }
@@ -761,8 +578,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       resetForm();
       onUploadSuccess();
       onClose();
-    } catch (err: any) {
-      setGlobalError(err.message || 'Upload failed');
+    } catch (err) {
+      setGlobalError(errMessage(err) || 'Upload failed');
     } finally {
       setIsProcessing(false);
     }

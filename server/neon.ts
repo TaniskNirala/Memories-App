@@ -1,4 +1,10 @@
 import pg from 'pg';
+import { logger, errMessage } from './logger.ts';
+import type { Db, SqlParam } from './db.ts';
+
+/** A value coming back from / going into a query row. */
+type DbValue = string | number | bigint | boolean | null | undefined | Date | Uint8Array;
+type ErrLike = { code?: unknown; message?: unknown };
 
 /**
  * Neon (PostgreSQL) persistence layer.
@@ -84,7 +90,7 @@ export function getPool(): pg.Pool {
 
   // Neon closes idle connections; without this handler an idle-client error would crash the process.
   pool.on('error', (err) => {
-    console.warn('⚠️ [Neon] idle client error (will reconnect automatically):', err.message);
+    logger.warn('⚠️ [Neon] idle client error (will reconnect automatically):', err.message);
   });
 
   return pool;
@@ -94,9 +100,10 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function isConnectionError(err: any): boolean {
-  const code: string = err?.code || '';
-  const msg: string = String(err?.message || '').toLowerCase();
+function isConnectionError(err: unknown): boolean {
+  const e = (err ?? {}) as ErrLike;
+  const code: string = typeof e.code === 'string' ? e.code : '';
+  const msg: string = String(e.message || '').toLowerCase();
   if (['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN'].includes(code)) return true;
   if (/^08/.test(code) || /^57P0/.test(code) || code === '53300') return true;
   return (
@@ -358,11 +365,13 @@ export async function ensureNeonSchema(): Promise<void> {
       await client.query(stmt);
     }
     await client.query('COMMIT');
-    console.log(`🗄️  [Neon] Schema ready (${TABLES_IN_ORDER.length} tables verified/created)`);
+    logger.info(`🗄️  [Neon] Schema ready (${TABLES_IN_ORDER.length} tables verified/created)`);
   } catch (err) {
     try {
       await client.query('ROLLBACK');
-    } catch {}
+    } catch {
+      // rollback failed; the connection is discarded by the caller
+    }
     throw err;
   } finally {
     client.release();
@@ -371,20 +380,20 @@ export async function ensureNeonSchema(): Promise<void> {
 
 /** Connects (with retries for Neon cold starts) and makes sure the schema exists. */
 export async function connectNeon(maxAttempts = 6): Promise<void> {
-  let lastErr: any = null;
+  let lastErr: unknown = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await getPool().query('SELECT 1');
       await ensureNeonSchema();
       return;
-    } catch (err: any) {
+    } catch (err) {
       lastErr = err;
-      console.warn(`⚠️ [Neon] connect attempt ${attempt}/${maxAttempts} failed: ${err?.message || err}`);
+      logger.warn(`⚠️ [Neon] connect attempt ${attempt}/${maxAttempts} failed: ${errMessage(err) || err}`);
       if (attempt < maxAttempts) await sleep(1500 * attempt);
     }
   }
   throw new Error(
-    `Could not connect to Neon database. Check DATABASE_URL. Last error: ${lastErr?.message || lastErr}`
+    `Could not connect to Neon database. Check DATABASE_URL. Last error: ${errMessage(lastErr) || String(lastErr)}`
   );
 }
 
@@ -402,7 +411,7 @@ export function shouldForwardToNeon(sql: string): boolean {
   return t.startsWith('INSERT') || t.startsWith('UPDATE') || t.startsWith('DELETE') || t.startsWith('REPLACE');
 }
 
-function normalizeValue(v: any): any {
+function normalizeValue(v: DbValue): string | number | Uint8Array | null {
   if (v === undefined) return null;
   if (typeof v === 'boolean') return v ? 1 : 0;
   if (v instanceof Date) return v.toISOString();
@@ -410,7 +419,7 @@ function normalizeValue(v: any): any {
   return v;
 }
 
-export function translateToPg(sql: string, params: any[] = []): { text: string; values: any[] } {
+export function translateToPg(sql: string, params: SqlParam[] = []): { text: string; values: unknown[] } {
   let s = sql.trim().replace(/;+\s*$/, '');
   let conflict = '';
 
@@ -455,7 +464,7 @@ export function translateToPg(sql: string, params: any[] = []): { text: string; 
 
 interface PendingWrite {
   sql: string;
-  params: any[];
+  params: SqlParam[];
 }
 
 const writeQueue: PendingWrite[] = [];
@@ -476,7 +485,7 @@ export function getWriteStats() {
 }
 
 /** Queue a write for Neon. Called by run() for every INSERT / UPDATE / DELETE. */
-export function pushWriteToNeon(sql: string, params: any[] = []): void {
+export function pushWriteToNeon(sql: string, params: SqlParam[] = []): void {
   if (!isNeonConfigured()) return;
   writeQueue.push({ sql, params });
   if (!flushTimer) {
@@ -500,12 +509,14 @@ async function applyBatchAtomically(batch: PendingWrite[]): Promise<boolean> {
       await client.query('COMMIT');
       client.release();
       return true;
-    } catch (err: any) {
+    } catch (err) {
       const connErr = isConnectionError(err);
       if (client) {
         try {
           await client.query('ROLLBACK');
-        } catch {}
+        } catch {
+          // rollback failed; the connection is discarded by the caller
+        }
         client.release(connErr ? (err as Error) : undefined);
       }
       if (connErr && attempt < 6) {
@@ -526,14 +537,14 @@ async function applyOneByOne(batch: PendingWrite[]): Promise<void> {
       try {
         await getPool().query(t.text, t.values);
         done = true;
-      } catch (err: any) {
+      } catch (err) {
         if (isConnectionError(err) && attempt < 5) {
           await sleep(500 * attempt);
           continue;
         }
         failedWrites++;
-        lastWriteError = `${err?.message || err} | ${st.sql.replace(/\s+/g, ' ').slice(0, 140)}`;
-        console.error('❌ [Neon] write failed:', lastWriteError);
+        lastWriteError = `${errMessage(err) || err} | ${st.sql.replace(/\s+/g, ' ').slice(0, 140)}`;
+        logger.error('❌ [Neon] write failed:', lastWriteError);
         done = true; // skip this statement so the queue keeps moving
       }
     }
@@ -569,7 +580,7 @@ export async function flushNeonWrites(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export async function restoreAllFromNeon(
-  localDb: any,
+  localDb: Db,
   options: { clearLocalFirst?: boolean } = { clearLocalFirst: true }
 ): Promise<{ success: boolean; totalRestored: number; counts: Record<string, number>; error?: string }> {
   const counts: Record<string, number> = {};
@@ -581,7 +592,9 @@ export async function restoreAllFromNeon(
       for (const table of [...TABLES_IN_ORDER].reverse()) {
         try {
           localDb.exec(`DELETE FROM ${table};`);
-        } catch {}
+        } catch {
+          // table may not exist locally yet
+        }
       }
     }
 
@@ -595,9 +608,11 @@ export async function restoreAllFromNeon(
 
       let localCols: string[] = columns;
       try {
-        const info = localDb.prepare(`PRAGMA table_info(${table})`).all() as any[];
+        const info = localDb.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
         localCols = info.map((c) => c.name);
-      } catch {}
+      } catch {
+        // fall back to Neon's column list
+      }
 
       const valid = columns.filter((c) => localCols.includes(c));
       if (!valid.length) {
@@ -608,7 +623,7 @@ export async function restoreAllFromNeon(
       const stmt = localDb.prepare(
         `INSERT OR REPLACE INTO ${table} (${valid.join(', ')}) VALUES (${valid.map(() => '?').join(', ')})`
       );
-      const insertAll = localDb.transaction((rows: any[]) => {
+      const insertAll = localDb.transaction((rows: Array<Record<string, DbValue>>) => {
         for (const row of rows) {
           stmt.run(...valid.map((c) => normalizeValue(row[c] === undefined ? null : row[c])));
         }
@@ -619,28 +634,30 @@ export async function restoreAllFromNeon(
     }
 
     localDb.exec('PRAGMA foreign_keys = ON;');
-    console.log(`📥 [Neon] Restored ${totalRestored} row(s) from Neon into the local cache`);
+    logger.info(`📥 [Neon] Restored ${totalRestored} row(s) from Neon into the local cache`);
     return { success: true, totalRestored, counts };
-  } catch (err: any) {
+  } catch (err) {
     try {
       localDb.exec('PRAGMA foreign_keys = ON;');
-    } catch {}
-    console.error('❌ [Neon] restore failed:', err?.message || err);
-    return { success: false, totalRestored, counts, error: err?.message || String(err) };
+    } catch {
+      // pragma not supported on this connection; safe to continue
+    }
+    logger.error('❌ [Neon] restore failed:', errMessage(err) || err);
+    return { success: false, totalRestored, counts, error: errMessage(err) || String(err) };
   }
 }
 
 export async function pushAllLocalToNeon(
-  localDb: any
+  localDb: Db
 ): Promise<{ success: boolean; totalPushed: number; counts: Record<string, number>; error?: string }> {
   await flushNeonWrites();
   const counts: Record<string, number> = {};
   let totalPushed = 0;
   try {
     for (const table of TABLES_IN_ORDER) {
-      let rows: any[] = [];
+      let rows: Array<Record<string, DbValue>> = [];
       try {
-        rows = localDb.prepare(`SELECT * FROM ${table}`).all();
+        rows = localDb.prepare(`SELECT * FROM ${table}`).all() as Array<Record<string, DbValue>>;
       } catch {
         counts[table] = 0;
         continue;
@@ -655,7 +672,7 @@ export async function pushAllLocalToNeon(
       let pushed = 0;
       for (let i = 0; i < rows.length; i += 100) {
         const chunk = rows.slice(i, i + 100);
-        const stmts: PendingWrite[] = chunk.map((r) => ({ sql, params: cols.map((c) => r[c]) }));
+        const stmts: PendingWrite[] = chunk.map((r) => ({ sql, params: cols.map((c) => normalizeValue(r[c])) }));
         const ok = await applyBatchAtomically(stmts);
         if (ok) {
           pushed += chunk.length;
@@ -665,8 +682,8 @@ export async function pushAllLocalToNeon(
               const t = translateToPg(st.sql, st.params);
               await getPool().query(t.text, t.values);
               pushed++;
-            } catch (err: any) {
-              console.warn(`⚠️ [Neon] skipped a row in ${table}: ${err?.message || err}`);
+            } catch (err) {
+              logger.warn(`⚠️ [Neon] skipped a row in ${table}: ${errMessage(err) || err}`);
             }
           }
         }
@@ -674,18 +691,20 @@ export async function pushAllLocalToNeon(
       counts[table] = pushed;
       totalPushed += pushed;
     }
-    console.log(`📤 [Neon] Pushed ${totalPushed} local row(s) into Neon`);
+    logger.info(`📤 [Neon] Pushed ${totalPushed} local row(s) into Neon`);
     return { success: true, totalPushed, counts };
-  } catch (err: any) {
-    console.error('❌ [Neon] push failed:', err?.message || err);
-    return { success: false, totalPushed, counts, error: err?.message || String(err) };
+  } catch (err) {
+    logger.error('❌ [Neon] push failed:', errMessage(err) || err);
+    return { success: false, totalPushed, counts, error: errMessage(err) || String(err) };
   }
 }
 
 export async function closeNeon(): Promise<void> {
   try {
     await flushNeonWrites();
-  } catch {}
+  } catch {
+    // shutting down: ignore flush errors
+  }
   if (pool) {
     await pool.end().catch(() => {});
     pool = null;

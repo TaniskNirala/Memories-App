@@ -19,6 +19,8 @@ import {
   StorageCapabilitiesResponse,
 } from '../utils/uploadWithProgress.ts';
 import { extractVideoThumbnail } from '../utils/videoThumbnail.ts';
+import { MB } from '../lib/format.ts';
+import { errMessage } from '../lib/errors.ts';
 
 interface AddPhotosToAlbumModalProps {
   isOpen: boolean;
@@ -82,7 +84,9 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
       queue.forEach((q) => {
         try {
           URL.revokeObjectURL(q.previewUrl);
-        } catch {}
+        } catch {
+          // revoking a blob URL can only fail if it is already revoked
+        }
       });
     }
   }, [isOpen]);
@@ -161,7 +165,9 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
       if (targetItem) {
         try {
           URL.revokeObjectURL(targetItem.previewUrl);
-        } catch {}
+        } catch {
+          // revoking a blob URL can only fail if it is already revoked
+        }
       }
       return prev.filter((item) => item.id !== id);
     });
@@ -239,7 +245,7 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
         const naturalHeight = img.naturalHeight || 800;
 
         const maxOriginalDim = 4096;
-        const keepOriginal = naturalWidth <= maxOriginalDim && naturalHeight <= maxOriginalDim && file.size < 25 * 1024 * 1024;
+        const keepOriginal = naturalWidth <= maxOriginalDim && naturalHeight <= maxOriginalDim && file.size < 25 * MB;
 
         const maxThumbDimension = 960;
         let tw = naturalWidth;
@@ -410,9 +416,9 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
       setUploadProgress(100);
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Add photos error:', err);
-      setErrorMessage(err.message || 'Failed to upload and add photos');
+      setErrorMessage(errMessage(err) || 'Failed to upload and add photos');
     } finally {
       setIsProcessing(false);
     }
@@ -437,8 +443,8 @@ export const AddPhotosToAlbumModal: React.FC<AddPhotosToAlbumModalProps> = ({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to link photos to album');
+    } catch (err) {
+      setErrorMessage(errMessage(err) || 'Failed to link photos to album');
     } finally {
       setIsProcessing(false);
     }

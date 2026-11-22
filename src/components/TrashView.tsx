@@ -3,6 +3,7 @@ import { Trash2, RotateCcw, Image as ImageIcon, ShieldAlert, AlertTriangle, Cloc
 import { apiFetch } from '../context/AuthContext.tsx';
 import { EmptyState, Modal, ModalHeader, SearchBox, StatTile, PageHero } from './ui/kit.tsx';
 import { relativeTime, shortDate } from '../lib/format.ts';
+import { useFeedback } from './ui/Feedback.tsx';
 
 interface TrashItem {
   id: string;
@@ -12,6 +13,7 @@ interface TrashItem {
 }
 
 export const TrashView: React.FC = () => {
+  const { toast } = useFeedback();
   const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDeleteProtected, setIsDeleteProtected] = useState(true);
@@ -36,7 +38,8 @@ export const TrashView: React.FC = () => {
         const data = await res.json();
         setTrashItems(data.trash || []);
       }
-    } catch {
+    } catch (err) {
+      console.error('Load trash failed', err);
     } finally {
       setLoading(false);
     }
@@ -51,7 +54,9 @@ export const TrashView: React.FC = () => {
     try {
       const res = await apiFetch(`/api/posts/${postId}/restore`, { method: 'POST' });
       if (res.ok) fetchTrash();
-    } catch {
+    } catch (err) {
+      console.error('Restore from trash failed', err);
+      toast('Could not restore the item. Please try again.', 'error');
     } finally {
       setBusyId(null);
     }
@@ -70,7 +75,9 @@ export const TrashView: React.FC = () => {
         setPendingDelete(null);
         fetchTrash();
       }
-    } catch {
+    } catch (err) {
+      console.error('Permanent delete failed', err);
+      toast('Could not delete the item. Please try again.', 'error');
     } finally {
       setBusyId(null);
     }

@@ -772,3 +772,22 @@ Configuring both lanes gives you instant Bot API uploads for everyday photos (`â
 11. **Password Policy, Re-Auth & Brute-Force Lockout**: Tests minimum length/weak password rejection, password re-verification on `DELETE /api/auth/account`, and `429` lockout after 5 failed logins.
 12. **Profile Photo Lifecycle**: End-to-end upload, replacement, feed/comment avatar resolution, and removal back to initials.
 13. **Admin Reset Links & Telegram Avatar Access**: Tests 1-hour admin reset key generation, full URL redemption, password rotation, and member access to Telegram-backed avatar keys (`tg:...`).
+
+## Development checks
+
+| Command | What it does |
+|---|---|
+| `npm run lint` | TypeScript type check (strict) |
+| `npm run lint:hooks` | `oxlint`: React hooks rules (catches React error #310), unused code, empty `catch` blocks |
+| `npm test` | Backend / privacy / security tests |
+| `npm run test:ui` | Frontend tests (Vitest), including a regression test for the hook-order crash |
+| `npm run check` | All of the above plus a production build |
+| `npm run format` | Format the code with Prettier (run once; `format:check` verifies) |
+
+The same checks run on every push and pull request via `.github/workflows/ci.yml`.
+
+**Rule of thumb for React components:** call every hook (`useState`, `useEffect`, `useMemo`, ...) *before* any
+early `return`. Hooks that are skipped on some renders crash the page with React error #310.
+
+**Logging:** server code uses `server/logger.ts` instead of `console.*`. Set `LOG_LEVEL` (`debug`/`info`/`warn`/`error`)
+and `LOG_FORMAT=json` for structured logs.

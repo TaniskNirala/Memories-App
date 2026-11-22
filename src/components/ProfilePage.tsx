@@ -17,6 +17,7 @@ import {
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
 import { Avatar, PageHero, Modal, ModalHeader } from './ui/kit.tsx';
+import { MB } from '../lib/format.ts';
 
 /* ---------------------------------------------------------------------------
    Profile & settings
@@ -68,7 +69,7 @@ export const ProfilePage: React.FC = () => {
       setAvatarMsg({ tone: 'error', text: 'Pick a PNG, JPEG or WebP image' });
       return;
     }
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > 2 * MB) {
       setAvatarMsg({ tone: 'error', text: 'That image is larger than 2 MB' });
       return;
     }

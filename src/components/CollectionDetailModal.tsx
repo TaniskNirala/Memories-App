@@ -7,6 +7,7 @@ import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { isVideoMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 import { Avatar } from './ui/kit.tsx';
+import { useFeedback } from './ui/Feedback.tsx';
 
 interface CollectionDetailModalProps {
   collectionId: string | null;
@@ -27,6 +28,7 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
   groups = [],
   onDeleteAlbum,
 }) => {
+  const { toast } = useFeedback();
   const { user, isAdmin } = useAuth();
   const [collection, setCollection] = useState<any>(null);
   const [items, setItems] = useState<any[]>([]);
@@ -72,7 +74,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
           setEventPlaceInput(data.album.eventPlace);
         }
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load collection failed', err);
+      toast('Could not load this collection.', 'error');
+    }
   };
 
   const fetchItems = async (resetOffset: boolean = false) => {
@@ -92,7 +97,8 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         setOffset(currentOffset + (data.items?.length || 0));
         setHasMore(Boolean(data.hasMore));
       }
-    } catch (e) {
+    } catch (err) {
+      console.error('Load more collection photos failed', err);
     } finally {
       setLoading(false);
     }
@@ -106,7 +112,9 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         const data = await res.json();
         setAttendees(data.attendees || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load attendance failed', err);
+    }
   };
 
   const fetchNotes = async () => {
@@ -117,7 +125,9 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         const data = await res.json();
         setNotes(data.notes || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load notes failed', err);
+    }
   };
 
   const fetchAvailableUsers = async () => {
@@ -127,7 +137,9 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         const data = await res.json();
         setAvailableUsers(data.users || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load available users failed', err);
+    }
   };
 
   useEffect(() => {
@@ -153,7 +165,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         fetchAttendance();
         setShowTagDropdown(false);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Add attendance failed', err);
+      toast('Could not update attendance. Please try again.', 'error');
+    }
   };
 
   const handleRemoveAttendance = async (userId: string) => {
@@ -164,7 +179,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
       if (res.ok) {
         fetchAttendance();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Remove attendance failed', err);
+      toast('Could not update attendance. Please try again.', 'error');
+    }
   };
 
   const handleAddNote = async (e: React.FormEvent) => {
@@ -187,7 +205,10 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
         setIsAnonymous(false);
         fetchNotes();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Save note failed', err);
+      toast('Could not save your note. Please try again.', 'error');
+    }
   };
 
   const handleConvertToEvent = async (e: React.FormEvent) => {

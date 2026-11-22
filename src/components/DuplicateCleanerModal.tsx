@@ -13,6 +13,9 @@ import {
   ShieldAlert,
 } from 'lucide-react';
 import { apiFetch } from '../context/AuthContext.tsx';
+import { MB, formatBytes } from '../lib/format.ts';
+import { useFeedback } from './ui/Feedback.tsx';
+import { errMessage } from '../lib/errors.ts';
 
 interface DuplicateFile {
   fileId: string;
@@ -49,6 +52,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
   onClose,
   onDuplicatesResolved,
 }) => {
+  const { toast: showToast } = useFeedback();
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [resolvingKey, setResolvingKey] = useState<string | null>(null);
@@ -64,7 +68,7 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
         const data = await res.json();
         setDuplicateGroups(data.duplicateGroups || []);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to fetch duplicates:', err);
     } finally {
       setLoading(false);
@@ -120,8 +124,8 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
       } else {
         setToast({ message: data.error || 'Failed to resolve duplicates', type: 'error' });
       }
-    } catch (err: any) {
-      setToast({ message: err.message || 'Error resolving duplicates', type: 'error' });
+    } catch (err) {
+      setToast({ message: errMessage(err) || 'Error resolving duplicates', type: 'error' });
     } finally {
       setResolvingKey(null);
     }
@@ -150,8 +154,8 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
       } else {
         setToast({ message: 'Failed to record preference', type: 'error' });
       }
-    } catch (err: any) {
-      setToast({ message: err.message || 'Error keeping both images', type: 'error' });
+    } catch (err) {
+      setToast({ message: errMessage(err) || 'Error keeping both images', type: 'error' });
     } finally {
       setResolvingKey(null);
     }
@@ -176,8 +180,8 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
       if (onDuplicatesResolved) {
         onDuplicatesResolved();
       }
-    } catch (err: any) {
-      setToast({ message: err.message || 'Error keeping all images', type: 'error' });
+    } catch (err) {
+      setToast({ message: errMessage(err) || 'Error keeping all images', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -213,11 +217,14 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
           successCount += d.removedCount || 0;
           totalFreed += d.freedBytes || 0;
         }
-      } catch {}
+      } catch (err) {
+        console.error('Resolve duplicates failed', err);
+        showToast('Could not clean duplicates. Please try again.', 'error');
+      }
     }
 
     setToast({
-      message: `Cleaned ${successCount} duplicate photo(s) across all groups! Reclaimed ${(totalFreed / (1024 * 1024)).toFixed(1)} MB.`,
+      message: `Cleaned ${successCount} duplicate photo(s) across all groups! Reclaimed ${(totalFreed / MB).toFixed(1)} MB.`,
       type: 'success',
     });
     setDuplicateGroups([]);
@@ -225,13 +232,6 @@ export const DuplicateCleanerModal: React.FC<DuplicateCleanerModalProps> = ({
     if (onDuplicatesResolved) {
       onDuplicatesResolved();
     }
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024 * 1024) {
-      return `${(bytes / 1024).toFixed(0)} KB`;
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (

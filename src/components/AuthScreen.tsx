@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useTheme } from '../context/ThemeContext.tsx';
+import { errMessage } from '../lib/errors.ts';
 
 export function extractResetTokenFromText(raw?: string | null): string {
   const input = String(raw || '').trim();
@@ -76,7 +77,9 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
           setMode('redeem_reset');
           setError(null);
         }
-      } catch {}
+      } catch {
+        // location may be inaccessible in sandboxed contexts
+      }
     };
     window.addEventListener('hashchange', syncFromUrl);
     window.addEventListener('popstate', syncFromUrl);
@@ -125,8 +128,8 @@ export const AuthScreen: React.FC<{ onResetComplete?: () => void }> = ({ onReset
           setError(data.error || 'That reset link is not valid');
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
+    } catch (err) {
+      setError(errMessage(err) || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }

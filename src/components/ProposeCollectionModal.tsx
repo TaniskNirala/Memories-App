@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Layers, Calendar, MapPin, Check } from 'lucide-react';
 import { Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { errMessage } from '../lib/errors.ts';
 
 interface ProposeCollectionModalProps {
   isOpen: boolean;
@@ -74,8 +75,8 @@ export const ProposeCollectionModal: React.FC<ProposeCollectionModalProps> = ({
       } else {
         setMsg(data.error || 'Failed to submit proposal');
       }
-    } catch (e: any) {
-      setMsg(e.message || 'Error creating collection');
+    } catch (e) {
+      setMsg(errMessage(e) || 'Error creating collection');
     } finally {
       setLoading(false);
     }

@@ -9,28 +9,30 @@ import { TimelineFeed } from './components/TimelineFeed.tsx';
 import { FeedSearchBar, FeedFilterState } from './components/FeedSearchBar.tsx';
 import { AuthScreen } from './components/AuthScreen.tsx';
 import { PendingApprovalScreen } from './components/PendingApprovalScreen.tsx';
-import { UploadModal } from './components/UploadModal.tsx';
-import { MediaViewerModal } from './components/MediaViewerModal.tsx';
-import { CommentsDrawer } from './components/CommentsDrawer.tsx';
-import { CollectionDetailModal } from './components/CollectionDetailModal.tsx';
-import { GroupManagementModal } from './components/GroupManagementModal.tsx';
-import { SharePlacementModal } from './components/SharePlacementModal.tsx';
-import { ProposeCollectionModal } from './components/ProposeCollectionModal.tsx';
 import { PendingReferencesBanner } from './components/PendingReferencesBanner.tsx';
-import { TrashView } from './components/TrashView.tsx';
-import { ProfilePage } from './components/ProfilePage.tsx';
 import { EventsPage } from './components/EventsPage.tsx';
 import { CirclesPage } from './components/CirclesPage.tsx';
 import { CommandPalette, PaletteAction } from './components/CommandPalette.tsx';
-import { AdminPanel } from './components/AdminPanel.tsx';
 import { OfflineIndicator } from './components/OfflineIndicator.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
-import { DuplicateCleanerModal } from './components/DuplicateCleanerModal.tsx';
 import { FeedItem, Group, NotificationItem } from './types/index.ts';
 import { RefreshCw, Upload, AlertTriangle } from 'lucide-react';
 import { Avatar, Modal, PageHero } from './components/ui/kit.tsx';
-import { FeedbackProvider } from './components/ui/Feedback.tsx';
+import { FeedbackProvider, useFeedback } from './components/ui/Feedback.tsx';
 import { accentFromName, greeting } from './lib/format.ts';
+import { lazyNamed } from './lib/lazyNamed.tsx';
+// Heavy screens/modals are code-split so the first page load stays small.
+const UploadModal = lazyNamed(() => import('./components/UploadModal.tsx'), 'UploadModal');
+const MediaViewerModal = lazyNamed(() => import('./components/MediaViewerModal.tsx'), 'MediaViewerModal');
+const CommentsDrawer = lazyNamed(() => import('./components/CommentsDrawer.tsx'), 'CommentsDrawer');
+const CollectionDetailModal = lazyNamed(() => import('./components/CollectionDetailModal.tsx'), 'CollectionDetailModal');
+const GroupManagementModal = lazyNamed(() => import('./components/GroupManagementModal.tsx'), 'GroupManagementModal');
+const SharePlacementModal = lazyNamed(() => import('./components/SharePlacementModal.tsx'), 'SharePlacementModal');
+const ProposeCollectionModal = lazyNamed(() => import('./components/ProposeCollectionModal.tsx'), 'ProposeCollectionModal');
+const TrashView = lazyNamed(() => import('./components/TrashView.tsx'), 'TrashView');
+const ProfilePage = lazyNamed(() => import('./components/ProfilePage.tsx'), 'ProfilePage');
+const AdminPanel = lazyNamed(() => import('./components/AdminPanel.tsx'), 'AdminPanel');
+const DuplicateCleanerModal = lazyNamed(() => import('./components/DuplicateCleanerModal.tsx'), 'DuplicateCleanerModal');
 
 /* ---------------------------------------------------------------------------
    Hero band: the "where am I" moment at the top of the timeline
@@ -39,6 +41,7 @@ import { accentFromName, greeting } from './lib/format.ts';
 const MainContent: React.FC = () => {
   const { user, loading, isPending, isAdmin } = useAuth();
   const { toggleTheme } = useTheme();
+  const { toast } = useFeedback();
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<'feed' | 'collections' | 'groups' | 'admin' | 'trash' | 'profile'>('feed');
@@ -377,7 +380,9 @@ const MainContent: React.FC = () => {
             /(?:^|[#?&])token=([A-Za-z0-9_-]+)/.test(window.location.search)
         );
         setForcingResetScreen(hasTok);
-      } catch {}
+      } catch {
+        // location access can throw in sandboxed contexts; just skip the reset-link check
+      }
     };
     window.addEventListener('hashchange', checkHash);
     window.addEventListener('popstate', checkHash);
@@ -388,8 +393,9 @@ const MainContent: React.FC = () => {
   }, []);
 
   // NOTE: all hooks must be declared above the early returns below (React error #310).
-  // Handle direct sharing from timeline card dropdown
-  const handleDirectShare = useCallback(async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
+  // Handle direct sharing from timeline card dropdown.
+  // Plain function (not useCallback) so it always sees the current fetchFeed / user / group state.
+  const handleDirectShare = async (itemId: string, itemType: 'post' | 'album', targetGroupId: string) => {
     try {
       const res = await apiFetch('/api/placements/bunch', {
         method: 'POST',
@@ -400,13 +406,13 @@ const MainContent: React.FC = () => {
           groupIds: [targetGroupId],
         }),
       });
-      if (res.ok) {
-        await fetchFeed(true);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await fetchFeed(true);
     } catch (e) {
       console.error('Share to group failed', e);
+      toast('Could not share to that circle. Please try again.', 'error');
     }
-  }, [selectedGroupId, user, isPending]);
+  };
 
   const contributorsCount = useMemo(
     () => new Set(feedItems.map((i) => (i.type === 'single_post' ? i.owner.id : i.creator.id))).size,
@@ -440,13 +446,17 @@ const MainContent: React.FC = () => {
 
   const handleDeletePost = async (postId: string, permanent: boolean = false) => {
     try {
-      await apiFetch(`/api/posts/${postId}`, {
+      const res = await apiFetch(`/api/posts/${postId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permanent }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchFeed(true);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Delete post failed', e);
+      toast('Could not delete the post. Please try again.', 'error');
+    }
   };
 
   const handleDeleteSinglePhoto = async (postId: string, fileId: string) => {
@@ -514,24 +524,32 @@ const MainContent: React.FC = () => {
 
   const handleDeleteAlbum = async (albumId: string, permanent: boolean = false) => {
     try {
-      await apiFetch(`/api/albums/${albumId}`, {
+      const res = await apiFetch(`/api/albums/${albumId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permanent }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchFeed(true);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Delete album failed', e);
+      toast('Could not delete the collection. Please try again.', 'error');
+    }
   };
 
   const handleAdminOverride = async (postId: string, override: string | null) => {
     try {
-      await apiFetch(`/api/posts/${postId}/override-visibility`, {
+      const res = await apiFetch(`/api/posts/${postId}/override-visibility`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ override }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       fetchFeed(true);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Visibility override failed', e);
+      toast('Could not change visibility. Please try again.', 'error');
+    }
   };
 
   const handleNotificationClick = async (notif: NotificationItem) => {
@@ -596,7 +614,9 @@ const MainContent: React.FC = () => {
                 };
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.error('Failed to load notification album', e);
+          }
         }
         if (targetAlbum) {
           setCommentsGroupId(groupId);
@@ -966,13 +986,17 @@ const MainContent: React.FC = () => {
         highlightCommentId={highlightCommentId}
         onReactionToggle={async (targetId, groupId, emoji) => {
           try {
-            await apiFetch('/api/reactions/toggle', {
+            const res = await apiFetch('/api/reactions/toggle', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ targetType: 'post', targetId, groupId, emoji }),
             });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             fetchFeed(true);
-          } catch (e) {}
+          } catch (e) {
+            console.error('Reaction failed', e);
+            toast('Could not save your reaction. Please try again.', 'error');
+          }
         }}
       />
 

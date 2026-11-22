@@ -5,6 +5,8 @@ import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
 import { isDeleteProtected } from '../config.ts';
 import { avatarUrlFor } from '../security/avatars.ts';
+import { logger } from '../logger.ts';
+import type { Row } from '../rows.ts';
 
 export const albumsRouter = Router();
 albumsRouter.use(requireApproved);
@@ -13,12 +15,12 @@ albumsRouter.use(requireApproved);
 export function canUserViewAlbum(userId: string, userRole: string, albumId: string): boolean {
   if (userRole === 'admin') return true;
 
-  const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
+  const album = queryOne<Row>('SELECT * FROM albums WHERE id = ?', [albumId]);
   if (!album) return false;
   if (album.creator_id === userId) return true;
   if (album.status !== 'approved') return false;
 
-  const placements = queryAll<any>(
+  const placements = queryAll<Row>(
     `SELECT ig.*
      FROM item_groups ig
      JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
@@ -124,13 +126,13 @@ albumsRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
   sql += ` ORDER BY a.created_at DESC`;
 
-  const albums = queryAll<any>(sql, params);
+  const albums = queryAll<Row>(sql, params);
   const storage = getStorageAdapter();
 
   // Attach cover mosaic thumbnails (up to 4)
   const results = await Promise.all(
     albums.map(async (alb) => {
-      const topItems = queryAll<any>(
+      const topItems = queryAll<Row>(
         `SELECT pf.thumb_key, pf.storage_key
          FROM album_items ai
          JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
@@ -177,7 +179,7 @@ albumsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     return res.status(403).json({ error: 'Access denied or album not found' });
   }
 
-  const album = queryOne<any>(
+  const album = queryOne<Row>(
     `SELECT a.*, u.username as creator_username, u.display_name as creator_display_name
      FROM albums a
      JOIN users u ON a.creator_id = u.id
@@ -228,7 +230,7 @@ albumsRouter.get('/:id/items', async (req: AuthenticatedRequest, res) => {
     return res.status(403).json({ error: 'Access denied' });
   }
 
-  const items = queryAll<any>(
+  const items = queryAll<Row>(
     `SELECT ai.position, p.id as post_id, pf.id as file_id, pf.position as file_position,
             p.caption, p.taken_at, p.uploaded_at, pf.storage_key, pf.thumb_key, pf.file_type, pf.width, pf.height, pf.tg_deleted_at
      FROM album_items ai
@@ -286,7 +288,7 @@ albumsRouter.post('/:id/items', async (req: AuthenticatedRequest, res) => {
     const userId = req.user!.id;
     const isAdmin = req.user!.role === 'admin';
 
-    const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
+    const album = queryOne<Row>('SELECT * FROM albums WHERE id = ?', [albumId]);
     if (!album) return res.status(404).json({ error: 'Album not found' });
 
     const isMemberOfEventCircle = queryOne(
@@ -330,8 +332,8 @@ albumsRouter.post('/:id/items', async (req: AuthenticatedRequest, res) => {
       addedCount,
       message: `${addedCount} photo(s) linked to album`,
     });
-  } catch (err: any) {
-    console.error('Failed to add items to album:', err);
+  } catch (err) {
+    logger.error('Failed to add items to album:', err);
     res.status(500).json({ error: 'Failed to add items to album' });
   }
 });
@@ -339,7 +341,7 @@ albumsRouter.post('/:id/items', async (req: AuthenticatedRequest, res) => {
 // Event attendance: "anyone can mark 'I was there', and the owner can tag friends as present, who can remove the tag"
 albumsRouter.get('/:id/attendance', (req: AuthenticatedRequest, res) => {
   const albumId = req.params.id;
-  const attendees = queryAll<any>(
+  const attendees = queryAll<Row>(
     `SELECT ea.user_id, ea.tagged_by, ea.created_at,
             u.username, u.display_name, u.avatar_color, u.avatar_url,
             tu.username as tagger_username
@@ -369,7 +371,7 @@ albumsRouter.post('/:id/attendance', (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   const { targetUserId } = req.body; // If tagging someone else
 
-  const album = queryOne<any>('SELECT creator_id, is_event, title FROM albums WHERE id = ?', [albumId]);
+  const album = queryOne<Row>('SELECT creator_id, is_event, title FROM albums WHERE id = ?', [albumId]);
   if (!album || !album.is_event) {
     return res.status(400).json({ error: 'Valid event required' });
   }
@@ -417,7 +419,7 @@ albumsRouter.delete('/:id/attendance/:targetUserId', (req: AuthenticatedRequest,
   const targetUserId = req.params.targetUserId;
   const isAdmin = req.user!.role === 'admin';
 
-  const album = queryOne<any>('SELECT creator_id FROM albums WHERE id = ?', [albumId]);
+  const album = queryOne<Row>('SELECT creator_id FROM albums WHERE id = ?', [albumId]);
   if (!album) return res.status(404).json({ error: 'Album not found' });
 
   // User can remove their own tag, or creator/admin can remove any
@@ -435,7 +437,7 @@ albumsRouter.get('/:id/notes', (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const notes = queryAll<any>(
+  const notes = queryAll<Row>(
     `SELECT en.*, u.username, u.display_name, u.avatar_color, u.avatar_url
      FROM event_notes en
      JOIN users u ON en.author_id = u.id
@@ -500,7 +502,7 @@ albumsRouter.post('/:id/convert-to-event', (req: AuthenticatedRequest, res) => {
   const isAdmin = req.user!.role === 'admin';
   const { eventDate, eventPlace, title } = req.body;
 
-  const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
+  const album = queryOne<Row>('SELECT * FROM albums WHERE id = ?', [albumId]);
   if (!album) return res.status(404).json({ error: 'Album not found' });
   if (!isAdmin && album.creator_id !== userId) {
     return res.status(403).json({ error: 'Only the album creator or an admin can convert this album' });
@@ -545,7 +547,7 @@ albumsRouter.delete('/:id', (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
   const isAdmin = req.user!.role === 'admin';
 
-  const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [albumId]);
+  const album = queryOne<Row>('SELECT * FROM albums WHERE id = ?', [albumId]);
   if (!album) return res.status(404).json({ error: 'Album not found' });
   if (!isAdmin && album.creator_id !== userId) {
     return res.status(403).json({ error: 'Only the creator or admin can delete this album' });

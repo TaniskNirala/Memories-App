@@ -3,6 +3,7 @@ import { queryOne, queryAll } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
 import { avatarUrlFor } from '../security/avatars.ts';
+import type { Row } from '../rows.ts';
 
 export const feedRouter = Router();
 feedRouter.use(requireApproved);
@@ -95,10 +96,10 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
   let albums: any[] = [];
 
   if (filter === 'all' || filter === 'single') {
-    posts = queryAll<any>(postSql, postParams);
+    posts = queryAll<Row>(postSql, postParams);
   }
   if (filter === 'all' || filter === 'collections') {
-    albums = queryAll<any>(albumSql, albumParams);
+    albums = queryAll<Row>(albumSql, albumParams);
   }
 
   // Format single posts
@@ -111,7 +112,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
       if (!isOwner && !isAdmin) {
         // Find placements user can see
-        const userPlacements = queryAll<any>(
+        const userPlacements = queryAll<Row>(
           `SELECT ig.*
            FROM item_groups ig
            JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
@@ -127,7 +128,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
       }
 
       if (isLocked) {
-        const placements = queryAll<any>(
+        const placements = queryAll<Row>(
           `SELECT ig.id, ig.group_id as groupId, g.name as groupName, ig.is_reference as isReference, ig.reference_status as referenceStatus
            FROM item_groups ig
            JOIN groups g ON ig.group_id = g.id
@@ -161,7 +162,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
       }
 
       // Load files with signed URLs
-      const rawFiles = queryAll<any>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [p.id]);
+      const rawFiles = queryAll<Row>('SELECT * FROM post_files WHERE post_id = ? ORDER BY position ASC', [p.id]);
       const filesWithUrls = await Promise.all(
         rawFiles.map(async (f) => ({
           id: f.id,
@@ -178,7 +179,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
       );
 
       // Placements & comments count
-      const placements = queryAll<any>(
+      const placements = queryAll<Row>(
         isAdmin || isOwner
           ? `SELECT ig.id, ig.group_id as groupId, g.name as groupName, ig.is_reference as isReference, ig.reference_status as referenceStatus
              FROM item_groups ig
@@ -205,7 +206,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
         );
         commentsCount = cCount?.count || 0;
 
-        const reactRows = queryAll<any>(
+        const reactRows = queryAll<Row>(
           `SELECT emoji, COUNT(*) as count,
                   MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted
            FROM reactions
@@ -249,7 +250,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
   const formattedAlbums = await Promise.all(
     albums.map(async (alb) => {
       // Cover mosaic (up to 4 thumbnails across all posts in the album)
-      const topThumbnails = queryAll<any>(
+      const topThumbnails = queryAll<Row>(
         `SELECT pf.thumb_key, pf.storage_key
          FROM album_items ai
          JOIN posts p ON ai.post_id = p.id AND p.deleted_at IS NULL
@@ -274,7 +275,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
       }
 
       // Group placement
-      const placements = queryAll<any>(
+      const placements = queryAll<Row>(
         `SELECT ig.id, ig.group_id as groupId, g.name as groupName
          FROM item_groups ig
          JOIN groups g ON ig.group_id = g.id
@@ -334,7 +335,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
 
   recentStripSql += ` ORDER BY p.uploaded_at DESC LIMIT 8`;
 
-  const recentRows = queryAll<any>(recentStripSql, recentParams);
+  const recentRows = queryAll<Row>(recentStripSql, recentParams);
   const recentlyAdded = await Promise.all(
     recentRows.map(async (r) => ({
       postId: r.id,

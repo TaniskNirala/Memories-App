@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
+import type { Row } from '../rows.ts';
 
 export const notificationsRouter = Router();
 notificationsRouter.use(requireApproved);
 
 notificationsRouter.get('/', (req: AuthenticatedRequest, res) => {
   const userId = req.user!.id;
-  const notifs = queryAll<any>(
+  const notifs = queryAll<Row>(
     'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
     [userId]
   );

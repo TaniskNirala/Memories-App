@@ -13,6 +13,14 @@ import {
   shouldForwardToNeon,
   getWriteStats,
 } from './neon.ts';
+import { logger, errMessage } from './logger.ts';
+import type { Row } from './rows.ts';
+
+/** A handle to the local SQLite (libsql) database. */
+export type Db = InstanceType<typeof Database>;
+
+/** Values SQLite accepts as bound parameters. */
+export type SqlParam = string | number | bigint | boolean | null | Uint8Array;
 
 /**
  * Database architecture
@@ -25,8 +33,8 @@ import {
  *  - Without DATABASE_URL the app runs on local SQLite only (development).
  */
 
-let dbInstance: any = null;
-let initPromise: Promise<any> | null = null;
+let dbInstance: Db | null = null;
+let initPromise: Promise<Db> | null = null;
 let isCloudSynced = false;
 let lastSyncTimestamp: string | null = null;
 let cloudSyncError: string | null = null;
@@ -36,15 +44,15 @@ function getDbFilePath(): string {
   return process.env.DB_PATH || path.join(dir, 'kinfolk.sqlite');
 }
 
-function localCount(db: any, table: string): number {
+function localCount(db: Db, table: string): number {
   try {
-    return db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get()?.count || 0;
+    return (db.prepare(`SELECT COUNT(*) as count FROM ${table}`).get() as { count?: number } | undefined)?.count || 0;
   } catch {
     return 0;
   }
 }
 
-async function initDb(): Promise<any> {
+async function initDb(): Promise<Db> {
   const dbFile = getDbFilePath();
   const targetDir = path.dirname(dbFile);
   if (!fs.existsSync(targetDir)) {
@@ -55,7 +63,7 @@ async function initDb(): Promise<any> {
   initSchema(local);
 
   if (isNeonConfigured()) {
-    console.log(`🔌 [Neon] Connecting to ${getMaskedNeonTarget()} ...`);
+    logger.info(`🔌 [Neon] Connecting to ${getMaskedNeonTarget()} ...`);
     // Throws (and stops the boot) if Neon is unreachable: starting with an empty cache would
     // look like data loss, and we must never write over Neon from a stale/empty copy.
     await connectNeon();
@@ -65,7 +73,7 @@ async function initDb(): Promise<any> {
 
     if (neonUsers === 0 && localUsers > 0) {
       // First ever boot on Neon: migrate whatever the local database file already contains.
-      console.log(`🚚 [Neon] Neon is empty - migrating ${localUsers} existing local user(s) and their data into Neon...`);
+      logger.info(`🚚 [Neon] Neon is empty - migrating ${localUsers} existing local user(s) and their data into Neon...`);
       const pushed = await pushAllLocalToNeon(local);
       if (!pushed.success) throw new Error(`Initial migration to Neon failed: ${pushed.error}`);
     } else {
@@ -77,20 +85,22 @@ async function initDb(): Promise<any> {
     lastSyncTimestamp = new Date().toISOString();
     cloudSyncError = null;
   } else {
-    console.warn(
+    logger.warn(
       '⚠️  [DB] DATABASE_URL is not set - using LOCAL SQLite only. Data will be LOST when the server restarts on ephemeral hosting (Render). Set DATABASE_URL to your Neon connection string.'
     );
   }
 
   try {
     local.exec('PRAGMA foreign_keys = ON;');
-  } catch {}
+  } catch {
+    // pragma not supported on this connection; safe to continue
+  }
 
   dbInstance = local;
   return local;
 }
 
-export async function getDb(): Promise<any> {
+export async function getDb(): Promise<Db> {
   if (dbInstance) return dbInstance;
   if (!initPromise) {
     initPromise = initDb().catch((err) => {
@@ -129,10 +139,10 @@ export function getDatabaseStatus(): {
     tursoUrl: getMaskedNeonTarget(),
     userCount: dbInstance ? localCount(dbInstance, 'users') : 0,
     postCount: dbInstance
-      ? (dbInstance.prepare('SELECT COUNT(*) as count FROM posts WHERE deleted_at IS NULL').get()?.count || 0)
+      ? ((dbInstance.prepare('SELECT COUNT(*) as count FROM posts WHERE deleted_at IS NULL').get() as { count?: number } | undefined)?.count || 0)
       : 0,
     albumCount: dbInstance
-      ? (dbInstance.prepare('SELECT COUNT(*) as count FROM albums WHERE deleted_at IS NULL').get()?.count || 0)
+      ? ((dbInstance.prepare('SELECT COUNT(*) as count FROM albums WHERE deleted_at IS NULL').get() as { count?: number } | undefined)?.count || 0)
       : 0,
     provider: isNeonConfigured() ? 'neon' : 'sqlite',
     pendingWrites: stats.pendingWrites,
@@ -148,7 +158,7 @@ export async function triggerDatabaseSync(): Promise<{
   totalPushed?: number;
   totalRestored?: number;
   counts?: Record<string, number>;
-  status: any;
+  status: ReturnType<typeof getDatabaseStatus>;
 }> {
   if (!dbInstance) throw new Error('Database not initialized');
   if (!isNeonConfigured()) {
@@ -175,8 +185,8 @@ export async function triggerDatabaseSync(): Promise<{
     }
     cloudSyncError = res.error || 'Sync failed';
     return { success: false, message: `Neon sync failed: ${res.error}`, status: getDatabaseStatus() };
-  } catch (err: any) {
-    cloudSyncError = err?.message || String(err);
+  } catch (err) {
+    cloudSyncError = errMessage(err) || String(err);
     return { success: false, message: `Neon sync exception: ${cloudSyncError}`, status: getDatabaseStatus() };
   }
 }
@@ -187,7 +197,7 @@ export async function restoreDatabaseFromCloud(): Promise<{
   message: string;
   totalRestored?: number;
   counts?: Record<string, number>;
-  status: any;
+  status: ReturnType<typeof getDatabaseStatus>;
 }> {
   if (!dbInstance) throw new Error('Database not initialized');
   if (!isNeonConfigured()) {
@@ -217,30 +227,30 @@ export async function restoreDatabaseFromCloud(): Promise<{
 
 export { flushNeonWrites };
 
-function cleanRow<T = any>(row: any): T {
-  if (!row || typeof row !== 'object') return row;
+function cleanRow<T = Row>(row: unknown): T {
+  if (!row || typeof row !== 'object') return row as T;
   if ('_metadata' in row) {
-    const { _metadata, ...clean } = row;
+    const { _metadata: _ignored, ...clean } = row as Record<string, unknown>;
     return clean as T;
   }
   return row as T;
 }
 
-export function queryAll<T = any>(sql: string, params: any[] = []): T[] {
+export function queryAll<T = Row>(sql: string, params: SqlParam[] = []): T[] {
   if (!dbInstance) throw new Error('Database not initialized');
   const stmt = dbInstance.prepare(sql);
   const rows = params.length > 0 ? stmt.all(...params) : stmt.all();
-  return rows.map((r: any) => cleanRow<T>(r));
+  return (rows as unknown[]).map((r) => cleanRow<T>(r));
 }
 
-export function queryOne<T = any>(sql: string, params: any[] = []): T | null {
+export function queryOne<T = Row>(sql: string, params: SqlParam[] = []): T | null {
   if (!dbInstance) throw new Error('Database not initialized');
   const stmt = dbInstance.prepare(sql);
   const row = params.length > 0 ? stmt.get(...params) : stmt.get();
   return row ? cleanRow<T>(row) : null;
 }
 
-export function run(sql: string, params: any[] = []): void {
+export function run(sql: string, params: SqlParam[] = []): void {
   if (!dbInstance) throw new Error('Database not initialized');
   const stmt = dbInstance.prepare(sql);
   if (params.length > 0) {
@@ -256,7 +266,7 @@ export function run(sql: string, params: any[] = []): void {
   }
 }
 
-function initSchema(db: any) {
+function initSchema(db: Db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -485,22 +495,30 @@ function initSchema(db: any) {
 
   try {
     db.exec('ALTER TABLE post_files ADD COLUMN checksum TEXT');
-  } catch {}
+  } catch {
+    // column already exists (idempotent migration)
+  }
 
   // Optional uploaded profile photo (storage key) — falls back to the colour avatar
   try {
     db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
-  } catch {}
+  } catch {
+    // column already exists (idempotent migration)
+  }
 
   // Per-account appearance preference, so a new device opens in the user's theme
   try {
     db.exec('ALTER TABLE users ADD COLUMN theme_preference TEXT');
-  } catch {}
+  } catch {
+    // column already exists (idempotent migration)
+  }
 
   // Set when the backing Telegram message was deleted from the channel
   try {
     db.exec('ALTER TABLE post_files ADD COLUMN tg_deleted_at TEXT');
-  } catch {}
+  } catch {
+    // column already exists (idempotent migration)
+  }
 
   // Auto-repair missing or generic captions from storage keys
   try {
@@ -509,7 +527,7 @@ function initSchema(db: any) {
        FROM posts p
        JOIN post_files pf ON pf.post_id = p.id AND pf.position = 0
        WHERE p.caption IS NULL OR p.caption = '' OR p.caption = 'Memory'`
-    ).all();
+    ).all() as Array<{ id: string; storage_key: string | null }>;
     for (const r of nameless) {
       if (r.storage_key) {
         const filename = r.storage_key.split('/').pop() || r.storage_key;
@@ -525,5 +543,7 @@ function initSchema(db: any) {
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    logger.warn('Startup repair of nameless posts failed:', err);
+  }
 }

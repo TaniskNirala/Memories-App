@@ -8,6 +8,8 @@ import { AuthenticatedRequest, requireAdmin, requireApproved } from '../middlewa
 import { getStorageAdapter, getStorageCapabilities } from '../storage/index.ts';
 import { syncStorageToDatabase, repairPostFileKeys } from '../storage/sync.ts';
 import { scanTelegramDeletions } from '../storage/tg-deletion-sync.ts';
+import { logger, errMessage } from '../logger.ts';
+import type { Row } from '../rows.ts';
 
 export const adminRouter = Router();
 
@@ -72,8 +74,8 @@ adminRouter.post('/db-sync', async (_req: AuthenticatedRequest, res) => {
     const result = await triggerDatabaseSync();
     await repairPostFileKeys().catch(() => {});
     res.json(result);
-  } catch (err: any) {
-    console.error('admin.ts error:', err);
+  } catch (err) {
+    logger.error('admin.ts error:', err);
     res.status(500).json({ error: 'Failed to sync database' });
   }
 });
@@ -84,8 +86,8 @@ adminRouter.post('/restore-turso', async (_req: AuthenticatedRequest, res) => {
     const result = await restoreDatabaseFromCloud();
     await repairPostFileKeys().catch(() => {});
     res.json(result);
-  } catch (err: any) {
-    console.error('admin.ts error:', err);
+  } catch (err) {
+    logger.error('admin.ts error:', err);
     res.status(500).json({ error: 'Failed to restore database from Neon' });
   }
 });
@@ -151,10 +153,10 @@ adminRouter.post('/storage-test', async (_req: AuthenticatedRequest, res) => {
       lanes: {},
       capabilities: caps,
     });
-  } catch (err: any) {
+  } catch (err) {
     res.status(500).json({
       ok: false,
-      summary: err?.message || 'Storage connection test failed',
+      summary: errMessage(err) || 'Storage connection test failed',
       lanes: {},
       capabilities: getStorageCapabilities(),
     });
@@ -166,8 +168,8 @@ adminRouter.post('/sync-storage', async (_req: AuthenticatedRequest, res) => {
   try {
     const result = await syncStorageToDatabase();
     res.json({ success: true, ...result });
-  } catch (err: any) {
-    console.error('admin.ts error:', err);
+  } catch (err) {
+    logger.error('admin.ts error:', err);
     res.status(500).json({ error: 'Failed to sync storage' });
   }
 });
@@ -193,8 +195,8 @@ adminRouter.post('/clear-feed', async (_req: AuthenticatedRequest, res) => {
       success: true,
       message: 'All feed posts, memories, and collections cleared. Users and circles preserved.',
     });
-  } catch (err: any) {
-    console.error('Error during clear-feed:', err);
+  } catch (err) {
+    logger.error('Error during clear-feed:', err);
     res.status(500).json({ error: 'Failed to clear feed' });
   }
 });
@@ -233,15 +235,15 @@ adminRouter.post('/purge-all-data', async (_req: AuthenticatedRequest, res) => {
         : `Permanently deleted ${deletedFiles} file(s) from storage bucket and cleared all posts and collections from the database.`,
       deletedFiles,
     });
-  } catch (err: any) {
-    console.error('Error during purge-all-data:', err);
+  } catch (err) {
+    logger.error('Error during purge-all-data:', err);
     res.status(500).json({ error: 'Failed to purge data from storage' });
   }
 });
 
 // 1. Pending signups
 adminRouter.get('/pending-signups', (req: AuthenticatedRequest, res) => {
-  const pending = queryAll<any>(
+  const pending = queryAll<Row>(
     "SELECT id, username, display_name, avatar_color, avatar_url, created_at FROM users WHERE role = 'pending' ORDER BY created_at ASC"
   ).map((u) => ({ ...u, avatarUrl: avatarUrlFor(u.avatar_url) }));
   res.json({ pending });
@@ -253,26 +255,25 @@ adminRouter.post('/approve-user/:id', (req: AuthenticatedRequest, res) => {
   const targetId = req.params.id;
   const adminId = req.user!.id;
 
-  const target = queryOne<any>('SELECT * FROM users WHERE id = ?', [targetId]);
+  const target = queryOne<Row>('SELECT * FROM users WHERE id = ?', [targetId]);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   const now = new Date().toISOString();
   run("UPDATE users SET role = 'member', status = 'active' WHERE id = ?", [targetId]);
 
   // Ensure "Everyone" group exists and add user
-  let everyone = queryOne<any>('SELECT id FROM groups WHERE is_everyone = 1');
-  if (!everyone) {
-    const everyoneId = crypto.randomUUID();
+  let everyoneGroupId = queryOne<Row>('SELECT id FROM groups WHERE is_everyone = 1')?.id;
+  if (!everyoneGroupId) {
+    everyoneGroupId = crypto.randomUUID();
     run(
       'INSERT INTO groups (id, name, description, creator_id, is_everyone, created_at) VALUES (?, ?, ?, ?, 1, ?)',
-      [everyoneId, 'Everyone', 'Automatic circle containing all approved friends', adminId, now]
+      [everyoneGroupId, 'Everyone', 'Automatic circle containing all approved friends', adminId, now]
     );
-    everyone = { id: everyoneId };
   }
 
   run(
     'INSERT OR IGNORE INTO group_members (group_id, user_id, joined_at) VALUES (?, ?, ?)',
-    [everyone.id, targetId, now]
+    [everyoneGroupId, targetId, now]
   );
 
   // Audit log
@@ -303,7 +304,7 @@ adminRouter.post('/reject-user/:id', (req: AuthenticatedRequest, res) => {
   const targetId = req.params.id;
   const adminId = req.user!.id;
 
-  const target = queryOne<any>('SELECT username FROM users WHERE id = ?', [targetId]);
+  const target = queryOne<Row>('SELECT username FROM users WHERE id = ?', [targetId]);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   run('DELETE FROM users WHERE id = ?', [targetId]);
@@ -318,7 +319,7 @@ adminRouter.post('/reject-user/:id', (req: AuthenticatedRequest, res) => {
 
 // 2. All users list & status management
 adminRouter.get('/users', (req: AuthenticatedRequest, res) => {
-  const users = queryAll<any>(
+  const users = queryAll<Row>(
     `SELECT id, username, display_name, role, status, avatar_color, avatar_url, created_at,
             (SELECT COUNT(*) FROM posts WHERE owner_id = users.id AND deleted_at IS NULL) as post_count
      FROM users
@@ -336,7 +337,7 @@ adminRouter.post('/toggle-suspend/:id', (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'Cannot suspend your own admin account' });
   }
 
-  const target = queryOne<any>('SELECT username, status FROM users WHERE id = ?', [targetId]);
+  const target = queryOne<Row>('SELECT username, status FROM users WHERE id = ?', [targetId]);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   const newStatus = target.status === 'active' ? 'suspended' : 'active';
@@ -372,21 +373,23 @@ adminRouter.delete('/users/:id', async (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'Cannot delete your own admin account' });
   }
 
-  const target = queryOne<any>('SELECT * FROM users WHERE id = ?', [targetId]);
+  const target = queryOne<Row>('SELECT * FROM users WHERE id = ?', [targetId]);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   // 1. Delete user's media files from disk/storage
-  const userPosts = queryAll<any>('SELECT id FROM posts WHERE owner_id = ?', [targetId]);
+  const userPosts = queryAll<Row>('SELECT id FROM posts WHERE owner_id = ?', [targetId]);
   const storage = getStorageAdapter();
   for (const p of userPosts) {
-    const files = queryAll<any>('SELECT storage_key, thumb_key FROM post_files WHERE post_id = ?', [p.id]);
+    const files = queryAll<Row>('SELECT storage_key, thumb_key FROM post_files WHERE post_id = ?', [p.id]);
     for (const f of files) {
       try {
         await storage.deleteObject(f.storage_key);
         if (f.thumb_key && f.thumb_key !== f.storage_key) {
           await storage.deleteObject(f.thumb_key);
         }
-      } catch {}
+      } catch (err) {
+        logger.warn('Could not delete a storage object (it may remain as an orphan):', err);
+      }
     }
     run('DELETE FROM post_files WHERE post_id = ?', [p.id]);
     run("DELETE FROM item_groups WHERE item_type = 'post' AND item_id = ?", [p.id]);
@@ -397,7 +400,7 @@ adminRouter.delete('/users/:id', async (req: AuthenticatedRequest, res) => {
   run('DELETE FROM posts WHERE owner_id = ?', [targetId]);
 
   // 2. Delete albums/events created by this user
-  const userAlbums = queryAll<any>('SELECT id FROM albums WHERE creator_id = ?', [targetId]);
+  const userAlbums = queryAll<Row>('SELECT id FROM albums WHERE creator_id = ?', [targetId]);
   for (const a of userAlbums) {
     run('DELETE FROM album_items WHERE album_id = ?', [a.id]);
     run("DELETE FROM item_groups WHERE item_type = 'album' AND item_id = ?", [a.id]);
@@ -408,7 +411,7 @@ adminRouter.delete('/users/:id', async (req: AuthenticatedRequest, res) => {
   run('DELETE FROM albums WHERE creator_id = ?', [targetId]);
 
   // 3. Delete custom circles created by this user
-  const userGroups = queryAll<any>('SELECT id FROM groups WHERE creator_id = ? AND is_everyone = 0', [targetId]);
+  const userGroups = queryAll<Row>('SELECT id FROM groups WHERE creator_id = ? AND is_everyone = 0', [targetId]);
   for (const g of userGroups) {
     run('DELETE FROM group_members WHERE group_id = ?', [g.id]);
     run('DELETE FROM item_groups WHERE group_id = ?', [g.id]);
@@ -454,7 +457,7 @@ adminRouter.post('/generate-reset-link/:id', (req: AuthenticatedRequest, res) =>
   const targetId = req.params.id;
   const adminId = req.user!.id;
 
-  const target = queryOne<any>('SELECT username FROM users WHERE id = ?', [targetId]);
+  const target = queryOne<Row>('SELECT username FROM users WHERE id = ?', [targetId]);
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   const token = crypto.randomBytes(24).toString('hex');
@@ -485,7 +488,7 @@ adminRouter.post('/generate-reset-link/:id', (req: AuthenticatedRequest, res) =>
 
 // 4. Pending album / event proposals
 adminRouter.get('/pending-proposals', (req: AuthenticatedRequest, res) => {
-  const proposals = queryAll<any>(
+  const proposals = queryAll<Row>(
     `SELECT a.*, u.username as creator_username, u.display_name as creator_display_name
      FROM albums a
      JOIN users u ON a.creator_id = u.id
@@ -505,7 +508,7 @@ adminRouter.post('/proposals/:id/decide', (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'Decision must be approved or rejected' });
   }
 
-  const album = queryOne<any>('SELECT * FROM albums WHERE id = ?', [proposalId]);
+  const album = queryOne<Row>('SELECT * FROM albums WHERE id = ?', [proposalId]);
   if (!album) return res.status(404).json({ error: 'Proposal not found' });
 
   const now = new Date().toISOString();
@@ -543,7 +546,7 @@ adminRouter.post('/proposals/:id/decide', (req: AuthenticatedRequest, res) => {
 
 // 5. Reports review
 adminRouter.get('/reports', (req: AuthenticatedRequest, res) => {
-  const reports = queryAll<any>(
+  const reports = queryAll<Row>(
     `SELECT r.*, u.username as reporter_username, u.display_name as reporter_display_name
      FROM reports r
      JOIN users u ON r.reporter_id = u.id
@@ -562,7 +565,7 @@ adminRouter.post('/reports/:id/decide', (req: AuthenticatedRequest, res) => {
 
 // 6. Audit log
 adminRouter.get('/audit-log', (req: AuthenticatedRequest, res) => {
-  const logs = queryAll<any>(
+  const logs = queryAll<Row>(
     `SELECT al.*, u.username as actor_username, u.display_name as actor_display_name
      FROM audit_log al
      JOIN users u ON al.actor_id = u.id

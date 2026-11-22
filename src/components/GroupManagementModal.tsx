@@ -14,6 +14,7 @@ import {
 import { Group, GroupMember } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { Avatar } from './ui/kit.tsx';
+import { errMessage } from '../lib/errors.ts';
 
 interface GroupManagementModalProps {
   isOpen: boolean;
@@ -174,8 +175,8 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
       } else {
         setCreateError(data.error || 'Could not create that circle');
       }
-    } catch (e: any) {
-      setCreateError(e?.message || 'Could not create that circle');
+    } catch (e) {
+      setCreateError(errMessage(e) || 'Could not create that circle');
     }
   };
 
@@ -254,8 +255,8 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
       // Pick next available group
       const remaining = groups.filter((g) => g.id !== deletedId);
       setSelectedGroup(remaining[0] || null);
-    } catch (err: any) {
-      setDeleteError(err.message || 'Network error while deleting circle');
+    } catch (err) {
+      setDeleteError(errMessage(err) || 'Network error while deleting circle');
     } finally {
       setDeleteLoading(false);
     }

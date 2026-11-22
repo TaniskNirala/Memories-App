@@ -32,7 +32,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
           <p className="eyebrow">Something slipped</p>
           <h1 className="mt-1.5 font-display text-xl leading-tight">This screen hit a snag</h1>
           <p className="mx-auto mt-2 max-w-xs text-[12px] leading-relaxed text-[var(--text-muted)]">
-            Nothing was lost — your memories are safe on the server. Reload to pick up where you left off.
+            Your saved memories are not affected by this screen error, but anything you were just doing may not have been saved. Reload to continue.
           </p>
 
           {this.state.error?.message && (

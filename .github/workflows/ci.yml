@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Type check
+      - run: npm run lint
+      # React hooks rules (catches React error #310) – fails on errors, warnings are allowed
+      - run: npm run lint:hooks
+      - run: npm run build
+      - run: npm test
+        env:
+          STORAGE_SIGNING_SECRET: ci-test-secret-ci-test-secret-ci-test-secret
+      # Frontend tests (includes the React #310 hook-order regression test)
+      - run: npm run test:ui

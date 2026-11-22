@@ -4,6 +4,7 @@ import { X, Send, Trash2, Edit2, CornerDownRight, Check, Smile } from 'lucide-re
 import { FeedItem, CommentItem, GroupMember } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { Avatar } from './ui/kit.tsx';
+import { useFeedback } from './ui/Feedback.tsx';
 
 interface CommentsDrawerProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
   highlightCommentId,
   onReactionToggle,
 }) => {
+  const { toast } = useFeedback();
   const { user, isAdmin } = useAuth();
   const [comments, setComments] = useState<CommentItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,7 +65,9 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
         const data = await res.json();
         setGroupMembers(data.members || []);
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Load group members failed', err);
+    }
   };
 
   useEffect(() => {
@@ -156,7 +160,10 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
         setEditingCommentId(null);
         fetchComments();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Edit comment failed', err);
+      toast('Could not edit the comment. Please try again.', 'error');
+    }
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -165,7 +172,10 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
       if (res.ok) {
         fetchComments();
       }
-    } catch (e) {}
+    } catch (err) {
+      console.error('Delete comment failed', err);
+      toast('Could not delete the comment. Please try again.', 'error');
+    }
   };
 
   // Group comments into root threads

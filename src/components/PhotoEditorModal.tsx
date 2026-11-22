@@ -226,7 +226,9 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
     if (dragInteractionRef.current) {
       try {
         (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {}
+      } catch {
+        // pointer capture may already be released
+      }
       dragInteractionRef.current = null;
     }
   };
@@ -324,7 +326,7 @@ export const PhotoEditorModal: React.FC<PhotoEditorModalProps> = ({
         await onSave(result);
       }
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to save edited photo:', err);
     } finally {
       setIsSaving(false);

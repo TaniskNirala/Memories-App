@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { queryOne, queryAll, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
+import type { Row } from '../rows.ts';
 
 export const reactionsRouter = Router();
 reactionsRouter.use(requireApproved);
@@ -22,7 +23,7 @@ reactionsRouter.post('/toggle', (req: AuthenticatedRequest, res) => {
     if (!isMember) return res.status(403).json({ error: 'Not a member of this circle' });
   }
 
-  const existing = queryOne<any>(
+  const existing = queryOne<Row>(
     'SELECT id FROM reactions WHERE target_type = ? AND target_id = ? AND group_id = ? AND user_id = ? AND emoji = ?',
     [targetType, targetId, groupId, userId, emoji]
   );
@@ -49,7 +50,7 @@ reactionsRouter.get('/', (req: AuthenticatedRequest, res) => {
     return res.status(400).json({ error: 'targetId and groupId required' });
   }
 
-  const reactions = queryAll<any>(
+  const reactions = queryAll<Row>(
     `SELECT r.emoji, r.user_id, u.username, u.display_name
      FROM reactions r
      JOIN users u ON r.user_id = u.id

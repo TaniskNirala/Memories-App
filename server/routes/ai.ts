@@ -7,6 +7,9 @@ import { GoogleGenAI } from '@google/genai';
 import { queryOne, run } from '../db.ts';
 import { AuthenticatedRequest, requireApproved } from '../middleware/auth.ts';
 import { getStorageAdapter } from '../storage/index.ts';
+import { logger, errMessage } from '../logger.ts';
+import { MB } from '../limits.ts';
+import type { Row } from '../rows.ts';
 
 export const aiRouter = Router();
 aiRouter.use(requireApproved);
@@ -21,7 +24,7 @@ aiRouter.use(
 );
 
 const upload = multer({
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25 MB max for vision analysis
+  limits: { fileSize: 25 * MB }, // 25 MB max for vision analysis
 });
 
 // Helper to safely get base64 data from file or storage key
@@ -65,7 +68,7 @@ async function getImageBase64(storageKey?: string, localPath?: string, directBas
         }
       }
     } catch (e) {
-      console.warn('Could not fetch object from storage adapter for AI captioning:', e);
+      logger.warn('Could not fetch object from storage adapter for AI captioning:', e);
     }
   }
 
@@ -335,8 +338,8 @@ aiRouter.post('/generate-caption', upload.single('image'), async (req: Authentic
         ],
       });
       textOutput = response.text || '';
-    } catch (modelErr: any) {
-      console.warn('gemini-3.8-flash retry fallback:', modelErr.message);
+    } catch (modelErr) {
+      logger.warn('gemini-3.8-flash retry fallback:', errMessage(modelErr));
       // Secondary attempt: gemini-flash-latest
       try {
         const fallbackRes = await ai.models.generateContent({
@@ -358,7 +361,7 @@ aiRouter.post('/generate-caption', upload.single('image'), async (req: Authentic
         });
         textOutput = fallbackRes.text || '';
       } catch (secErr) {
-        console.warn('AI fallback to heuristic captions:', secErr);
+        logger.warn('AI fallback to heuristic captions:', secErr);
         const fallback = getHeuristicCaptions(tone, context, temporal);
         return res.json({ success: true, ...fallback, source: 'heuristic' });
       }
@@ -397,8 +400,8 @@ aiRouter.post('/generate-caption', upload.single('image'), async (req: Authentic
         source: 'gemini_raw',
       });
     }
-  } catch (error: any) {
-    console.error('Caption generation error:', error);
+  } catch (error) {
+    logger.error('Caption generation error:', error);
     const temporal = formatTemporalContext(req.body?.takenAt);
     const fallback = getHeuristicCaptions(req.body?.tone, req.body?.context, temporal);
     return res.json({ success: true, ...fallback, source: 'heuristic_recovered' });
@@ -407,7 +410,9 @@ aiRouter.post('/generate-caption', upload.single('image'), async (req: Authentic
     if (req.file?.path && fs.existsSync(req.file.path)) {
       try {
         fs.unlinkSync(req.file.path);
-      } catch {}
+      } catch {
+        // temp upload already removed
+      }
     }
   }
 });
@@ -420,13 +425,13 @@ aiRouter.post('/caption-post/:postId', async (req: AuthenticatedRequest, res) =>
     const userId = req.user!.id;
     const isAdmin = req.user!.role === 'admin';
 
-    const post = queryOne<any>('SELECT * FROM posts WHERE id = ?', [postId]);
+    const post = queryOne<Row>('SELECT * FROM posts WHERE id = ?', [postId]);
     if (!post) return res.status(404).json({ error: 'Post not found' });
     if (!isAdmin && post.owner_id !== userId) {
       return res.status(403).json({ error: 'Only the memory owner or an admin can update caption' });
     }
 
-    const firstFile = queryOne<any>(
+    const firstFile = queryOne<Row>(
       'SELECT storage_key, thumb_key, mime_type FROM post_files WHERE post_id = ? ORDER BY position ASC LIMIT 1',
       [postId]
     );
@@ -436,7 +441,7 @@ aiRouter.post('/caption-post/:postId', async (req: AuthenticatedRequest, res) =>
     }
 
     // Retrieve group/circle name if shared to a group
-    const groupRow = queryOne<any>(
+    const groupRow = queryOne<Row>(
       `SELECT g.name FROM item_groups ig JOIN groups g ON ig.group_id = g.id WHERE ig.item_type = 'post' AND ig.item_id = ? LIMIT 1`,
       [postId]
     );
@@ -473,10 +478,10 @@ aiRouter.post('/caption-post/:postId', async (req: AuthenticatedRequest, res) =>
         const cleaned = (aiRes.text || '').replace(/```json/gi, '').replace(/```/g, '').trim();
         result = JSON.parse(cleaned);
       } catch {
-        result = getHeuristicCaptions(tone, post.caption, temporal);
+        result = getHeuristicCaptions(tone, post.caption ?? undefined, temporal);
       }
     } else {
-      result = getHeuristicCaptions(tone, post.caption, temporal);
+      result = getHeuristicCaptions(tone, post.caption ?? undefined, temporal);
     }
 
     const newCaption = result.caption || result.suggestions?.[0]?.text || 'Treasured memories.';
@@ -494,8 +499,8 @@ aiRouter.post('/caption-post/:postId', async (req: AuthenticatedRequest, res) =>
       temporal,
       message: 'Caption generated successfully',
     });
-  } catch (err: any) {
-    console.error('Caption post error:', err);
+  } catch (err) {
+    logger.error('Caption post error:', err);
     res.status(500).json({ error: 'Failed to auto-caption memory' });
   }
 });

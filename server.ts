@@ -6,7 +6,8 @@ import { PassThrough } from 'stream';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { getDb, queryOne } from './server/db.ts';
-import { flushNeonWrites, closeNeon } from './server/neon.ts';
+import { clearLoginAttempts } from './server/middleware/auth.ts';
+import { flushNeonWrites, closeNeon, getWriteStats } from './server/neon.ts';
 import { seedDatabase } from './server/seed.ts';
 import { authMiddleware } from './server/middleware/auth.ts';
 import { LocalDiskStorageAdapter } from './server/storage/local.ts';
@@ -30,6 +31,7 @@ import { feedRouter } from './server/routes/feed.ts';
 import { adminRouter, reportsRouter } from './server/routes/admin.ts';
 import { notificationsRouter } from './server/routes/notifications.ts';
 import { aiRouter } from './server/routes/ai.ts';
+import { logger, errMessage } from './server/logger.ts';
 
 dotenv.config();
 
@@ -38,7 +40,10 @@ const __dirname = path.dirname(__filename);
 
 export async function createApp() {
   await getDb();
-  await repairPostFileKeys().catch((e) => console.warn('Storage key repair notice:', e));
+  // Prune old login attempts on boot. Must run AFTER the database is initialised
+  // (recent failures are kept so a restart cannot reset rate limits).
+  clearLoginAttempts();
+  await repairPostFileKeys().catch((e) => logger.warn('Storage key repair notice:', e));
 
   const app = express();
 
@@ -61,10 +66,26 @@ export async function createApp() {
   app.use((req, res, next) => {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
     const originalEnd = res.end.bind(res) as (...args: any[]) => any;
+    const failedBefore = getWriteStats().failedWrites;
     (res as any).end = (...args: any[]) => {
       flushNeonWrites()
         .catch(() => {})
-        .finally(() => originalEnd(...args));
+        .finally(() => {
+          // If a write made during this request could not be stored in Neon (even after retries),
+          // do NOT report success: the change would be lost on the next restart. Tell the client instead.
+          // (Only possible while headers are still unsent, i.e. normal JSON responses, not streams.)
+          if (!res.headersSent && res.statusCode < 400 && getWriteStats().failedWrites > failedBefore) {
+            logger.error(`❌ [Neon] ${req.method} ${req.originalUrl} answered 500: a database write failed`);
+            res.statusCode = 500;
+            res.removeHeader('Content-Length');
+            res.removeHeader('ETag');
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            return originalEnd(
+              JSON.stringify({ error: 'Your change could not be saved to the database. Please try again.' })
+            );
+          }
+          originalEnd(...args);
+        });
       return res;
     };
     next();
@@ -148,8 +169,8 @@ export async function createApp() {
       }
 
       res.json({ success: true, key });
-    } catch (err: any) {
-      console.error('Storage upload error:', err);
+    } catch (err) {
+      logger.error('Storage upload error:', err);
       res.status(500).json({ error: 'Upload write failed' });
     }
   });
@@ -201,8 +222,8 @@ export async function createApp() {
       if (!res.headersSent) {
         res.status(404).json({ error: 'Telegram media not found' });
       }
-    } catch (err: any) {
-      console.error('Direct Telegram media stream error:', err?.message || err);
+    } catch (err) {
+      logger.error('Direct Telegram media stream error:', errMessage(err) || err);
       if (!res.headersSent) {
         res.status(502).json({ error: 'Failed to stream media' });
       }
@@ -344,9 +365,11 @@ export async function createApp() {
             const dir = path.dirname(targetPath);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             const diskWrite = fs.createWriteStream(targetPath);
-            diskWrite.on('error', (err) => console.warn('Disk cache write notice:', err.message));
+            diskWrite.on('error', (err) => logger.warn('Disk cache write notice:', err.message));
             passForDisk.pipe(diskWrite);
-          } catch {}
+          } catch {
+            // best-effort disk cache; the response is still sent to the client
+          }
 
           return passForRes.pipe(res);
         }
@@ -357,7 +380,9 @@ export async function createApp() {
             const dir = path.dirname(targetPath);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
             fs.writeFileSync(targetPath, obj.data);
-          } catch {}
+          } catch {
+            // best-effort disk cache; the response is still sent to the client
+          }
 
           res.setHeader('Content-Type', obj.contentType || 'image/jpeg');
           res.setHeader('Content-Length', obj.data.length);
@@ -390,8 +415,8 @@ export async function createApp() {
           <circle cx="430" cy="245" r="9" fill="#f43f5e" opacity="0.8"/>
         </svg>`
       );
-    } catch (err: any) {
-      console.error('Storage view error:', err);
+    } catch (err) {
+      logger.error('Storage view error:', err);
       res.status(500).send('Failed to stream media');
     }
   });
@@ -435,7 +460,7 @@ async function startServer() {
   const hasDist = fs.existsSync(distIndexHtml);
 
   if (process.env.NODE_ENV === 'production') {
-    console.log('Serving production static build from dist/');
+    logger.info('Serving production static build from dist/');
     app.use(express.static(distDir));
     app.get('*', (_req, res) => {
       res.sendFile(distIndexHtml);
@@ -451,7 +476,7 @@ async function startServer() {
   }
 
   const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Nest server listening on http://0.0.0.0:${PORT}`);
+    logger.info(`Nest server listening on http://0.0.0.0:${PORT}`);
     startTelegramDeletionWatcher();
   });
 
@@ -459,10 +484,14 @@ async function startServer() {
     stopTelegramDeletionWatcher();
     try {
       await closeNeon(); // flush any pending database writes to Neon before exiting
-    } catch {}
+    } catch {
+      // shutting down: nothing more can be done if closing Neon fails
+    }
     try {
       await getStorageAdapter().disconnect?.();
-    } catch {}
+    } catch {
+      // shutting down: ignore storage disconnect errors
+    }
     server.close(() => process.exit(0));
   };
   process.once('SIGTERM', gracefulShutdown);
@@ -474,7 +503,7 @@ const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.
 
 if (isMainModule && process.env.NODE_ENV !== 'test') {
   startServer().catch((err) => {
-    console.error('Fatal server boot error:', err);
+    logger.error('Fatal server boot error:', err);
     process.exit(1);
   });
 }

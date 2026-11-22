@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { FeedItem, Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
+import { errMessage } from '../lib/errors.ts';
 
 interface ViewingPermissionsModalProps {
   item: FeedItem | null;
@@ -172,8 +173,8 @@ export const ViewingPermissionsModal: React.FC<ViewingPermissionsModalProps> = (
       } else {
         setToast({ message: data.error || 'Failed to update permissions', type: 'error' });
       }
-    } catch (err: any) {
-      setToast({ message: err.message || 'Network error saving permissions', type: 'error' });
+    } catch (err) {
+      setToast({ message: errMessage(err) || 'Network error saving permissions', type: 'error' });
     } finally {
       setSaving(false);
     }

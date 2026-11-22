@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Share2, Users, Check, AlertCircle } from 'lucide-react';
 import { FeedItem, Group } from '../types/index.ts';
 import { apiFetch } from '../context/AuthContext.tsx';
+import { errMessage } from '../lib/errors.ts';
 
 interface SharePlacementModalProps {
   item: FeedItem | null;
@@ -65,8 +66,8 @@ export const SharePlacementModal: React.FC<SharePlacementModalProps> = ({
       } else {
         setMessage(data.error || 'Failed to share');
       }
-    } catch (e: any) {
-      setMessage(e.message || 'Share request failed');
+    } catch (e) {
+      setMessage(errMessage(e) || 'Share request failed');
     } finally {
       setLoading(false);
     }

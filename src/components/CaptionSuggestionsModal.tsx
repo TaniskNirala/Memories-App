@@ -63,7 +63,7 @@ export const CaptionSuggestionsModal: React.FC<CaptionSuggestionsModalProps> = (
           setSelectedText(data.caption);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to fetch caption suggestions:', err);
     } finally {
       setLoading(false);

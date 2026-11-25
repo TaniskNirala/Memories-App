@@ -5,7 +5,7 @@ import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 
 import { Modal, ModalHeader, EmptyState } from './ui/kit.tsx';
-import { monthYearLabel, shortDate } from '../lib/format.ts';
+import { monthYearLabel, accentFromName } from '../lib/format.ts';
 
 import { MonthMarker, DayNode } from './timeline/TimelineParts.tsx';
 import { MemoryCard } from './timeline/MemoryCard.tsx';
@@ -272,8 +272,30 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
     }
   };
 
-  /** "24 Nov 2026" — shown beside each card and in the phone day header */
-  const dateLabel = (value?: string) => shortDate(value, { year: true }) || 'Undated';
+  /** "Wed" for the day chip in the rail header */
+  const weekdayLabel = (value?: string) => {
+    const d = value ? new Date(value) : null;
+    if (!d || Number.isNaN(d.getTime())) return 'Undated';
+    return d.toLocaleDateString([], { weekday: 'short' });
+  };
+
+  /** the person who owns most of a day's memories — tints the spine node */
+  const dayOwnerName = (dayItems: FeedItem[]) => {
+    const counts = new Map<string, number>();
+    for (const i of dayItems) {
+      const name = i.type === 'single_post' ? i.owner.displayName : i.creator.displayName;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+    let best = '';
+    let bestN = 0;
+    counts.forEach((n, name) => {
+      if (n > bestN) {
+        best = name;
+        bestN = n;
+      }
+    });
+    return best;
+  };
 
   return (
     <div className="relative">
@@ -330,12 +352,14 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                     return (
                       <div key={day.key} className="tl-day">
                         <div className="tl-day-head">
+                          <span className="tl-day-rule" aria-hidden />
                           <span className="tl-day-head-pill">
-                            <span className="tl-day-weekday">{dateLabel(day.date)}</span>
+                            <span className="tl-day-weekday">{weekdayLabel(day.date)}</span>
                             <span className="tl-day-count">
                               {dayCount === 1 ? '1 memory' : `${dayCount} memories`}
                             </span>
                           </span>
+                          <span className="tl-day-rule" aria-hidden />
                         </div>
 
                         <div className="tl-day-cards">
@@ -346,9 +370,6 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
 
                             return (
                               <div key={item.id} className="tl-entry">
-                                <span className="tl-entry-date" aria-hidden="true">
-                                  {dateLabel(day.date)}
-                                </span>
                                 {item.type === 'single_post' ? (
                                   item.isLockedPlaceholder ? (
                                     <div className="card relative overflow-hidden p-5 text-center">
@@ -400,7 +421,7 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                           })}
                         </div>
 
-                        <DayNode date={day.date} />
+                        <DayNode date={day.date} color={accentFromName(dayOwnerName(day.items))} />
                       </div>
                     );
                   })}

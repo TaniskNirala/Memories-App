@@ -593,10 +593,10 @@
     padding: 0.4rem 0 1rem var(--tl-pad);
   }
   @media (max-width: 899.98px) {
-    .tl-root { --tl-pad: 2.35rem; --tl-rail-x: 0.85rem; }
+    .tl-root { --tl-pad: 3.35rem; --tl-rail-x: 1.8rem; }
   }
   @media (max-width: 389.98px) {
-    .tl-root { --tl-pad: 2.05rem; --tl-rail-x: 0.72rem; --tl-node: 1.9rem; }
+    .tl-root { --tl-pad: 3.05rem; --tl-rail-x: 1.65rem; --tl-node: 1.9rem; }
   }
 
   /* curved spine — same amber as before, but a solid winding line instead of dashes */
@@ -732,10 +732,33 @@
     position: relative;
   }
   @media (max-width: 899.98px) {
+    /* the entry box includes the left gutter so the vertical date isn't clipped by content-visibility */
     .tl-entry {
+      margin-left: calc(-1 * var(--tl-pad));
+      padding-left: var(--tl-pad);
       content-visibility: auto;
       contain-intrinsic-size: auto 340px;
     }
+  }
+
+  /* date (day month year) shown beside every card, on the side opposite the card */
+  .tl-entry-date {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.15rem;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-family: var(--font-display);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--text-primary);
+    pointer-events: none;
+  }
+  @media (max-width: 389.98px) {
+    .tl-entry-date { font-size: 0.7rem; left: 0.05rem; }
   }
 
   @media (min-width: 900px) {
@@ -796,6 +819,25 @@
     .tl-entry:nth-child(odd)::before { right: calc(-1 * var(--tl-gap) * 1.05); }
     .tl-entry:nth-child(even)::before { left: calc(-1 * var(--tl-gap) * 1.05); }
 
+    .tl-entry-date {
+      top: 1.6rem;
+      left: auto;
+      right: auto;
+      writing-mode: horizontal-tb;
+      transform: translateY(-50%);
+      font-size: 1.05rem;
+      letter-spacing: 0.01em;
+    }
+    /* card on the left -> date to the right of the spine */
+    .tl-entry:nth-child(odd) > .tl-entry-date {
+      left: calc(100% + var(--tl-gap) * 1.05 + 1rem);
+    }
+    /* card on the right -> date to the left of the spine */
+    .tl-entry:nth-child(even) > .tl-entry-date {
+      right: calc(100% + var(--tl-gap) * 1.05 + 1rem);
+      text-align: right;
+    }
+
     .tl-month-pill {
       margin-left: 0;
       border-style: solid;
@@ -806,8 +848,7 @@
 
   /* date header (weekday + count) and the day-number circle above each day's cards are hidden */
   .tl-day-head,
-  .tl-day-node,
-  .tl-entry-date { display: none; }
+  .tl-day-node { display: none; }
 
   .tl-card {
     background:

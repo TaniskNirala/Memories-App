@@ -5,7 +5,7 @@ import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 
 import { Modal, ModalHeader, EmptyState } from './ui/kit.tsx';
-import { monthYearLabel, accentFromName } from '../lib/format.ts';
+import { monthYearLabel, accentFromName, shortDate } from '../lib/format.ts';
 
 import { MonthMarker, DayNode } from './timeline/TimelineParts.tsx';
 import { MemoryCard } from './timeline/MemoryCard.tsx';
@@ -370,6 +370,9 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
 
                             return (
                               <div key={item.id} className="tl-entry">
+                                <span className="tl-entry-date" aria-hidden="true">
+                                  {shortDate(day.date, { year: true })}
+                                </span>
                                 {item.type === 'single_post' ? (
                                   item.isLockedPlaceholder ? (
                                     <div className="card relative overflow-hidden p-5 text-center">

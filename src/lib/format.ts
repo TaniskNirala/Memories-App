@@ -119,3 +119,19 @@ export function clampText(text: string, max = 120): string {
   if (!text) return '';
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
+
+/* ---------------------------------------------------------------------------
+   Byte sizes
+   --------------------------------------------------------------------------- */
+
+export const KB = 1024;
+export const MB = 1024 * KB;
+export const GB = 1024 * MB;
+
+/** "512 KB", "3.5 MB", "2.0 GB". Safe for empty / invalid input ("0 KB"). */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
+  if (bytes >= GB) return `${(bytes / GB).toFixed(1)} GB`;
+  if (bytes >= MB) return `${(bytes / MB).toFixed(1)} MB`;
+  return `${Math.round(bytes / KB)} KB`;
+}

@@ -1,5 +1,5 @@
 import { queryAll } from '../db.ts';
-import { canUserViewPost } from '../routes/posts.ts';
+import { canUserViewPost } from './postAccess.ts';
 
 interface Viewer {
   id: string;

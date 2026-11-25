@@ -796,21 +796,6 @@
     .tl-entry:nth-child(odd)::before { right: calc(-1 * var(--tl-gap) * 1.05); }
     .tl-entry:nth-child(even)::before { left: calc(-1 * var(--tl-gap) * 1.05); }
 
-    /* dot sitting on the spine, one per card */
-    .tl-entry::after {
-      content: "";
-      position: absolute;
-      top: calc(1.6rem - 4px);
-      width: 9px;
-      height: 9px;
-      border-radius: 999px;
-      background: var(--bg-page);
-      border: 2px solid color-mix(in oklab, var(--accent-amber) 60%, var(--border-color));
-      z-index: 11;
-    }
-    .tl-entry:nth-child(odd)::after { right: calc(-1 * var(--tl-gap) * 1.05 - 4.5px); }
-    .tl-entry:nth-child(even)::after { left: calc(-1 * var(--tl-gap) * 1.05 - 4.5px); }
-
     .tl-month-pill {
       margin-left: 0;
       border-style: solid;

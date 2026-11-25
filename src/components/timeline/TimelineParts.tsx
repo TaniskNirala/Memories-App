@@ -1,39 +1,28 @@
 import React from 'react';
 import { FeedItem, SinglePostFeedItem } from '../../types/index.ts';
-import { MessageSquare, Calendar, Images, Maximize2, Eye } from 'lucide-react';
-import { Dot } from '../ui/kit.tsx';
-import { dayNumber } from '../../lib/format.ts';
+import { MessageSquare, Images, Maximize2, Eye } from 'lucide-react';
 import type { OnOpenViewer } from './types.ts';
 import { PostCollage } from './PostCollage.tsx';
 
-export const MonthMarker: React.FC<{ label: string; count: number; people: number }> = ({ label, count, people }) => (
+export const MonthMarker: React.FC<{ label: string; count: number; people?: number }> = ({ label, count }) => (
   <div className="tl-month">
-    <span className="tl-month-pill min-w-0">
-      <Calendar className="!h-6 !w-6 shrink-0" />
-      <span className="truncate font-display text-[12.5px] leading-none sm:text-[13px]">{label}</span>
-      <span className="ml-0.5 flex shrink-0 items-center gap-1.5 border-l border-[var(--border-subtle)] pl-2 text-[9.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)] sm:ml-1 sm:text-[10px] sm:tracking-[0.08em]">
-        <span>
-          {count} {count === 1 ? 'memory' : 'memories'}
-        </span>
-        <span className="hidden min-[400px]:inline-flex items-center gap-1.5">
-          <Dot />
-          {people} {people === 1 ? 'person' : 'people'}
-        </span>
+    <span className="tl-month-pill">
+      <span className="tl-month-dot" aria-hidden="true" />
+      <span className="tl-month-label">{label}</span>
+      <span className="tl-month-count" title={`${count} ${count === 1 ? 'memory' : 'memories'}`}>
+        {count}
       </span>
     </span>
   </div>
 );
 
 /* ---------------------------------------------------------------------------
-   Day marker that sits on the spine — carries the day number itself
+   Ring marker that sits on the spine at the start of a day (phones only;
+   on desktop every card carries its own ring)
    --------------------------------------------------------------------------- */
 
-export const DayNode: React.FC<{ date?: string; color: string }> = ({ date, color }) => (
-  <div
-    className="tl-day-node"
-    style={{ color, borderColor: `color-mix(in oklab, ${color} 55%, var(--border-color))` }}
-  >
-    <span>{dayNumber(date)}</span>
+export const DayNode: React.FC<{ date?: string }> = ({ date }) => (
+  <div className="tl-day-node">
     <span className="sr-only">{date || 'memory'}</span>
   </div>
 );

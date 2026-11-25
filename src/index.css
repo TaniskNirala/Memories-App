@@ -581,14 +581,15 @@
   }
 
   /* ---------------------------------------------------------------- Timeline
-     Vertical spine with alternating cards: odd items hang left of the rail,
-     even items right of it, joined by dotted connectors. Below 900px the whole
-     thing collapses to a single left-aligned column on the same rail. */
+     A solid, gently winding spine with ring nodes. Odd items hang left of the
+     rail, even items right of it, each with a vertical date label on its outer
+     edge. Below 900px everything collapses to one column on the same rail. */
   .tl-root {
     --tl-pad: 3.15rem;
     --tl-rail-x: 50%;
-    --tl-node: 2.15rem;
     --tl-gap: 1.35rem;
+    --tl-line: var(--text-primary);
+    --tl-ring: 0.95rem;
     position: relative;
     padding: 0.4rem 0 1rem var(--tl-pad);
   }
@@ -596,114 +597,121 @@
     .tl-root { --tl-pad: 2.35rem; --tl-rail-x: 0.85rem; }
   }
   @media (max-width: 389.98px) {
-    .tl-root { --tl-pad: 2.05rem; --tl-rail-x: 0.72rem; --tl-node: 1.9rem; }
+    .tl-root { --tl-pad: 2.05rem; --tl-rail-x: 0.72rem; }
   }
 
-  /* dotted spine */
+  /* winding spine: a tiled sine wave used as a mask so the colour follows the theme */
   .tl-rail {
     position: absolute;
-    top: 0.9rem;
-    bottom: 0.4rem;
+    top: 0;
+    bottom: 0;
     left: var(--tl-rail-x);
-    width: 2px;
-    transform: translateX(-1px);
-    border-radius: 999px;
-    background: repeating-linear-gradient(
-      180deg,
-      color-mix(in oklab, var(--accent-amber) 58%, var(--border-color)) 0 6px,
-      transparent 6px 12px
-    );
-    opacity: 0.9;
+    width: 28px;
+    transform: translateX(-50%);
+    background: var(--tl-line);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='200' viewBox='0 0 28 200'%3E%3Cpath d='M14 0C26 33 26 67 14 100C2 133 2 167 14 200' fill='none' stroke='%23000' stroke-width='3.2'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='200' viewBox='0 0 28 200'%3E%3Cpath d='M14 0C26 33 26 67 14 100C2 133 2 167 14 200' fill='none' stroke='%23000' stroke-width='3.2'/%3E%3C/svg%3E");
+    -webkit-mask-size: 28px 200px;
+    mask-size: 28px 200px;
+    -webkit-mask-repeat: repeat-y;
+    mask-repeat: repeat-y;
+    -webkit-mask-position: center top;
+    mask-position: center top;
   }
 
-  /* month "chapter" marker — stays in place on the timeline (does not follow scroll) */
+  /* month marker: "● November  173" */
   .tl-month {
     position: relative;
     z-index: 12;
     display: flex;
     justify-content: flex-start;
-    margin: 0 0 1.1rem;
+    margin: 0 0 1.4rem;
     pointer-events: none;
   }
   .tl-month-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.6rem;
     max-width: calc(100% + var(--tl-pad));
     margin-left: calc(-1 * var(--tl-pad));
-    padding: 0.32rem 0.8rem 0.32rem 0.35rem;
+    padding: 0.4rem 0.45rem 0.4rem calc(var(--tl-rail-x) - 0.3rem);
     border-radius: 999px;
     background: var(--bg-card);
-    border: 1px dashed color-mix(in oklab, var(--border-color) 80%, var(--accent-amber));
+    border: 2px solid var(--tl-line);
     color: var(--text-primary);
-    font-weight: 700;
-    letter-spacing: -0.01em;
-    box-shadow: var(--shadow-card);
+    box-shadow: 0 0 0 5px var(--bg-page);
     position: relative;
     z-index: 3;
     pointer-events: auto;
   }
-  @media (min-width: 640px) {
-    .tl-month-pill {
-      gap: 0.55rem;
-      padding: 0.35rem 0.95rem 0.35rem 0.4rem;
-    }
-  }
-  .tl-month-pill svg {
-    width: 1.5rem;
-    height: 1.5rem;
+  .tl-month-dot {
     flex-shrink: 0;
-    padding: 0.3rem;
+    width: 0.6rem;
+    height: 0.6rem;
     border-radius: 999px;
-    background: color-mix(in oklab, var(--accent-amber) 16%, transparent);
-    color: var(--accent-amber);
+    background: var(--tl-line);
+  }
+  .tl-month-label {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tl-month-count {
+    flex-shrink: 0;
+    padding: 0.22rem 0.6rem;
+    border-radius: 999px;
+    background: var(--tl-line);
+    color: var(--bg-page);
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1;
   }
 
-  .tl-section + .tl-section { margin-top: 2rem; }
+  .tl-section + .tl-section { margin-top: 2.4rem; }
 
   /* ---- day cluster ---- */
   .tl-day { position: relative; }
   .tl-day + .tl-day { margin-top: 1.7rem; }
 
+  /* ring node on the spine (phones only; desktop gets one ring per card) */
   .tl-day-node {
     position: absolute;
-    top: -0.25rem;
+    top: 0.2rem;
     left: var(--tl-rail-x);
     transform: translateX(-50%);
-    width: var(--tl-node);
-    height: var(--tl-node);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: var(--tl-ring);
+    height: var(--tl-ring);
     border-radius: 999px;
-    background: var(--bg-card);
-    border: 2px dashed currentColor;
-    font-family: var(--font-display);
-    font-size: 0.76rem;
-    line-height: 1;
-    letter-spacing: -0.02em;
+    background: var(--bg-page);
+    border: 3px solid var(--tl-line);
+    box-shadow: 0 0 0 5px var(--bg-page);
     z-index: 10;
-    box-shadow: 0 0 0 4px var(--bg-page), 0 10px 22px -12px rgba(0, 0, 0, 0.9);
   }
 
+  /* phone day header: "24 Nov 2026 · 2 memories" */
   .tl-day-head {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    margin-bottom: 0.65rem;
+    margin-bottom: 0.7rem;
     min-height: 1.5rem;
   }
   .tl-day-head-pill {
     display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
+    align-items: baseline;
+    gap: 0.6rem;
   }
   .tl-day-weekday {
-    font-size: 0.58rem;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
     font-weight: 800;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--text-secondary);
+    letter-spacing: 0.01em;
+    color: var(--text-primary);
   }
   .tl-day-count {
     font-family: var(--font-mono);
@@ -713,21 +721,12 @@
     color: var(--text-muted);
     white-space: nowrap;
   }
-  .tl-day-rule {
-    flex: 1 1 auto;
-    height: 0;
-    min-width: 1.5rem;
-    border-top: 1px dashed var(--border-color);
-  }
-  /* on phones the label starts the line; desktop balances it between two rules */
-  .tl-day-head > .tl-day-rule:first-child { display: none; }
 
   .tl-day-cards { display: flex; flex-direction: column; gap: 1rem; }
 
-  /* ---- zigzag entries at >= 900px ---- */
-  .tl-entry {
-    position: relative;
-  }
+  /* ---- entries ---- */
+  .tl-entry { position: relative; }
+  .tl-entry-date { display: none; }
   @media (max-width: 899.98px) {
     .tl-entry {
       content-visibility: auto;
@@ -735,85 +734,66 @@
     }
   }
 
+  /* ---- zigzag at >= 900px ---- */
   @media (min-width: 900px) {
-    .tl-root { --tl-pad: 0px; }
+    /* side padding leaves room for the vertical date labels */
+    .tl-root { --tl-pad: 0px; padding: 0.4rem 2.6rem 1rem; }
 
-    .tl-day {
-      padding-top: calc(var(--tl-node) + 0.35rem);
-    }
+    .tl-day { padding-top: 0.3rem; }
+    .tl-day-head { display: none; }
+    .tl-day-node { display: none; }
 
-    .tl-day-head {
-      justify-content: center;
-      gap: 0.6rem;
-      margin-bottom: 0.9rem;
-    }
-    .tl-day-head-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.22rem 0.68rem;
-      border-radius: 999px;
-      background: color-mix(in oklab, var(--bg-card) 92%, var(--bg-page));
-      border: 1px solid var(--border-subtle);
-      position: relative;
-      z-index: 6;
-    }
-    .tl-day-rule {
-      flex: 0 1 7rem;
-    }
-    .tl-day-head > .tl-day-rule:first-child { display: block; }
+    .tl-day-cards { gap: 1.4rem; }
 
-    .tl-day-cards {
-      display: flex;
-      flex-direction: column;
-      gap: 1.4rem;
-    }
+    .tl-entry { width: calc(50% - var(--tl-gap) * 1.05); }
+    .tl-entry:nth-child(odd) { margin-right: auto; }
+    .tl-entry:nth-child(even) { margin-left: auto; }
 
-    .tl-entry {
-      width: calc(50% - var(--tl-gap) * 1.05);
-    }
-    .tl-entry:nth-child(odd) {
-      margin-right: auto;
-      padding-right: 0;
-    }
-    .tl-entry:nth-child(even) {
-      margin-left: auto;
-    }
-
-    /* dotted connector from card to spine */
-    .tl-entry::before {
-      content: "";
-      position: absolute;
-      top: 1.6rem;
-      width: calc(var(--tl-gap) * 1.05);
-      height: 0;
-      border-top: 2px dotted color-mix(in oklab, var(--accent-amber) 45%, var(--border-color));
-      opacity: 0.75;
-    }
-    .tl-entry:nth-child(odd)::before { right: calc(-1 * var(--tl-gap) * 1.05); }
-    .tl-entry:nth-child(even)::before { left: calc(-1 * var(--tl-gap) * 1.05); }
-
-    /* dot sitting on the spine, one per card */
+    /* ring on the spine, one per card */
     .tl-entry::after {
       content: "";
       position: absolute;
-      top: calc(1.6rem - 4px);
-      width: 9px;
-      height: 9px;
+      top: calc(1.6rem - var(--tl-ring) / 2);
+      width: var(--tl-ring);
+      height: var(--tl-ring);
       border-radius: 999px;
       background: var(--bg-page);
-      border: 2px solid color-mix(in oklab, var(--accent-amber) 60%, var(--border-color));
+      border: 3px solid var(--tl-line);
+      box-shadow: 0 0 0 5px var(--bg-page);
       z-index: 11;
     }
-    .tl-entry:nth-child(odd)::after { right: calc(-1 * var(--tl-gap) * 1.05 - 4.5px); }
-    .tl-entry:nth-child(even)::after { left: calc(-1 * var(--tl-gap) * 1.05 - 4.5px); }
-
-    .tl-month-pill {
-      margin-left: 0;
-      border-style: solid;
+    .tl-entry:nth-child(odd)::after {
+      right: calc(-1 * var(--tl-gap) * 1.05 - var(--tl-ring) / 2);
     }
+    .tl-entry:nth-child(even)::after {
+      left: calc(-1 * var(--tl-gap) * 1.05 - var(--tl-ring) / 2);
+    }
+
+    /* vertical date on the outer edge of each card */
+    .tl-entry-date {
+      display: block;
+      position: absolute;
+      top: 0.4rem;
+      writing-mode: vertical-rl;
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      white-space: nowrap;
+      color: var(--text-primary);
+      pointer-events: none;
+    }
+    .tl-entry:nth-child(odd) > .tl-entry-date {
+      right: calc(100% + 0.55rem);
+      transform: rotate(180deg);
+    }
+    .tl-entry:nth-child(even) > .tl-entry-date {
+      left: calc(100% + 0.55rem);
+    }
+
+    .tl-month-pill { margin-left: 0; padding-left: 1rem; }
     .tl-month { justify-content: center; }
-    .tl-day-node { top: -0.1rem; }
   }
 
   .tl-card {

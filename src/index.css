@@ -741,24 +741,40 @@
     }
   }
 
-  /* date (day month year) shown beside every card, on the side opposite the card */
+  /* date (weekday + day month year) shown beside every card, on the side opposite the card.
+     Phones: written vertically in the left gutter. Desktop: a small centred chip. */
   .tl-entry-date {
     position: absolute;
     top: 0.5rem;
     left: 0.15rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
     writing-mode: vertical-rl;
     transform: rotate(180deg);
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .tl-entry-weekday {
+    font-family: var(--font-mono);
+    font-size: 0.5rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent-amber);
+  }
+  .tl-wd-long { display: none; }
+  .tl-entry-day {
     font-family: var(--font-display);
     font-size: 0.78rem;
     font-weight: 800;
     letter-spacing: 0.03em;
-    line-height: 1;
-    white-space: nowrap;
     color: var(--text-primary);
-    pointer-events: none;
   }
   @media (max-width: 389.98px) {
-    .tl-entry-date { font-size: 0.7rem; left: 0.05rem; }
+    .tl-entry-date { left: 0.05rem; }
+    .tl-entry-day { font-size: 0.7rem; }
   }
 
   @media (min-width: 900px) {
@@ -798,11 +814,11 @@
     .tl-entry {
       width: calc(50% - var(--tl-gap) * 1.05);
     }
-    .tl-entry:nth-child(odd) {
+    .tl-entry[data-side='left'] {
       margin-right: auto;
       padding-right: 0;
     }
-    .tl-entry:nth-child(even) {
+    .tl-entry[data-side='right'] {
       margin-left: auto;
     }
 
@@ -816,26 +832,35 @@
       border-top: 2px dotted color-mix(in oklab, var(--accent-amber) 45%, var(--border-color));
       opacity: 0.75;
     }
-    .tl-entry:nth-child(odd)::before { right: calc(-1 * var(--tl-gap) * 1.05); }
-    .tl-entry:nth-child(even)::before { left: calc(-1 * var(--tl-gap) * 1.05); }
+    .tl-entry[data-side='left']::before { right: calc(-1 * var(--tl-gap) * 1.05); }
+    .tl-entry[data-side='right']::before { left: calc(-1 * var(--tl-gap) * 1.05); }
 
     .tl-entry-date {
-      top: 1.6rem;
+      top: 50%;
       left: auto;
       right: auto;
+      flex-direction: column;
+      gap: 0.3rem;
       writing-mode: horizontal-tb;
       transform: translateY(-50%);
-      font-size: 1.05rem;
-      letter-spacing: 0.01em;
+      padding: 0.55rem 1.15rem 0.6rem;
+      border-radius: 1rem;
+      background: var(--bg-card);
+      border: 1px solid color-mix(in oklab, var(--accent-amber) 30%, var(--border-color));
+      box-shadow: var(--shadow-card);
+      text-align: center;
     }
-    /* card on the left -> date to the right of the spine */
-    .tl-entry:nth-child(odd) > .tl-entry-date {
-      left: calc(100% + var(--tl-gap) * 1.05 + 1rem);
+    .tl-entry-weekday { font-size: 0.62rem; letter-spacing: 0.24em; }
+    .tl-wd-long { display: inline; }
+    .tl-wd-short { display: none; }
+    .tl-entry-day { font-size: 1.2rem; letter-spacing: 0.01em; }
+    /* card on the left -> date on the right of the spine */
+    .tl-entry[data-side='left'] > .tl-entry-date {
+      left: calc(100% + var(--tl-gap) * 1.05 + 1.1rem);
     }
-    /* card on the right -> date to the left of the spine */
-    .tl-entry:nth-child(even) > .tl-entry-date {
-      right: calc(100% + var(--tl-gap) * 1.05 + 1rem);
-      text-align: right;
+    /* card on the right -> date on the left of the spine */
+    .tl-entry[data-side='right'] > .tl-entry-date {
+      right: calc(100% + var(--tl-gap) * 1.05 + 1.1rem);
     }
 
     .tl-month-pill {

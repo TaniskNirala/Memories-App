@@ -5,7 +5,7 @@ import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 
 import { Modal, ModalHeader, EmptyState } from './ui/kit.tsx';
-import { monthYearLabel, accentFromName, shortDate } from '../lib/format.ts';
+import { monthYearLabel, accentFromName, shortDate, toDate } from '../lib/format.ts';
 
 import { MonthMarker, DayNode } from './timeline/TimelineParts.tsx';
 import { MemoryCard } from './timeline/MemoryCard.tsx';
@@ -119,6 +119,21 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
         days: Array.from(m.days.values()).sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0)),
       }));
   }, [items]);
+
+  // cards alternate left / right continuously across days and months
+  const sideById = useMemo(() => {
+    const map = new Map<string, 'left' | 'right'>();
+    let n = 0;
+    for (const section of sections) {
+      for (const day of section.days) {
+        for (const it of day.items) map.set(it.id, n++ % 2 === 0 ? 'left' : 'right');
+      }
+    }
+    return map;
+  }, [sections]);
+
+  const weekdayOf = (value: string | undefined, style: 'long' | 'short') =>
+    toDate(value)?.toLocaleDateString('en-US', { weekday: style }) ?? '';
 
   const handleShareClick = useCallback(async (item: FeedItem, targetGroupId: string) => {
     setSharingLoadingId(item.id);
@@ -369,9 +384,13 @@ export const TimelineFeed: React.FC<TimelineFeedProps> = ({
                             const isPriority = sectionIdx === 0 && dayIdx === 0 && itemIdx < 2;
 
                             return (
-                              <div key={item.id} className="tl-entry">
+                              <div key={item.id} className="tl-entry" data-side={sideById.get(item.id) ?? 'left'}>
                                 <span className="tl-entry-date" aria-hidden="true">
-                                  {shortDate(day.date, { year: true })}
+                                  <span className="tl-entry-weekday">
+                                    <span className="tl-wd-long">{weekdayOf(day.date, 'long')}</span>
+                                    <span className="tl-wd-short">{weekdayOf(day.date, 'short')}</span>
+                                  </span>
+                                  <span className="tl-entry-day">{shortDate(day.date, { year: true })}</span>
                                 </span>
                                 {item.type === 'single_post' ? (
                                   item.isLockedPlaceholder ? (

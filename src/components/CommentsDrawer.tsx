@@ -171,6 +171,8 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
       const res = await apiFetch(`/api/comments/${commentId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchComments();
+      } else {
+        toast('Could not delete the comment. Please try again.', 'error');
       }
     } catch (err) {
       console.error('Delete comment failed', err);

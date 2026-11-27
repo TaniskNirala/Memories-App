@@ -207,6 +207,8 @@ const SCHEMA_STATEMENTS: string[] = [
     is_everyone INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL
   )`,
+  `ALTER TABLE groups ADD COLUMN IF NOT EXISTS icon_key TEXT`,
+  `ALTER TABLE groups ADD COLUMN IF NOT EXISTS banner_key TEXT`,
   `CREATE TABLE IF NOT EXISTS group_members (
     group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

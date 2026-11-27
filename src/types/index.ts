@@ -32,6 +32,12 @@ export interface Group {
   memberCount: number;
   isMember: boolean;
   canManage: boolean;
+  /** Creator or admin (admin only for the Everyone circle) */
+  canEditImages?: boolean;
+  /** Circle icon (square, shown like a channel avatar) */
+  iconUrl?: string;
+  /** Circle banner (wide cover image) */
+  bannerUrl?: string;
   members: GroupMember[];
 }
 

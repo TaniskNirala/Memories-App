@@ -56,6 +56,22 @@ export function canAccessStorageKey(viewer: Viewer, rawKey: string): boolean {
 
   if (viewer.role === 'pending') return false;
 
+  // Circle icon / banner: members of that circle (everyone, for the Everyone circle)
+  const circleImage = queryAll<{ id: string; is_everyone: number }>(
+    'SELECT id, is_everyone FROM groups WHERE icon_key = ? OR banner_key = ? LIMIT 1',
+    [key, key]
+  );
+  if (circleImage.length > 0) {
+    const circle = circleImage[0];
+    if (circle.is_everyone) return true;
+    return (
+      queryAll<{ ok: number }>('SELECT 1 AS ok FROM group_members WHERE group_id = ? AND user_id = ? LIMIT 1', [
+        circle.id,
+        viewer.id,
+      ]).length > 0
+    );
+  }
+
   if (key.startsWith(`posts/${viewer.id}/`)) return true;
 
   const candidates = alternateKeys(key);
@@ -86,6 +102,20 @@ export function canAccessTelegramMessage(viewer: Viewer, msgId: string): boolean
   if (viewer.status === 'suspended' || viewer.role === 'pending') return false;
   if (viewer.role === 'admin') return true;
   const prefix = `tgmsg:${parseInt(msgId, 10)}/%`;
+  const circleImage = queryAll<{ id: string; is_everyone: number }>(
+    'SELECT id, is_everyone FROM groups WHERE icon_key LIKE ? OR banner_key LIKE ? LIMIT 1',
+    [prefix, prefix]
+  );
+  if (circleImage.length > 0) {
+    const circle = circleImage[0];
+    if (circle.is_everyone) return true;
+    return (
+      queryAll<{ ok: number }>('SELECT 1 AS ok FROM group_members WHERE group_id = ? AND user_id = ? LIMIT 1', [
+        circle.id,
+        viewer.id,
+      ]).length > 0
+    );
+  }
   const rows = queryAll<{ post_id: string }>(
     'SELECT DISTINCT post_id FROM post_files WHERE storage_key LIKE ? OR thumb_key LIKE ?',
     [prefix, prefix]

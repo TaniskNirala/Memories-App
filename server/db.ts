@@ -520,6 +520,15 @@ function initSchema(db: Db) {
     // column already exists (idempotent migration)
   }
 
+  // Optional circle icon + banner (storage keys, like users.avatar_url)
+  for (const col of ['icon_key', 'banner_key']) {
+    try {
+      db.exec(`ALTER TABLE groups ADD COLUMN ${col} TEXT`);
+    } catch {
+      // column already exists (idempotent migration)
+    }
+  }
+
   // Auto-repair missing or generic captions from storage keys
   try {
     const nameless = db.prepare(

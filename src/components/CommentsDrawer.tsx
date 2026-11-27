@@ -198,7 +198,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
 
   return (
     <div
-      className="scrim z-50 !p-0 sm:!p-4 !items-end sm:!items-center"
+      className="scrim z-[80] !p-0 sm:!p-4 !items-end sm:!items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

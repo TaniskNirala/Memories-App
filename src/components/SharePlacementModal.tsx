@@ -75,7 +75,7 @@ export const SharePlacementModal: React.FC<SharePlacementModalProps> = ({
 
   return (
     <div
-      className="scrim z-50"
+      className="scrim z-[80]"
       onClick={(e) => {
         if (e.target === e.currentTarget && !loading) onClose();
       }}

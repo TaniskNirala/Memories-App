@@ -361,7 +361,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   };
 
   return (
-    <div className="scrim !p-0 z-50 select-none">
+    <div className="scrim !p-0 z-[70] select-none">
       {/* Top action bar */}
       <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between gap-2 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:p-4 bg-gradient-to-b from-black/90 via-black/60 to-transparent">
         {/* Left: Author & Album info */}

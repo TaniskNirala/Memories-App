@@ -39,8 +39,8 @@
    -------------------------------------------------------------------------- */
 @layer base {
   :root.dark {
-    --bg-page: #0a0c14;
-    --bg-page-soft: #0e111b;
+    --bg-page: #000000;
+    --bg-page-soft: #050505;
     --bg-card: #12151f;
     --bg-surface: #191d29;
     --bg-surface-elevated: #222736;
@@ -79,10 +79,10 @@
     --pattern-ink: rgba(226, 222, 255, 0.15);
     --pattern-tint: rgba(246, 181, 68, 0.16);
     --pattern-size: 378px auto;
-    --blob-a: rgba(255, 112, 105, 0.2);
-    --blob-b: rgba(94, 234, 212, 0.13);
-    --blob-c: rgba(155, 155, 255, 0.17);
-    --vignette: rgba(0, 0, 0, 0.55);
+    --blob-a: transparent;
+    --blob-b: transparent;
+    --blob-c: transparent;
+    --vignette: transparent;
     --glass-tint: rgba(255, 255, 255, 0.04);
     /* how much of a card's fill is opaque — lower lets the doodle sheet show */
     --surface-opacity: 100%;

@@ -135,3 +135,8 @@ export function formatBytes(bytes: number): string {
   if (bytes >= MB) return `${(bytes / MB).toFixed(1)} MB`;
   return `${Math.round(bytes / KB)} KB`;
 }
+/** Compact comment count for cards: 1..9 as-is, 10 or more as "10+". */
+export function formatCount(n: number | undefined | null): string {
+  const v = Number(n) || 0;
+  return v >= 10 ? '10+' : String(v);
+}

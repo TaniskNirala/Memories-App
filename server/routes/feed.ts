@@ -283,6 +283,16 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
         [alb.id]
       );
 
+      const cardGroupId = groupId || placements[0]?.groupId || placements[0]?.group_id;
+      let commentsCount = 0;
+      if (cardGroupId) {
+        const cc = queryOne<{ count: number }>(
+          "SELECT COUNT(*) as count FROM comments WHERE target_type = 'album' AND target_id = ? AND group_id = ? AND deleted_at IS NULL",
+          [alb.id, cardGroupId]
+        );
+        commentsCount = cc?.count || 0;
+      }
+
       return {
         type: 'collection_card',
         id: alb.id,
@@ -304,6 +314,7 @@ feedRouter.get('/', async (req: AuthenticatedRequest, res) => {
         attendeesCount,
         userAttended,
         placements,
+        commentsCount,
         activeGroupId: groupId || placements[0]?.groupId || placements[0]?.group_id,
       };
     })

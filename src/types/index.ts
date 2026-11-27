@@ -113,6 +113,7 @@ export interface CollectionCardFeedItem {
   attendeesCount: number;
   userAttended: boolean;
   placements: { id?: string; groupId: string; groupName: string }[];
+  commentsCount?: number;
   activeGroupId?: string;
 }
 

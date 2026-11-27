@@ -26,7 +26,7 @@
          is no dark flash before the theme provider boots. The script below
          upgrades the shell to the stored theme before the first paint. */
       html { background: #f7f2e9; color-scheme: light; }
-      html.dark { background: #0a0c14; color-scheme: dark; }
+      html.dark { background: #000000; color-scheme: dark; }
     </style>
     <script>
       /* A returning user's saved palette, applied before React mounts so the
@@ -39,7 +39,7 @@
             root.classList.remove('light');
             root.classList.add('dark');
             root.style.colorScheme = 'dark';
-            root.style.backgroundColor = '#0a0c14';
+            root.style.backgroundColor = '#000000';
           } else if (t === 'light') {
             root.classList.remove('dark');
             root.classList.add('light');
@@ -55,4 +55,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

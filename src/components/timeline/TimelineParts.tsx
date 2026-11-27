@@ -2,7 +2,7 @@ import React from 'react';
 import { FeedItem, SinglePostFeedItem } from '../../types/index.ts';
 import { MessageSquare, Calendar, Images, Maximize2, Eye } from 'lucide-react';
 import { Dot } from '../ui/kit.tsx';
-import { dayNumber } from '../../lib/format.ts';
+import { dayNumber, formatCount } from '../../lib/format.ts';
 import type { OnOpenViewer } from './types.ts';
 import { PostCollage } from './PostCollage.tsx';
 
@@ -73,7 +73,7 @@ export const MediaFrame: React.FC<{
         }}
         className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/70 px-2.5 py-1.5 text-[10px] font-semibold text-white transition hover:bg-black/85"
       >
-        <MessageSquare className="h-3 w-3" /> {item.commentsCount || 'Comment'}
+        <MessageSquare className="h-3 w-3" /> {item.commentsCount ? formatCount(item.commentsCount) : 'Comment'}
       </button>
       <button
         type="button"

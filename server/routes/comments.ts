@@ -99,16 +99,34 @@ commentsRouter.post('/', (req: AuthenticatedRequest, res) => {
   const mentionMatches = cleanText.match(/@([a-z0-9_-]+)/gi);
   if (mentionMatches) {
     const uniqueUsernames = Array.from(new Set(mentionMatches.map((m: string) => m.substring(1).toLowerCase())));
+    // @everyone notifies every active member of this circle (except the author)
+    const tagsEveryone = uniqueUsernames.includes('everyone');
+    const targets: Row[] = [];
+    if (tagsEveryone) {
+      targets.push(
+        ...queryAll<Row>(
+          `SELECT u.id, u.username
+           FROM users u
+           JOIN group_members gm ON u.id = gm.user_id
+           WHERE gm.group_id = ? AND u.status = 'active'`,
+          [groupId]
+        )
+      );
+    }
     for (const uname of uniqueUsernames) {
+      if (uname === 'everyone') continue;
       // Find user who is in THIS group
-      const targetUser = queryOne<Row>(
+      const found = queryOne<Row>(
         `SELECT u.id, u.username
          FROM users u
          JOIN group_members gm ON u.id = gm.user_id
          WHERE u.username = ? AND gm.group_id = ? AND u.status = 'active'`,
         [uname, groupId]
       );
+      if (found && !targets.some((t) => t.id === found.id)) targets.push(found);
+    }
 
+    for (const targetUser of targets) {
       if (targetUser && targetUser.id !== userId) {
         run('INSERT INTO mentions (id, comment_id, mentioned_user_id, created_at) VALUES (?, ?, ?, ?)', [
           crypto.randomUUID(),
@@ -126,7 +144,7 @@ commentsRouter.post('/', (req: AuthenticatedRequest, res) => {
             targetUser.id,
             'mention',
             'New Mention',
-            `@${req.user!.username} mentioned you in "${group?.name || 'circle'}": "${cleanText.slice(0, 50)}..."`,
+            `@${req.user!.username} ${tagsEveryone ? 'tagged everyone' : 'mentioned you'} in "${group?.name || 'circle'}": "${cleanText.slice(0, 50)}..."`,
             `/${targetType}/${targetId}?group=${groupId}&comment=${commentId}`,
             now,
           ]

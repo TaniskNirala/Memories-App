@@ -2,7 +2,7 @@ import React from 'react';
 import { FeedItem } from '../../types/index.ts';
 import { Sparkles, MessageSquare, Layers, Trash2, MoreHorizontal, Calendar, Images, MapPin, ShieldAlert, SlidersHorizontal, PencilLine, Users, ArrowUpRight } from 'lucide-react';
 import { Dropdown, MenuItem, Dot } from '../ui/kit.tsx';
-import { dayNumber, monthShort } from '../../lib/format.ts';
+import { dayNumber, monthShort, formatCount } from '../../lib/format.ts';
 
 export const EventCard: React.FC<{
   item: Extract<FeedItem, { type: 'collection_card' }>;
@@ -216,6 +216,9 @@ export const EventCard: React.FC<{
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3">
           <button type="button" onClick={() => onOpenComments(item)} className="chip">
             <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-cyan)]" /> Conversation
+            {(item.commentsCount || 0) > 0 && (
+              <span className="font-mono text-[10px] text-[var(--text-muted)]">{formatCount(item.commentsCount)}</span>
+            )}
           </button>
           <button
             type="button"

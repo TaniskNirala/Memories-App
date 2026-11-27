@@ -190,6 +190,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
     }
   }
 
+  const showEveryone = 'everyone'.startsWith(mentionFilter);
   const filteredMembers = groupMembers.filter((m) => {
     const dName = m.displayName || (m as any).display_name || m.username || '';
     const uName = m.username || '';
@@ -389,11 +390,22 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
         {/* Input Bar & Mentions Suggestions */}
         <div className="relative p-3 border-t border-[var(--border-color)] bg-[var(--bg-card)]">
           {/* @mention autocomplete popup */}
-          {showMentionSuggestions && filteredMembers.length > 0 && (
+          {showMentionSuggestions && (showEveryone || filteredMembers.length > 0) && (
             <div className="absolute bottom-full left-3 right-3 mb-2 max-h-36 overflow-y-auto bg-[var(--bg-surface-elevated)] border border-[var(--border-color)] rounded-xl shadow-xl p-1 z-30">
               <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] px-2 py-0.5 block">
                 Members in this circle
               </span>
+              {showEveryone && (
+                <button
+                  type="button"
+                  onClick={() => insertMention('everyone')}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-[var(--bg-card)] text-xs text-[var(--text-primary)]"
+                >
+                  <span className="w-4 h-4 rounded-full bg-amber-500 text-neutral-950 flex items-center justify-center text-[9px] font-bold">@</span>
+                  <span className="font-semibold">everyone</span>
+                  <span className="text-[10px] text-[var(--text-muted)]">Notify all members of this circle</span>
+                </button>
+              )}
               {filteredMembers.map((m) => (
                 <button
                   key={m.id}
@@ -424,7 +436,7 @@ export const CommentsDrawer: React.FC<CommentsDrawerProps> = ({
               type="text"
               value={text}
               onChange={handleInputChange}
-              placeholder="Add a comment... (use @ to mention circle friends)"
+              placeholder="Add a comment... (use @ to mention friends or @everyone)"
               className="flex-1 px-3 py-2 text-xs rounded-xl bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-hidden"
             />
             <button

@@ -1,3 +1,4 @@
+import { formatCount } from '../lib/format.ts';
 import React, { useState, useEffect, useRef } from 'react';
 import { useGesture } from '@use-gesture/react';
 import {
@@ -707,7 +708,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                   className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center gap-1.5 transition"
                 >
                   <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Comments ({item.commentsCount})</span>
+                  <span>Comments ({formatCount(item.commentsCount)})</span>
                 </button>
 
                 <button
@@ -1057,7 +1058,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
                     className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-semibold transition"
                   >
                     <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Comments ({item.commentsCount})</span>
+                    <span>Comments ({formatCount(item.commentsCount)})</span>
                   </button>
                 </div>
               </div>

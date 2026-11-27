@@ -3,7 +3,7 @@ import { FeedItem, SinglePostFeedItem, Group } from '../../types/index.ts';
 import { Sparkles, MessageSquare, Trash2, MoreHorizontal, X, Flag, Share2, ShieldAlert, SlidersHorizontal, RefreshCw, Maximize2, PencilLine, Users, ArrowUpRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { Avatar, Badge, Dropdown, MenuItem, Dot } from '../ui/kit.tsx';
-import { relativeTime, accentFromName } from '../../lib/format.ts';
+import { relativeTime, accentFromName, formatCount } from '../../lib/format.ts';
 import { MediaFrame } from './TimelineParts.tsx';
 import type { OnOpenViewer } from './types.ts';
 
@@ -100,7 +100,7 @@ export const MemoryCard: React.FC<{
               <MenuItem
                 icon={<MessageSquare className="h-3.5 w-3.5" />}
                 label="Read comments"
-                hint={String(item.commentsCount || '')}
+                hint={item.commentsCount ? formatCount(item.commentsCount) : ''}
                 onClick={() => {
                   close();
                   onOpenComments(item);
@@ -220,7 +220,7 @@ export const MemoryCard: React.FC<{
             className="chip hover:text-[var(--text-primary)]"
           >
             <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-cyan)]" />
-            {item.commentsCount > 0 ? `${item.commentsCount} ${item.commentsCount === 1 ? 'comment' : 'comments'}` : 'Add a comment'}
+            {item.commentsCount > 0 ? `${formatCount(item.commentsCount)} ${item.commentsCount === 1 ? 'comment' : 'comments'}` : 'Add a comment'}
           </button>
 
           <Dropdown

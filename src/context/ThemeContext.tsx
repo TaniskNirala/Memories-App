@@ -89,7 +89,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const next: Theme = isDark ? 'dark' : 'light';
 
     const meta = document.querySelector('meta[name="theme-color"]:not([media])');
-    const colour = isDark ? '#0a0c14' : '#f7f2e9';
+    const colour = isDark ? '#000000' : '#f7f2e9';
     if (meta) {
       meta.setAttribute('content', colour);
     } else {

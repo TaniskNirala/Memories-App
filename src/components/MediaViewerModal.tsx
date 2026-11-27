@@ -23,6 +23,8 @@ import {
   MapPin,
   ShieldAlert,
   Play,
+  Image as ImageIcon,
+  CircleUser,
 } from 'lucide-react';
 import { FeedItem, Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
@@ -31,6 +33,7 @@ import { AddPhotosToAlbumModal } from './AddPhotosToAlbumModal.tsx';
 import { ViewingPermissionsModal } from './ViewingPermissionsModal.tsx';
 import { TgDeletedBadge } from './TgDeletedBadge.tsx';
 import { CaptionSuggestionsModal } from './CaptionSuggestionsModal.tsx';
+import { CircleImageEditorModal, CircleImageKind } from './CircleImageEditorModal.tsx';
 import { Avatar } from './ui/kit.tsx';
 import { isVideoMedia, isAudioMedia, getVideoPosterUrl } from '../utils/videoThumbnail.ts';
 
@@ -47,6 +50,8 @@ interface MediaViewerModalProps {
   onPhotoUpdated?: (postId: string, updatedFile: any) => void;
   onOverrideVisibility?: (postId: string, override: string | null) => void;
   groups?: Group[];
+  selectedGroupId?: string;
+  onCircleUpdated?: () => void;
   onPermissionsUpdated?: (updatedPlacements?: any[], visibilityOverride?: string | null) => void;
 }
 
@@ -63,6 +68,8 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   onPhotoUpdated,
   onOverrideVisibility,
   groups = [],
+  selectedGroupId,
+  onCircleUpdated,
   onPermissionsUpdated,
 }) => {
   const { user, isAdmin } = useAuth();
@@ -76,6 +83,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
   const [isAddPhotosModalOpen, setIsAddPhotosModalOpen] = useState(false);
   const [isPermissionsModalOpen, setIsPermissionsModalOpen] = useState(false);
   const [isCaptionSuggestionsOpen, setIsCaptionSuggestionsOpen] = useState(false);
+  const [circleImageKind, setCircleImageKind] = useState<CircleImageKind | null>(null);
   const [captionToast, setCaptionToast] = useState<string | null>(null);
   const [showConvertPostToEvent, setShowConvertPostToEvent] = useState(false);
   const [postEventTitle, setPostEventTitle] = useState('');
@@ -446,6 +454,35 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
               <span className="hidden sm:inline">Edit Photo</span>
             </button>
           )}
+
+          {/* Set as Circle Banner / Circle Icon (with interactive aspect-ratio cropper) */}
+          {currentFile &&
+            (!currentFile.fileType || currentFile.fileType === 'photo') &&
+            !currentFile.tgDeleted &&
+            groups.some((g) =>
+              typeof g.canEditImages === 'boolean'
+                ? g.canEditImages
+                : isAdmin || (!g.isEveryone && g.creatorId === user?.id)
+            ) && (
+              <>
+                <button
+                  onClick={() => setCircleImageKind('banner')}
+                  className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-white/10 hover:bg-amber-500/20 text-white hover:text-amber-300 transition flex items-center gap-1.5 text-xs font-semibold shrink-0"
+                  title="Set as Circle Banner (with crop)"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Set as Circle Banner</span>
+                </button>
+                <button
+                  onClick={() => setCircleImageKind('icon')}
+                  className="p-2 sm:px-3 sm:py-1.5 rounded-full bg-white/10 hover:bg-amber-500/20 text-white hover:text-amber-300 transition flex items-center gap-1.5 text-xs font-semibold shrink-0"
+                  title="Set as Circle Icon (with crop)"
+                >
+                  <CircleUser className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Set as Circle Icon</span>
+                </button>
+              </>
+            )}
 
           {/* Share to circle */}
           <button
@@ -1310,6 +1347,29 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = ({
           }
         }}
       />
+
+      {/* Set Photo as Circle Banner / Icon (always opens interactive aspect-ratio cropper) */}
+      {circleImageKind && currentFile && (
+        <CircleImageEditorModal
+          isOpen={Boolean(circleImageKind)}
+          onClose={() => setCircleImageKind(null)}
+          kind={circleImageKind}
+          groups={groups}
+          initialGroupId={selectedGroupId || item.activeGroupId || item.placements?.[0]?.groupId}
+          initialImageUrl={
+            currentFile.storageKey
+              ? `/api/storage/view?key=${encodeURIComponent(currentFile.storageKey)}`
+              : currentFile.viewUrl || currentFile.thumbUrl
+          }
+          onSaved={() => {
+            setCaptionToast(
+              circleImageKind === 'banner' ? 'Circle banner updated!' : 'Circle icon updated!'
+            );
+            setTimeout(() => setCaptionToast(null), 3000);
+            if (onCircleUpdated) onCircleUpdated();
+          }}
+        />
+      )}
     </div>
   );
 };

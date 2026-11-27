@@ -178,7 +178,7 @@ export const SideNav: React.FC<SideNavProps> = ({
                   }`}
                 >
                   <span className="relative">
-                    <Avatar name={g.name} color={accent} size={24} />
+                    <Avatar name={g.name} color={accent} src={g.iconUrl} size={24} />
                     {g.isEveryone && (
                       <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full border border-[var(--bg-card)] bg-[var(--accent-teal)]">
                         <Sparkles className="h-2 w-2 text-[#04120c]" />

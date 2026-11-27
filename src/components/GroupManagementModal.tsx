@@ -10,11 +10,15 @@ import {
   Check,
   AlertTriangle,
   RefreshCw,
+  Camera,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { Group, GroupMember } from '../types/index.ts';
+import { Group } from '../types/index.ts';
 import { useAuth, apiFetch } from '../context/AuthContext.tsx';
 import { Avatar } from './ui/kit.tsx';
 import { errMessage } from '../lib/errors.ts';
+import { accentFromName } from '../lib/format.ts';
+import { CircleImageEditorModal, CircleImageKind } from './CircleImageEditorModal.tsx';
 
 interface GroupManagementModalProps {
   isOpen: boolean;
@@ -23,6 +27,7 @@ interface GroupManagementModalProps {
   onRefreshGroups: () => void;
   onSelectGroupFeed?: (groupId: string | undefined) => void;
   initialCreateMode?: boolean;
+  initialGroupId?: string;
   onGroupDeleted?: (groupId: string) => void;
 }
 
@@ -33,6 +38,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
   onRefreshGroups,
   onSelectGroupFeed,
   initialCreateMode = false,
+  initialGroupId,
   onGroupDeleted,
 }) => {
   const { user, isAdmin } = useAuth();
@@ -60,6 +66,10 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
 
+  // Circle banner / icon customization state
+  const [imageEditorKind, setImageEditorKind] = useState<CircleImageKind | null>(null);
+  const [removingImageKind, setRemovingImageKind] = useState<CircleImageKind | null>(null);
+
   const fetchAvailableUsers = async () => {
     try {
       const res = await apiFetch('/api/groups/available-users');
@@ -86,6 +96,13 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         return;
       }
       setShowCreateModal(false);
+      if (initialGroupId) {
+        const target = groups.find((g) => g.id === initialGroupId);
+        if (target) {
+          setSelectedGroup(target);
+          return;
+        }
+      }
       if (selectedGroup) {
         // Keep selected group updated with fresh props
         const fresh = groups.find((g) => g.id === selectedGroup.id);
@@ -98,7 +115,7 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
         setSelectedGroup(groups[0]);
       }
     }
-  }, [isOpen, initialCreateMode, groups.length]);
+  }, [isOpen, initialCreateMode, initialGroupId, groups]);
 
   /* A circle that was just created is selected once the refetched list includes
      it, so the sheet closes onto the circle you made rather than a blank pane. */
@@ -292,6 +309,30 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
       (isAdmin || selectedGroup.canManage || selectedGroup.creatorId === user?.id)
   );
 
+  const canEditSelectedImages = Boolean(
+    selectedGroup &&
+      (typeof selectedGroup.canEditImages === 'boolean'
+        ? selectedGroup.canEditImages
+        : isAdmin || (!selectedGroup.isEveryone && selectedGroup.creatorId === user?.id))
+  );
+
+  const handleRemoveCircleImage = async (kind: CircleImageKind) => {
+    if (!selectedGroup) return;
+    setRemovingImageKind(kind);
+    try {
+      const res = await apiFetch(`/api/groups/${selectedGroup.id}/image/${kind}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        onRefreshGroups();
+      }
+    } catch (e) {
+      console.error(`Failed to remove circle ${kind}`, e);
+    } finally {
+      setRemovingImageKind(null);
+    }
+  };
+
   if (showCreateModal) {
     return (
       <div
@@ -465,8 +506,16 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
                       : 'bg-[var(--bg-surface)]/40 sm:bg-transparent hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate">{g.name}</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Avatar
+                        name={g.name}
+                        color={accentFromName(g.name)}
+                        src={g.iconUrl}
+                        size={22}
+                      />
+                      <span className="truncate">{g.name}</span>
+                    </div>
                     <div className="flex items-center gap-1 shrink-0">
                       {g.isEveryone ? (
                         <span className="tone-amber text-[9px] border font-mono px-1 rounded">ALL</span>
@@ -501,6 +550,102 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
           <div className="flex-1 overflow-y-auto p-4 sm:p-5">
             {selectedGroup ? (
               <div className="space-y-5">
+                {/* YouTube-channel-style Circle Banner + Icon Header */}
+                <div className="overflow-hidden rounded-2xl border border-[var(--border-subtle)] bg-[var(--bg-surface)]">
+                  <div className="relative aspect-[3/1] w-full overflow-hidden bg-neutral-950">
+                    {selectedGroup.bannerUrl ? (
+                      <img
+                        src={selectedGroup.bannerUrl}
+                        alt={`${selectedGroup.name} banner`}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="flex h-full w-full items-center justify-center text-[11px] text-[var(--text-muted)]"
+                        style={{
+                          background: `radial-gradient(360px 140px at 20% 0%, color-mix(in oklab, ${accentFromName(selectedGroup.name)} 28%, transparent), transparent 75%)`,
+                        }}
+                      >
+                        <span className="flex items-center gap-1.5 opacity-75">
+                          <ImageIcon className="h-3.5 w-3.5" /> No banner yet
+                        </span>
+                      </div>
+                    )}
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/15" />
+
+                    {canEditSelectedImages && (
+                      <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setImageEditorKind('banner')}
+                          className="flex items-center gap-1 rounded-full border border-white/20 bg-black/70 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:bg-black/90"
+                        >
+                          <Camera className="h-3 w-3" />
+                          <span>{selectedGroup.bannerUrl ? 'Change banner' : 'Add banner'}</span>
+                        </button>
+                        {selectedGroup.bannerUrl && (
+                          <button
+                            type="button"
+                            disabled={removingImageKind === 'banner'}
+                            onClick={() => handleRemoveCircleImage('banner')}
+                            title="Remove banner"
+                            className="flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-black/70 text-rose-300 transition hover:bg-rose-600 hover:text-white disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative -mt-8 shrink-0">
+                        <Avatar
+                          name={selectedGroup.name}
+                          color={accentFromName(selectedGroup.name)}
+                          src={selectedGroup.iconUrl}
+                          size={54}
+                          ring
+                          className="border-2 border-[var(--bg-card)] shadow-md"
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-bold text-[var(--text-primary)]">
+                          {selectedGroup.name}
+                        </p>
+                        <p className="text-[10px] text-[var(--text-muted)]">
+                          Channel icon &amp; banner
+                        </p>
+                      </div>
+                    </div>
+
+                    {canEditSelectedImages && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setImageEditorKind('icon')}
+                          className="flex items-center gap-1 rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] px-2.5 py-1 text-[10.5px] font-semibold text-[var(--text-primary)] transition hover:border-[var(--accent-amber)]/60"
+                        >
+                          <Camera className="h-3 w-3 text-[var(--accent-amber)]" />
+                          <span>{selectedGroup.iconUrl ? 'Edit icon / collage' : 'Set icon / collage'}</span>
+                        </button>
+                        {selectedGroup.iconUrl && (
+                          <button
+                            type="button"
+                            disabled={removingImageKind === 'icon'}
+                            onClick={() => handleRemoveCircleImage('icon')}
+                            title="Remove circle icon"
+                            className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-color)] bg-[var(--bg-card)] text-rose-400 transition hover:bg-rose-500/15 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Circle Meta */}
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-[var(--border-subtle)]">
                   <div className="min-w-0">
@@ -796,6 +941,20 @@ export const GroupManagementModal: React.FC<GroupManagementModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Circle Banner / Icon Cropper + Auto-Collage Modal */}
+      {imageEditorKind && selectedGroup && (
+        <CircleImageEditorModal
+          isOpen={Boolean(imageEditorKind)}
+          onClose={() => setImageEditorKind(null)}
+          kind={imageEditorKind}
+          groups={groups}
+          initialGroupId={selectedGroup.id}
+          onSaved={() => {
+            onRefreshGroups();
+          }}
+        />
+      )}
     </div>
   );
 };

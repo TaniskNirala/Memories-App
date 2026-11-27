@@ -83,6 +83,7 @@ const MainContent: React.FC = () => {
   const [isWindowDragging, setIsWindowDragging] = useState(false);
   const [isGroupsModalOpen, setIsGroupsModalOpen] = useState(false);
   const [isCreateGroupMode, setIsCreateGroupMode] = useState(false);
+  const [manageGroupId, setManageGroupId] = useState<string | undefined>(undefined);
   const [isProposeModalOpen, setIsProposeModalOpen] = useState(false);
   const [viewerItem, setViewerItem] = useState<FeedItem | null>(null);
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -720,9 +721,18 @@ const MainContent: React.FC = () => {
                 selectedGroupName={selectedGroup?.name}
                 selectedGroupDescription={selectedGroup?.description}
                 selectedGroupMembers={selectedGroup?.members?.length || selectedGroup?.memberCount}
+                selectedGroupIconUrl={selectedGroup?.iconUrl}
+                selectedGroupBannerUrl={selectedGroup?.bannerUrl}
+                selectedGroupCanEditImages={selectedGroup?.canEditImages}
+                onEditGroupImages={() => {
+                  setIsCreateGroupMode(false);
+                  setManageGroupId(selectedGroup?.id);
+                  setIsGroupsModalOpen(true);
+                }}
                 onOpenUpload={handleOpenUploadModal}
                 onOpenGroupsManager={() => {
                   setIsCreateGroupMode(false);
+                  setManageGroupId(selectedGroup?.id);
                   setIsGroupsModalOpen(true);
                 }}
                 onClearGroup={() => setSelectedGroupId(undefined)}
@@ -749,10 +759,14 @@ const MainContent: React.FC = () => {
                         onClick={() => setSelectedGroupId(g.id)}
                         className={`chip shrink-0 !py-1.5 !px-3 !text-[11px] ${active ? 'chip-active' : ''}`}
                       >
-                        <span
-                          className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ background: accentFromName(g.name) }}
-                        />
+                        {g.iconUrl ? (
+                          <Avatar name={g.name} color={accentFromName(g.name)} src={g.iconUrl} size={16} />
+                        ) : (
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ background: accentFromName(g.name) }}
+                          />
+                        )}
                         <span className="max-w-[140px] truncate">{g.name}</span>
                       </button>
                     );
@@ -836,8 +850,9 @@ const MainContent: React.FC = () => {
                 setSelectedGroupId(gid);
                 setCurrentTab('feed');
               }}
-              onManage={() => {
+              onManage={(gid) => {
                 setIsCreateGroupMode(false);
+                setManageGroupId(gid);
                 setIsGroupsModalOpen(true);
               }}
               onCreate={() => {
@@ -869,9 +884,18 @@ const MainContent: React.FC = () => {
                 selectedGroupName={selectedGroup?.name}
                 selectedGroupDescription={selectedGroup?.description}
                 selectedGroupMembers={selectedGroup?.members?.length || selectedGroup?.memberCount}
+                selectedGroupIconUrl={selectedGroup?.iconUrl}
+                selectedGroupBannerUrl={selectedGroup?.bannerUrl}
+                selectedGroupCanEditImages={selectedGroup?.canEditImages}
+                onEditGroupImages={() => {
+                  setIsCreateGroupMode(false);
+                  setManageGroupId(selectedGroup?.id);
+                  setIsGroupsModalOpen(true);
+                }}
                 onOpenUpload={handleOpenUploadModal}
                 onOpenGroupsManager={() => {
                   setIsCreateGroupMode(false);
+                  setManageGroupId(selectedGroup?.id);
                   setIsGroupsModalOpen(true);
                 }}
                 onClearGroup={() => setSelectedGroupId(undefined)}
@@ -963,13 +987,20 @@ const MainContent: React.FC = () => {
           initialMode={viewerMode}
           isOpen={true}
           onClose={() => setViewerItem(null)}
-          onOpenComments={(item) => setCommentsItem(item)}
+          onOpenComments={(item) => {
+            setCommentsGroupId(
+              selectedGroupId || item.activeGroupId || item.placements?.[0]?.groupId
+            );
+            setCommentsItem(item);
+          }}
           onOpenShareModal={(item) => setShareItem(item)}
           onDeletePost={handleDeletePost}
           onDeleteFile={handleDeleteSinglePhoto}
           onPhotoUpdated={handlePhotoUpdated}
           onOverrideVisibility={handleAdminOverride}
           groups={groups}
+          selectedGroupId={selectedGroupId}
+          onCircleUpdated={fetchGroups}
           onPermissionsUpdated={() => fetchFeed(true)}
         />
       )}
@@ -1007,16 +1038,30 @@ const MainContent: React.FC = () => {
         onUpdated={() => fetchFeed(true)}
         groups={groups}
         onDeleteAlbum={handleDeleteAlbum}
-        onSelectPhoto={(postId, fileIndex = 0) => {
+        onSelectPhoto={(postId, fileIndex = 0, fallbackGroupId) => {
+          const contextGroupId = selectedGroupId || fallbackGroupId;
           const found = feedItems.find((i) => i.id === postId);
           if (found) {
-            handleOpenViewer(found, fileIndex, 'expanded');
+            const enriched =
+              contextGroupId && !found.activeGroupId
+                ? { ...found, activeGroupId: contextGroupId }
+                : found;
+            handleOpenViewer(enriched, fileIndex, 'expanded');
           } else {
-            apiFetch(`/api/posts/${postId}`)
+            const qs = contextGroupId ? `?groupId=${encodeURIComponent(contextGroupId)}` : '';
+            apiFetch(`/api/posts/${postId}${qs}`)
               .then((r) => r.json())
               .then((data) => {
                 if (data.post) {
-                  handleOpenViewer({ type: 'single_post', ...data.post }, fileIndex, 'expanded');
+                  const postItem: FeedItem = {
+                    type: 'single_post',
+                    ...data.post,
+                    activeGroupId:
+                      data.post.activeGroupId ||
+                      contextGroupId ||
+                      data.post.placements?.[0]?.groupId,
+                  };
+                  handleOpenViewer(postItem, fileIndex, 'expanded');
                 }
               });
           }
@@ -1028,6 +1073,7 @@ const MainContent: React.FC = () => {
         onClose={() => {
           setIsGroupsModalOpen(false);
           setIsCreateGroupMode(false);
+          setManageGroupId(undefined);
         }}
         groups={groups}
         onRefreshGroups={() => {
@@ -1035,6 +1081,7 @@ const MainContent: React.FC = () => {
           fetchFeed(true);
         }}
         initialCreateMode={isCreateGroupMode}
+        initialGroupId={manageGroupId}
         onSelectGroupFeed={(gid) => {
           setSelectedGroupId(gid);
           setCurrentTab('feed');

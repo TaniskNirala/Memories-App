@@ -747,6 +747,107 @@ async function runTests() {
     }
 
     // -------------------------------------------------------------
+    // Test 14: Album-linked photo inherits circle placements & circle icon/banner API
+    // -------------------------------------------------------------
+    console.log('\n[Test 14] Album photo circle inheritance & circle icon/banner:');
+    try {
+      const adminToken = await loginUser(baseUrl, 'admin', 'admin123');
+      const samToken = await loginUser(baseUrl, 'sam', 'secret123');
+      const adminAuth = { Authorization: `Bearer ${adminToken}` };
+      const samAuth = { Authorization: `Bearer ${samToken}` };
+
+      // Create an album placed in Everyone circle
+      const albRes = await fetch(`${baseUrl}/api/albums`, {
+        method: 'POST',
+        headers: { ...adminAuth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Test Trip Album',
+          isEvent: true,
+          groupIds: [gEveryoneId],
+        }),
+      });
+      const albData: any = await albRes.json();
+      if (albRes.status !== 201 || !albData.albumId) {
+        throw new Error(`Album creation failed: ${albRes.status}`);
+      }
+
+      // Verify GET /api/albums/:id returns placements
+      const albDetailRes = await fetch(`${baseUrl}/api/albums/${albData.albumId}`, { headers: samAuth });
+      const albDetail: any = await albDetailRes.json();
+      if (!albDetail.album?.placements?.some((p: any) => p.groupId === gEveryoneId)) {
+        throw new Error('Album detail did not return placements');
+      }
+
+      // Create a post attached only via album_items (no direct item_groups placement)
+      const albumPostId = 'post-in-album-test';
+      const nowIso = new Date().toISOString();
+      run(
+        `INSERT INTO posts (id, owner_id, caption, taken_at, uploaded_at, date_basis, is_standalone, created_at)
+         VALUES (?, 'u-admin', 'Album photo', ?, ?, 'taken_at', 0, ?)`,
+        [albumPostId, nowIso, nowIso, nowIso]
+      );
+      run(
+        `INSERT INTO post_files (id, post_id, storage_key, file_type, position, thumb_key, file_size, mime_type)
+         VALUES ('pf-album-1', ?, 'uploads/posts/u-admin/sample.jpg', 'photo', 0, 'uploads/posts/u-admin/sample.jpg', 1024, 'image/jpeg')`,
+        [albumPostId]
+      );
+      run(
+        `INSERT INTO album_items (album_id, post_id, position, added_at) VALUES (?, ?, 0, ?)`,
+        [albData.albumId, albumPostId, nowIso]
+      );
+
+      const postGetRes = await fetch(`${baseUrl}/api/posts/${albumPostId}`, { headers: samAuth });
+      const postGetData: any = await postGetRes.json();
+      if (postGetRes.status !== 200 || postGetData.post?.activeGroupId !== gEveryoneId) {
+        throw new Error(`Expected inherited activeGroupId=${gEveryoneId}, got ${postGetData.post?.activeGroupId}`);
+      }
+      if (!postGetData.post?.placements?.some((p: any) => p.groupId === gEveryoneId)) {
+        throw new Error('Expected inherited placements on album post');
+      }
+
+      // Upload circle icon & banner on Everyone (as admin)
+      const tinyPng = Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2ZkAAAAASUVORK5CYII=',
+        'base64'
+      );
+      for (const kind of ['icon', 'banner'] as const) {
+        const fd = new FormData();
+        fd.append('image', new Blob([tinyPng], { type: 'image/png' }), `${kind}.png`);
+        const upRes = await fetch(`${baseUrl}/api/groups/${gEveryoneId}/image/${kind}`, {
+          method: 'POST',
+          headers: adminAuth,
+          body: fd,
+        });
+        const upData: any = await upRes.json();
+        if (upRes.status !== 200 || (kind === 'icon' ? !upData.iconUrl : !upData.bannerUrl)) {
+          throw new Error(`Circle ${kind} upload failed: ${upRes.status}`);
+        }
+      }
+
+      // Verify GET /api/groups/:id/photos returns the album photo
+      const photosRes = await fetch(`${baseUrl}/api/groups/${gEveryoneId}/photos`, { headers: samAuth });
+      const photosData: any = await photosRes.json();
+      if (photosRes.status !== 200 || !photosData.photos?.some((p: any) => p.postId === albumPostId)) {
+        throw new Error('Circle photos endpoint did not include album photo');
+      }
+
+      // Remove banner
+      const delBannerRes = await fetch(`${baseUrl}/api/groups/${gEveryoneId}/image/banner`, {
+        method: 'DELETE',
+        headers: adminAuth,
+      });
+      const delBannerData: any = await delBannerRes.json();
+      if (delBannerRes.status !== 200 || delBannerData.bannerUrl) {
+        throw new Error('Circle banner delete failed');
+      }
+
+      results.push({ name: 'Album photo circle inheritance & circle icon/banner API', passed: true });
+    } catch (err: any) {
+      console.error('✗ FAIL: Test 14 failed:', err.message);
+      results.push({ name: 'Album photo circle inheritance & circle icon/banner API', passed: false, error: err.message });
+    }
+
+    // -------------------------------------------------------------
     // Summary
     // -------------------------------------------------------------
     console.log('\n=======================================');

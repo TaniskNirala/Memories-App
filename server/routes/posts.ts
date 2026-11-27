@@ -420,14 +420,67 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     return res.status(404).json({ error: 'The owner of this post no longer exists' });
   }
 
-  // Placements for this post
-  const placements = queryAll<Row>(
-    `SELECT ig.*, g.name as group_name
-     FROM item_groups ig
-     JOIN groups g ON ig.group_id = g.id
-     WHERE ig.item_type = 'post' AND ig.item_id = ?`,
-    [postId]
+  // Direct placements for this post, falling back to parent album/event placements
+  // when a post belongs to a collection without its own item_groups rows.
+  let placements = queryAll<Row>(
+    userRole === 'admin' || access.isOwner
+      ? `SELECT ig.*, g.name as group_name
+         FROM item_groups ig
+         JOIN groups g ON ig.group_id = g.id
+         WHERE ig.item_type = 'post' AND ig.item_id = ?`
+      : `SELECT ig.*, g.name as group_name
+         FROM item_groups ig
+         JOIN groups g ON ig.group_id = g.id
+         JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
+         WHERE ig.item_type = 'post' AND ig.item_id = ?`,
+    userRole === 'admin' || access.isOwner ? [postId] : [userId, postId]
   );
+
+  if (placements.length === 0) {
+    placements = queryAll<Row>(
+      userRole === 'admin' || access.isOwner
+        ? `SELECT DISTINCT ig.id, ig.group_id, g.name as group_name, ig.is_reference, ig.reference_status
+           FROM album_items ai
+           JOIN albums a ON ai.album_id = a.id
+           JOIN item_groups ig ON ig.item_type = 'album' AND ig.item_id = a.id
+           JOIN groups g ON ig.group_id = g.id
+           WHERE ai.post_id = ? AND (a.status = 'approved' OR a.creator_id = ? OR ? = 'admin')`
+        : `SELECT DISTINCT ig.id, ig.group_id, g.name as group_name, ig.is_reference, ig.reference_status
+           FROM album_items ai
+           JOIN albums a ON ai.album_id = a.id
+           JOIN item_groups ig ON ig.item_type = 'album' AND ig.item_id = a.id
+           JOIN groups g ON ig.group_id = g.id
+           JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
+           WHERE ai.post_id = ? AND a.status = 'approved'`,
+      userRole === 'admin' || access.isOwner ? [postId, userId, userRole] : [userId, postId]
+    );
+  }
+
+  const formattedPlacements = placements.map((p) => ({
+    id: p.id,
+    groupId: p.group_id,
+    groupName: p.group_name,
+    isReference: Boolean(p.is_reference),
+    referenceStatus: p.reference_status,
+  }));
+
+  const requestedGroupId = typeof req.query.groupId === 'string' && req.query.groupId ? req.query.groupId : undefined;
+  const activeGroupId =
+    (requestedGroupId &&
+      (userRole === 'admin' ||
+        Boolean(queryOne('SELECT user_id FROM group_members WHERE group_id = ? AND user_id = ?', [requestedGroupId, userId])))
+      ? requestedGroupId
+      : undefined) ||
+    formattedPlacements[0]?.groupId;
+
+  let commentsCount = 0;
+  if (activeGroupId) {
+    const cCount = queryOne<{ count: number }>(
+      "SELECT COUNT(*) as count FROM comments WHERE target_type = 'post' AND target_id = ? AND group_id = ? AND deleted_at IS NULL",
+      [postId, activeGroupId]
+    );
+    commentsCount = cCount?.count || 0;
+  }
 
   res.json({
     post: {
@@ -450,13 +503,9 @@ postsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
         avatarUrl: avatarUrlFor(owner.avatar_url),
       },
       files: filesWithUrls,
-      placements: placements.map((p) => ({
-        id: p.id,
-        groupId: p.group_id,
-        groupName: p.group_name,
-        isReference: Boolean(p.is_reference),
-        referenceStatus: p.reference_status,
-      })),
+      placements: formattedPlacements,
+      activeGroupId,
+      commentsCount,
     },
   });
 });

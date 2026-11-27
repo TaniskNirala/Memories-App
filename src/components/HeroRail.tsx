@@ -1,7 +1,7 @@
 import React from 'react';
-import { Plus, Users, Sparkles, CalendarDays, Bookmark, X } from 'lucide-react';
+import { Plus, Users, Sparkles, CalendarDays, Bookmark, X, Camera } from 'lucide-react';
 import { Avatar } from './ui/kit.tsx';
-import { greeting } from '../lib/format.ts';
+import { greeting, accentFromName } from '../lib/format.ts';
 
 /* ---------------------------------------------------------------------------
    Hero rail — the "where am I" panel.
@@ -19,6 +19,10 @@ export interface HeroRailProps {
   selectedGroupName?: string;
   selectedGroupDescription?: string;
   selectedGroupMembers?: number;
+  selectedGroupIconUrl?: string;
+  selectedGroupBannerUrl?: string;
+  selectedGroupCanEditImages?: boolean;
+  onEditGroupImages?: () => void;
   onOpenUpload: () => void;
   onOpenGroupsManager: () => void;
   /** Clears the circle filter and returns to the full timeline */
@@ -43,6 +47,10 @@ export const HeroRail: React.FC<HeroRailProps> = ({
   selectedGroupName,
   selectedGroupDescription,
   selectedGroupMembers,
+  selectedGroupIconUrl,
+  selectedGroupBannerUrl,
+  selectedGroupCanEditImages,
+  onEditGroupImages,
   onOpenUpload,
   onOpenGroupsManager,
   onClearGroup,
@@ -50,6 +58,7 @@ export const HeroRail: React.FC<HeroRailProps> = ({
 }) => {
   const firstName = user?.displayName?.split(' ')[0] || user?.username || 'friend';
   const memberCount = selectedGroupMembers || 0;
+  const circleAccent = selectedGroupName ? accentFromName(selectedGroupName) : undefined;
 
   const eyebrow = selectedGroupName
     ? `Your circle${memberCount ? ` · ${memberCount} ${memberCount === 1 ? 'person' : 'people'}` : ''}`
@@ -63,28 +72,78 @@ export const HeroRail: React.FC<HeroRailProps> = ({
   if (compact) {
     return (
       <header className="surface relative overflow-hidden p-4">
-        <p className="eyebrow flex items-center gap-1.5">
-          {selectedGroupName && <Users className="h-3 w-3 text-[var(--accent-cyan)]" />}
-          {eyebrow}
-        </p>
-        <h1 className="mt-1.5 flex flex-wrap items-center gap-2 font-display text-[1.5rem] leading-[1.1] tracking-tight">
-          {selectedGroupName ? (
-            <span className="glow-text">{selectedGroupName}</span>
-          ) : (
-            <>
-              Hello, <span className="glow-text">{firstName}</span>
-            </>
-          )}
-          {selectedGroupName && onClearGroup && (
-            <button
-              type="button"
-              onClick={onClearGroup}
-              className="inline-flex items-center gap-1 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-2 py-0.5 text-[10px] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
-            >
-              <X className="h-2.5 w-2.5" /> All circles
-            </button>
-          )}
-        </h1>
+        {selectedGroupName && selectedGroupBannerUrl && (
+          <div className="relative -mx-4 -mt-4 mb-3 aspect-[3/1] w-[calc(100%+2rem)] overflow-hidden border-b border-[var(--border-subtle)] bg-neutral-950">
+            <img
+              src={selectedGroupBannerUrl}
+              alt={`${selectedGroupName} banner`}
+              className="h-full w-full object-cover"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+            {selectedGroupCanEditImages && onEditGroupImages && (
+              <button
+                type="button"
+                onClick={onEditGroupImages}
+                title="Customize circle banner & icon"
+                className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full border border-white/20 bg-black/65 px-2 py-1 text-[10px] font-semibold text-white transition hover:bg-black/85"
+              >
+                <Camera className="h-3 w-3" /> Edit
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2.5">
+            {selectedGroupName && (
+              <Avatar
+                name={selectedGroupName}
+                color={circleAccent}
+                src={selectedGroupIconUrl}
+                size={selectedGroupBannerUrl ? 44 : 36}
+                ring
+                className={selectedGroupBannerUrl ? '-mt-7 border-2 border-[var(--bg-card)] shadow-md' : ''}
+              />
+            )}
+            <div className="min-w-0">
+              <p className="eyebrow flex items-center gap-1.5">
+                {selectedGroupName && !selectedGroupIconUrl && <Users className="h-3 w-3 text-[var(--accent-cyan)]" />}
+                {eyebrow}
+              </p>
+              <h1 className="mt-1 flex flex-wrap items-center gap-2 font-display text-[1.45rem] leading-[1.1] tracking-tight">
+                {selectedGroupName ? (
+                  <span className="glow-text">{selectedGroupName}</span>
+                ) : (
+                  <>
+                    Hello, <span className="glow-text">{firstName}</span>
+                  </>
+                )}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            {selectedGroupName && !selectedGroupBannerUrl && selectedGroupCanEditImages && onEditGroupImages && (
+              <button
+                type="button"
+                onClick={onEditGroupImages}
+                title="Customize circle banner & icon"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {selectedGroupName && onClearGroup && (
+              <button
+                type="button"
+                onClick={onClearGroup}
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]/70 px-2 py-0.5 text-[10px] font-semibold text-[var(--text-secondary)] transition hover:text-[var(--text-primary)]"
+              >
+                <X className="h-2.5 w-2.5" /> All circles
+              </button>
+            )}
+          </div>
+        </div>
         <p className="mt-1.5 text-[11.5px] leading-relaxed text-[var(--text-secondary)]">{subtitle}</p>
         <div className="mt-3 flex items-center gap-2">
           <div className="grid flex-1 grid-cols-3 gap-1.5">
@@ -103,25 +162,74 @@ export const HeroRail: React.FC<HeroRailProps> = ({
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain pb-4">
       <section className="surface relative shrink-0 overflow-hidden p-4">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full opacity-40 blur-2xl"
-          style={{ background: 'var(--gradient-ember)' }}
-        />
+        {selectedGroupName && selectedGroupBannerUrl ? (
+          <div className="relative -mx-4 -mt-4 mb-2 aspect-[3/1] w-[calc(100%+2rem)] overflow-hidden border-b border-[var(--border-subtle)] bg-neutral-950">
+            <img
+              src={selectedGroupBannerUrl}
+              alt={`${selectedGroupName} banner`}
+              className="h-full w-full object-cover"
+            />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/15" />
+            {selectedGroupCanEditImages && onEditGroupImages && (
+              <button
+                type="button"
+                onClick={onEditGroupImages}
+                title="Customize circle banner & icon"
+                className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full border border-white/20 bg-black/65 px-2 py-0.5 text-[9.5px] font-semibold text-white transition hover:bg-black/85"
+              >
+                <Camera className="h-2.5 w-2.5" /> Edit
+              </button>
+            )}
+          </div>
+        ) : (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full opacity-40 blur-2xl"
+            style={{ background: 'var(--gradient-ember)' }}
+          />
+        )}
 
-        <p className="eyebrow flex items-center gap-1.5">
-          {selectedGroupName && <Users className="h-2.5 w-2.5 text-[var(--accent-cyan)]" />}
-          {eyebrow}
-        </p>
-        <h1 className="mt-1.5 font-display text-[1.35rem] leading-[1.12] tracking-tight">
-          {selectedGroupName ? (
-            <span className="glow-text">{selectedGroupName}</span>
-          ) : (
-            <>
+        {selectedGroupName ? (
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Avatar
+                name={selectedGroupName}
+                color={circleAccent}
+                src={selectedGroupIconUrl}
+                size={selectedGroupBannerUrl ? 44 : 36}
+                ring
+                className={selectedGroupBannerUrl ? '-mt-7 relative z-10 border-2 border-[var(--bg-card)] shadow-md' : ''}
+              />
+              <div className="min-w-0">
+                <p className="eyebrow flex items-center gap-1.5">
+                  {!selectedGroupIconUrl && <Users className="h-2.5 w-2.5 text-[var(--accent-cyan)]" />}
+                  {eyebrow}
+                </p>
+                <h1 className="mt-1 truncate font-display text-[1.25rem] leading-[1.12] tracking-tight">
+                  <span className="glow-text">{selectedGroupName}</span>
+                </h1>
+              </div>
+            </div>
+
+            {!selectedGroupBannerUrl && selectedGroupCanEditImages && onEditGroupImages && (
+              <button
+                type="button"
+                onClick={onEditGroupImages}
+                title="Customize circle banner & icon"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[var(--border-subtle)] bg-[var(--bg-surface)]/70 text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <p className="eyebrow flex items-center gap-1.5">{eyebrow}</p>
+            <h1 className="mt-1.5 font-display text-[1.35rem] leading-[1.12] tracking-tight">
               Hello, <span className="glow-text">{firstName}</span>
-            </>
-          )}
-        </h1>
+            </h1>
+          </>
+        )}
         <p className="mt-1.5 text-[10.5px] leading-relaxed text-[var(--text-muted)]">{subtitle}</p>
 
         {selectedGroupName && (

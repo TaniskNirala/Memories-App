@@ -198,6 +198,21 @@ albumsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
     [albumId]
   );
 
+  const isHostOrAdmin = userRole === 'admin' || album.creator_id === userId;
+  const placements = queryAll<Row>(
+    isHostOrAdmin
+      ? `SELECT ig.id, ig.group_id as groupId, g.name as groupName
+         FROM item_groups ig
+         JOIN groups g ON ig.group_id = g.id
+         WHERE ig.item_type = 'album' AND ig.item_id = ?`
+      : `SELECT ig.id, ig.group_id as groupId, g.name as groupName
+         FROM item_groups ig
+         JOIN groups g ON ig.group_id = g.id
+         JOIN group_members gm ON ig.group_id = gm.group_id AND gm.user_id = ?
+         WHERE ig.item_type = 'album' AND ig.item_id = ?`,
+    isHostOrAdmin ? [albumId] : [userId, albumId]
+  );
+
   res.json({
     album: {
       id: album.id,
@@ -213,6 +228,7 @@ albumsRouter.get('/:id', async (req: AuthenticatedRequest, res) => {
         username: album.creator_username,
         displayName: album.creator_display_name,
       },
+      placements,
       createdAt: album.created_at,
     },
   });

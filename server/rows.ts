@@ -47,6 +47,8 @@ export interface GroupsRow {
   creator_id: string;
   is_everyone: number;
   created_at: string;
+  icon_key: string | null;
+  banner_key: string | null;
 }
 
 export interface GroupMembersRow {
@@ -214,6 +216,7 @@ export interface Row {
   author_id: string;
   avatar_color: string | null;
   avatar_url: string | null;
+  banner_key: string | null;
   body: string;
   caption: string | null;
   checksum: string | null;
@@ -236,6 +239,7 @@ export interface Row {
   file_type: string;
   group_id: string;
   height: number | null;
+  icon_key: string | null;
   id: string;
   ip: string;
   is_anonymous: number;

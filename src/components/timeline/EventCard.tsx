@@ -214,8 +214,14 @@ export const EventCard: React.FC<{
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-3">
-          <button type="button" onClick={() => onOpenComments(item)} className="chip">
-            <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-cyan)]" /> Conversation
+          <button
+            type="button"
+            onClick={() => onOpenComments(item)}
+            aria-label="Conversation"
+            title="Conversation"
+            className="chip"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-[var(--accent-cyan)]" />
             {(item.commentsCount || 0) > 0 && (
               <span className="font-mono text-[10px] text-[var(--text-muted)]">{formatCount(item.commentsCount)}</span>
             )}

@@ -9,7 +9,7 @@ interface CirclesPageProps {
   groups: Group[];
   selectedGroupId?: string;
   onSelectGroup: (id: string) => void;
-  onManage: () => void;
+  onManage: (groupId?: string) => void;
   onCreate: () => void;
   onRequestDelete: (group: Group) => void;
 }
@@ -59,7 +59,7 @@ export const CirclesPage: React.FC<CirclesPageProps> = ({
             <button type="button" onClick={onCreate} className="btn btn-primary">
               <Plus className="h-3.5 w-3.5" /> New circle
             </button>
-            <button type="button" onClick={onManage} className="btn btn-soft">
+            <button type="button" onClick={() => onManage()} className="btn btn-soft">
               <Settings2 className="h-3.5 w-3.5" /> Manage
             </button>
           </>
@@ -106,18 +106,37 @@ export const CirclesPage: React.FC<CirclesPageProps> = ({
                 className={`card card-hover group relative overflow-hidden fade-in ${active ? 'border-[var(--accent-amber)]/50' : ''}`}
                 style={{ animationDelay: `${Math.min(i, 5) * 20}ms` }}
               >
-                <div
-                  aria-hidden
-                  className="pointer-events-none absolute inset-x-0 top-0 h-24 opacity-70"
-                  style={{
-                    background: `radial-gradient(280px 120px at 18% 0%, color-mix(in oklab, ${accent} 26%, transparent), transparent 72%)`,
-                  }}
-                />
+                {g.bannerUrl ? (
+                  <div className="relative aspect-[3/1] w-full overflow-hidden border-b border-[var(--border-subtle)] bg-neutral-950">
+                    <img
+                      src={g.bannerUrl}
+                      alt={`${g.name} banner`}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-transparent to-transparent" />
+                  </div>
+                ) : (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 top-0 h-24 opacity-70"
+                    style={{
+                      background: `radial-gradient(280px 120px at 18% 0%, color-mix(in oklab, ${accent} 26%, transparent), transparent 72%)`,
+                    }}
+                  />
+                )}
 
                 <div className="relative p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <Avatar name={g.name} color={accent} size={40} ring />
+                      <Avatar
+                        name={g.name}
+                        color={accent}
+                        src={g.iconUrl}
+                        size={g.bannerUrl ? 46 : 40}
+                        ring
+                        className={g.bannerUrl ? '-mt-8 border-2 border-[var(--bg-card)] shadow-md' : ''}
+                      />
                       <div className="min-w-0">
                         <h3 className="truncate font-display text-[14.5px] leading-tight">{g.name}</h3>
                         <p className="mt-0.5 flex items-center gap-1.5 text-[10px] text-[var(--text-muted)]">
@@ -177,9 +196,9 @@ export const CirclesPage: React.FC<CirclesPageProps> = ({
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={onManage}
+                        onClick={() => onManage(g.id)}
                         className="flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-surface)]/60 text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
-                        title="Manage members"
+                        title="Manage circle, banner & members"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
                       </button>

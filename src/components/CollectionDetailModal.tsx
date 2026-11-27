@@ -13,7 +13,7 @@ interface CollectionDetailModalProps {
   collectionId: string | null;
   isOpen: boolean;
   onClose: () => void;
-  onSelectPhoto: (postId: string, initialIndex?: number) => void;
+  onSelectPhoto: (postId: string, initialIndex?: number, fallbackGroupId?: string) => void;
   onUpdated?: () => void;
   groups?: Group[];
   onDeleteAlbum?: (albumId: string, permanent?: boolean) => Promise<void>;
@@ -547,7 +547,13 @@ export const CollectionDetailModal: React.FC<CollectionDetailModalProps> = ({
               {items.map((item, idx) => (
                 <div
                   key={item.id || `${item.postId}_${idx}`}
-                  onClick={() => onSelectPhoto(item.postId, item.filePosition || 0)}
+                  onClick={() =>
+                    onSelectPhoto(
+                      item.postId,
+                      item.filePosition || 0,
+                      collection?.placements?.[0]?.groupId || collection?.placements?.[0]?.group_id
+                    )
+                  }
                   className="relative aspect-square rounded-xl overflow-hidden bg-neutral-900 cursor-pointer group border border-[var(--border-subtle)] hover:border-[var(--accent-coral)] transition"
                 >
                   {isVideoMedia(item) ? (
